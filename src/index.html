@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grupo MediBuy · Endoscopy Capture</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+
+  <body>
+    <main class="app-shell">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">Grupo MediBuy</p>
+          <h1>Endoscopy Capture</h1>
+          <p class="subtitle">
+            Captura local en tiempo real desde procesador de endoscopía mediante capturador USB.
+          </p>
+        </div>
+
+        <div class="status-pill" id="connectionStatus">Listo</div>
+      </section>
+
+      <section class="layout">
+        <section class="video-card">
+          <div class="video-header">
+            <div>
+              <h2>Vista en tiempo real</h2>
+              <p id="deviceLabel">Selecciona un capturador para iniciar.</p>
+            </div>
+
+            <div class="recording-indicator" id="recordingIndicator">
+              <span></span>
+              Grabación detenida
+            </div>
+          </div>
+
+          <div class="video-frame">
+            <video id="preview" autoplay playsinline muted></video>
+
+            <div class="empty-state" id="emptyState">
+              <div class="empty-icon">●</div>
+              <h3>Capturador no iniciado</h3>
+              <p>Conecta el capturador USB y presiona “Detectar dispositivos”.</p>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button class="btn btn-ghost" id="detectDevicesBtn" type="button">
+              Detectar dispositivos
+            </button>
+
+            <button class="btn btn-primary" id="startBtn" type="button">
+              Iniciar video
+            </button>
+
+            <button class="btn btn-outline" id="captureBtn" type="button" disabled>
+              Tomar foto
+            </button>
+
+            <button class="btn btn-danger-soft" id="recordBtn" type="button" disabled>
+              Iniciar grabación
+            </button>
+
+            <button class="btn btn-danger" id="stopRecordBtn" type="button" disabled>
+              Detener grabación
+            </button>
+          </div>
+        </section>
+
+        <aside class="side-card">
+          <div class="panel-block">
+            <h2>Conexión Laravel</h2>
+
+            <label class="field">
+              <span>Código de Laravel</span>
+              <input id="pairCodeInput" type="text" maxlength="7" placeholder="Ej. 768220" />
+            </label>
+
+            <button class="btn btn-primary full" id="pairBtn" type="button">
+              Conectar con Laravel
+            </button>
+
+            <button class="btn btn-ghost full" id="disconnectBtn" type="button">
+              Desconectar
+            </button>
+
+            <div class="connection-box">
+              <p><strong>Estado:</strong> <span id="pairStatusText">Sin conectar</span></p>
+              <p><strong>Tenant:</strong> <span id="tenantText">-</span></p>
+              <p><strong>Paciente:</strong> <span id="patientText">-</span></p>
+              <p><strong>Estudio:</strong> <span id="studyText">-</span></p>
+              <p><strong>Sesión:</strong> <span id="sessionText">-</span></p>
+            </div>
+          </div>
+
+          <div class="panel-block">
+            <h2>Capturador</h2>
+
+            <label class="field">
+              <span>Dispositivo</span>
+              <select id="deviceSelect">
+                <option value="">Sin dispositivos detectados</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="panel-block">
+            <h2>Mejoras visuales</h2>
+
+            <label class="range-field">
+              <span>Brillo</span>
+              <input id="brightnessInput" type="range" min="0.7" max="1.4" step="0.01" value="1" />
+            </label>
+
+            <label class="range-field">
+              <span>Contraste</span>
+              <input id="contrastInput" type="range" min="0.7" max="1.6" step="0.01" value="1" />
+            </label>
+
+            <label class="range-field">
+              <span>Saturación</span>
+              <input id="saturationInput" type="range" min="0.5" max="1.8" step="0.01" value="1" />
+            </label>
+
+            <button class="btn btn-ghost full" id="resetFiltersBtn" type="button">
+              Restaurar imagen
+            </button>
+          </div>
+
+          <div class="panel-block">
+            <h2>Capturas</h2>
+
+            <div class="stats-grid">
+              <div class="stat">
+                <strong id="imageCount">0</strong>
+                <span>Fotos</span>
+              </div>
+
+              <div class="stat">
+                <strong id="videoCount">0</strong>
+                <span>Videos</span>
+              </div>
+            </div>
+
+            <div class="log-box" id="logBox">
+              <p>Sistema listo.</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <canvas id="snapshotCanvas"></canvas>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
