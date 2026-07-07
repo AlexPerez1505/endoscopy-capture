@@ -1,0 +1,74 @@
+<div class="ed-actions rise d2">
+  <button class="ed-btn" data-nav="ia-reportes">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    Volver
+  </button>
+  <button class="ed-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar borrador</button>
+  <button class="ed-btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Finalizar reporte</button>
+</div>
+
+<div class="ed-body">
+  <div class="ed-main">
+    <div class="ed-meta card rise d3">
+      <div class="f grow">
+        <label>Paciente</label>
+        <div class="ed-ctrl" id="edPaciente">Selecciona un paciente...</div>
+      </div>
+      <div class="f">
+        <label>Tipo de estudio</label>
+        <select class="ed-ctrl"><option>Endoscopía alta</option><option>Colonoscopía</option></select>
+      </div>
+      <div class="f">
+        <label>Folio</label>
+        <div class="ed-ctrl">P-00045</div>
+      </div>
+    </div>
+
+    <!-- Barra de herramientas del editor -->
+    <div class="ed-toolbar rise d4">
+      <button class="ed-tb" title="Negrita"><b>B</b></button>
+      <button class="ed-tb" title="Cursiva"><i>I</i></button>
+      <button class="ed-tb" title="Subrayado"><u>U</u></button>
+      <div class="sep"></div>
+      <button class="ed-tb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+      <button class="ed-tb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 16 7 11"/><polyline points="17 5 12 10 7 5"/></svg></button>
+    </div>
+
+    <!-- Documento -->
+    <div class="ed-doc rise d5" contenteditable="true">
+      <div class="doc-h">
+        <h2>REPORTE ENDOSCÓPICO</h2>
+        <p>ENCLAII · ENDOSCOPY CAPTURE SYSTEM</p>
+      </div>
+      <h4>INDICACIÓN</h4>
+      <p>Paciente de 45 años que acude por pirosis crónica y dolor epigástrico...</p>
+      <h4>HALLAZGOS</h4>
+      <ul>
+        <li>Esófago: Mucosa de aspecto normal, unión escamocilíndrica a 40cm de la arcada dental.</li>
+        <li>Estómago: Se observa eritema difuso en antro.</li>
+      </ul>
+      <h4>IMPRESIÓN DIAGNÓSTICA</h4>
+      <p>1. Gastritis antral eritematosa leve.</p>
+    </div>
+  </div>
+
+  <!-- Asistente IA lateral -->
+  <aside class="ed-side">
+    <div class="card ed-chat rise d6">
+      <div class="chat-head">
+        <div class="chat-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg></div>
+        <div>
+          <h3>Asistente IA</h3>
+          <div class="chat-on">Analizando hallazgos...</div>
+        </div>
+      </div>
+      <div class="chat-msgs">
+        <div class="chat-msg ai">Hola, estoy analizando los hallazgos del estudio. He detectado eritema en el antro, ¿te gustaría que sugiera una impresión diagnóstica?</div>
+      </div>
+      <div class="chat-input">
+        <input type="text" placeholder="Pregunta a la IA...">
+        <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+      </div>
+    </div>
+  </aside>
+</div>

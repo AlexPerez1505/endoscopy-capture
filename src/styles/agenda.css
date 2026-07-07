@@ -1,0 +1,113 @@
+/* ============ AGENDA · Estilos globales (migrados desde _base.blade.php y _mes.blade.php) ============ */
+
+/* ---- Layout ---- */
+.agenda-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.agenda-header-left h2{font-family:'Sora',sans-serif;font-size:22px;font-weight:700}
+.agenda-header-left p{font-size:13.5px;color:var(--txt-soft);margin-top:3px}
+
+.agenda-body{display:grid;grid-template-columns:1fr 260px;gap:18px;align-items:start}
+.agenda-left{
+  background:#000B1E;border:1.84px solid #168BD9;
+  box-shadow:inset 0 0 0 1.84px rgba(0,0,0,.47);
+  border-radius:var(--r-lg);padding:22px 22px 26px;color:#EAF1FF;
+  min-width:0;
+}
+.agenda-right{display:flex;flex-direction:column;gap:16px}
+.agenda-left.expanded{grid-column:span 2}
+
+/* ---- Toolbar ---- */
+.cal-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.view-tabs{display:flex;gap:6px}
+.view-tab{
+  padding:8px 20px;border-radius:var(--r-md);font-size:13.5px;font-weight:600;
+  color:var(--txt-soft);border:1px solid var(--stroke);background:transparent;
+  transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease;
+}
+.view-tab.active{background:linear-gradient(135deg,#1668D9,var(--blue));color:#fff;border-color:transparent;box-shadow:0 4px 14px -4px rgba(46,123,246,.5)}
+
+.toolbar-right{display:flex;align-items:center;gap:10px;position:relative}
+.month-nav{display:flex;align-items:center;gap:10px}
+.month-nav button{width:32px;height:32px;border-radius:8px;border:1px solid var(--stroke);display:grid;place-items:center;color:var(--txt-soft);transition:border-color 150ms ease,color 150ms ease}
+.month-label{display:flex;align-items:center;gap:6px;font-family:'Sora',sans-serif;font-weight:700;font-size:14px;color:#fff}
+.month-label svg{color:var(--cyan);opacity:.8}
+
+/* ---- Vista Mes ---- */
+.cal-wrap{display:none;max-height:600px;overflow-y:auto;border-radius:8px;min-width:0}
+.cal-wrap.active{display:block;width:100%}
+.cal-grid{width:100%;border-collapse:separate;border-spacing:0;display:table;table-layout:fixed}
+.cal-grid th{
+  text-align:center;font-size:12px;font-weight:600;color:#8FA3CF;padding:8px 4px;
+  background:linear-gradient(to bottom,#001525 30%,#004F8B 100%);
+  border-bottom:1px solid var(--stroke);
+  position:sticky;top:0;z-index:2;
+}
+.cal-grid thead tr th:first-child{border-radius:8px 0 0 0}
+.cal-grid thead tr th:last-child{border-radius:0 8px 0 0}
+.cal-grid td{vertical-align:top;width:calc(100%/7);border:1px solid rgba(110,160,255,.07);padding:6px 5px;height:100px}
+.cal-grid td.off-month .day-num{color:var(--off)}
+.cal-grid td.today-cell .day-num{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;box-shadow:0 3px 10px -2px rgba(46,123,246,.7)}
+
+.day-num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:600;margin-bottom:5px;color:var(--txt-soft)}
+
+/* Eventos en calendario */
+.cal-event{border-radius:5px;padding:3px 6px;font-size:10px;font-weight:600;line-height:1.2;margin-bottom:3px;cursor:pointer;transition:opacity 150ms ease;min-width:0;word-wrap:break-word;hyphens:auto}
+.cal-event:hover{opacity:.8}
+.ce-line1{font-weight:700;line-height:1.2}
+.ce-line2{font-size:9px;opacity:.9;line-height:1.2;margin-top:1px}
+
+.cal-event.ev-done{background:linear-gradient(to bottom,#042226 20%,#4C9242 80%);color:#fff;border:1.38px solid #284D23}
+.cal-event.ev-wait{background:linear-gradient(to bottom,#351909 29%,#9B491A 100%);color:#fff;border:1.24px solid #E75D01}
+.cal-event.ev-cancel{background:linear-gradient(to bottom,#251117 38%,#D90000 100%);color:#fff;border:1.27px solid #D90000}
+.cal-event.ev-soon{background:linear-gradient(to bottom,#0B1331 43%,#B263FF 100%);color:#fff;border:1.27px solid #B263FF}
+
+.cal-more-btn{display:block;width:100%;margin-top:2px;padding:3px 5px;font-size:9px;font-weight:600;color:#8FA3CF;background:transparent;border:1.5px dashed rgba(110,160,255,.4);border-radius:4px;cursor:pointer;transition:all 150ms ease;text-align:center}
+
+/* ---- Sidebar Cards ---- */
+.filter-card, .proximas-card{
+  background:#001525;border:1.84px solid #168BD9;
+  box-shadow:inset 0 0 0 1.84px rgba(0,0,0,.47);
+  border-radius:11.06px;padding:18px;color:#EAF1FF;
+}
+.filter-card h4, .proximas-card h4{font-family:'Sora',sans-serif;font-size:13px;font-weight:700;color:#EAF1FF;margin-bottom:14px}
+
+/* Filtros */
+.filter-list{display:flex;flex-direction:column;gap:10px}
+.filter-row{display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 8px;border-radius:8px;transition:background 150ms ease}
+.filter-row:hover{background:rgba(22,139,217,.15)}
+.filter-row input{width:16px;height:16px;accent-color:#168BD9;cursor:pointer;flex:none}
+.filter-indicator{width:12px;height:12px;border-radius:50%;flex:none;border:1.5px solid transparent}
+.filter-indicator.done{background:#4C9242;border-color:#4C9242}
+.filter-indicator.wait{background:#E75D01;border-color:#E75D01}
+.filter-indicator.cancel{background:#D90000;border-color:#D90000}
+.filter-indicator.soon{background:#B263FF;border-color:#B263FF}
+.filter-text{font-size:11px;color:#EAF1FF;font-weight:500}
+
+/* Próximas citas sidebar */
+.prox-list{display:flex;flex-direction:column;gap:10px}
+.prox-item{display:flex;gap:10px;padding:10px;border-radius:10px;background:rgba(22,139,217,.08);border:1px solid rgba(22,139,217,.15);transition:all 150ms ease;cursor:pointer}
+.prox-item:hover{background:rgba(22,139,217,.15);border-color:rgba(22,139,217,.3);transform:translateX(4px)}
+.prox-time{flex:none;width:54px;text-align:center}
+.prox-time .h{display:block;font-size:12px;font-weight:700;color:var(--cyan)}
+.prox-time .m{display:block;font-size:10px;color:var(--txt-soft);margin-top:2px}
+.prox-info{flex:1;min-width:0}
+.prox-name{font-size:12px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prox-study{font-size:10px;color:var(--txt-soft);margin-top:2px}
+
+/* ---- Light Theme Adjustments ---- */
+html[data-theme="light"] .agenda-left{background:#FFFFFF;border-color:rgba(20,50,120,.2);box-shadow:inset 0 0 0 1.84px rgba(0,0,0,.05);color:#0E1530}
+html[data-theme="light"] .filter-card, html[data-theme="light"] .proximas-card{background:#FFFFFF;border-color:rgba(20,50,120,.2);box-shadow:inset 0 0 0 1.84px rgba(0,0,0,.05);color:#0E1530}
+html[data-theme="light"] .filter-card h4, html[data-theme="light"] .proximas-card h4{color:#0E1530}
+html[data-theme="light"] .filter-text{color:#0E1530}
+html[data-theme="light"] .cal-grid th{background:linear-gradient(to bottom,#DDEAF8 30%,#B3D0F0 100%);color:#2E5CAA;border-bottom-color:rgba(20,50,120,.15)}
+html[data-theme="light"] .cal-grid td{border-color:rgba(20,50,120,.08)}
+html[data-theme="light"] .day-num{color:#5B6A99}
+html[data-theme="light"] .cal-grid td.off-month .day-num{color:#C2CCE8}
+html[data-theme="light"] .month-label{color:#0E1530}
+html[data-theme="light"] .prox-name{color:#0E1530}
+html[data-theme="light"] .prox-item{background:#F0F4FA;border-color:rgba(20,50,120,.1)}
+
+/* Responsive */
+@media(max-width:1024px){
+  .agenda-body{grid-template-columns:1fr}
+  .agenda-right{display:none}
+}

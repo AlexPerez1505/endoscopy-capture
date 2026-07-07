@@ -1,0 +1,214 @@
+<!-- Panel de filtros modal -->
+<div class="filter-overlay" id="filterOverlay" onclick="closeFilters()"></div>
+<div class="filter-modal" id="filterPanel" role="dialog" aria-modal="true">
+  <div class="filter-modal-head">
+    <h2>Filtros <span id="filterCount">(0)</span></h2>
+    <button class="filter-clear-all" onclick="clearFilters()" id="btnClearAllFilters" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      Limpiar todo
+    </button>
+  </div>
+  <div class="filter-modal-body">
+    <div class="filter-grid" id="filterBasicGrid">
+      <div class="filter-group">
+        <label>Nombre del paciente</label>
+        <input type="text" class="filter-input" placeholder="Ej. María González" id="fNombre">
+      </div>
+      <div class="filter-group">
+        <label>Médico</label>
+        <select class="filter-input filter-select" id="fMedico"><option value="">Seleccionar médico</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Estado</label>
+        <select class="filter-input filter-select" id="fEstado">
+          <option value="">Todos</option><option>Completado</option><option>En espera</option><option>Cancelado</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Último estudio</label>
+        <select class="filter-input filter-select" id="fUltimoEstudio">
+          <option value="">Seleccionar periodo</option><option>Hoy</option><option>Esta semana</option><option>Este mes</option><option>Este año</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Fecha de nacimiento</label>
+        <input type="date" class="filter-input" id="fFechaNacimiento">
+      </div>
+      <div class="filter-group">
+        <label>Número de folio</label>
+        <input type="text" class="filter-input" placeholder="Ej. P-001" id="fFolio">
+      </div>
+    </div>
+  </div>
+  <div class="filter-modal-footer">
+    <button class="filter-btn-cancel" onclick="closeFilters()">Cancelar</button>
+    <button class="filter-btn-apply" onclick="applyFilters()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <span>Aplicar filtros</span><span id="applyFilterCount">(0)</span>
+    </button>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<section class="toolbar rise d2">
+  <div class="search-box">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="searchInput" placeholder="Busca por nombre del paciente" oninput="filterPatients()">
+  </div>
+  <button class="btn-filter" id="btnFiltros" onclick="openFilters()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+    <span>Filtros</span>
+  </button>
+  <button class="btn-new" data-nav="nuevo-estudio">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <span>Nuevo paciente</span>
+  </button>
+</section>
+
+<div class="content-with-panel" id="contentWrapper">
+
+  <!-- Tabla de pacientes -->
+  <section class="patients-card rise d3">
+    <div class="table-header">
+      <span>
+        Paciente
+        <span class="ordenar-container">
+          <button type="button" class="ordenar-btn" onclick="toggleOrdenar('paciente')" title="Ordenar pacientes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <div id="ordenarPacienteDropdown" class="ordenar-dropdown">
+            <div class="ordenar-option" onclick="ordenarPor('paciente', 'default')">Predeterminado</div>
+            <div class="ordenar-option" onclick="ordenarPor('paciente', 'nombre-asc')">Nombre (A-Z)</div>
+            <div class="ordenar-option" onclick="ordenarPor('paciente', 'nombre-desc')">Nombre (Z-A)</div>
+          </div>
+        </span>
+      </span>
+      <span>Folio</span>
+      <span class="cell-fecha">Nacimiento</span>
+      <span>
+        Último estudio
+        <span class="ordenar-container">
+          <button type="button" class="ordenar-btn" onclick="toggleOrdenar('estudio')" title="Ordenar estudios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <div id="ordenarEstudioDropdown" class="ordenar-dropdown">
+            <div class="ordenar-option" onclick="ordenarPor('estudio', 'default')">Predeterminado</div>
+            <div class="ordenar-option" onclick="ordenarPor('estudio', 'fecha-reciente')">Más reciente</div>
+            <div class="ordenar-option" onclick="ordenarPor('estudio', 'fecha-antigua')">Más antigua</div>
+          </div>
+        </span>
+      </span>
+      <span class="col-status">
+        Estado
+        <span class="estado-filter-container">
+          <button type="button" class="estado-filter-btn" onclick="toggleEstadoFilter()" title="Filtrar por estado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <div id="estadoFilterDropdown" class="estado-filter-dropdown">
+            <div class="filter-option" onclick="filterByEstado('all')"><span class="status-dot gray"></span> Todos</div>
+            <div class="filter-option" onclick="filterByEstado('completado')"><span class="status-dot green"></span> Completado</div>
+            <div class="filter-option" onclick="filterByEstado('espera')"><span class="status-dot yellow"></span> En espera</div>
+            <div class="filter-option" onclick="filterByEstado('cancelado')"><span class="status-dot red"></span> Cancelado</div>
+          </div>
+        </span>
+      </span>
+      <span>Acciones</span>
+    </div>
+
+    <div id="patientsTableBody"></div>
+
+    <div class="table-footer">
+      <span id="paginationInfo">Mostrando 0 pacientes</span>
+      <div class="pagination" id="paginationControls"></div>
+    </div>
+  </section>
+
+  <!-- Panel lateral de detalle -->
+  <aside class="patient-detail-panel" id="patientPanel">
+    <div class="panel-header">
+      <div class="patient-identity">
+        <div class="panel-avatar" id="panelAvatar">MG</div>
+        <div class="patient-title">
+          <h3 id="panelName">Paciente</h3>
+          <span class="folio" id="panelFolio">Folio: —</span>
+        </div>
+      </div>
+      <button class="btn-close-panel" onclick="closePanel()" aria-label="Cerrar panel">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="quick-meta">
+      <div class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span id="panelAge">—</span></div>
+      <div class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg><span id="panelGender">—</span></div>
+      <div class="meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span id="panelDob">—</span></div>
+    </div>
+
+    <div class="panel-tabs">
+      <button class="tab-btn active" onclick="showTab('resumen')">Resumen</button>
+      <button class="tab-btn" onclick="showTab('historial')">Historial</button>
+      <button class="tab-btn" onclick="showTab('reportes')">Reportes IA</button>
+    </div>
+
+    <div id="tab-resumen" class="tab-content active">
+      <div class="info-section">
+        <h4>Información general</h4>
+        <div class="info-list">
+          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Teléfono</span></div><div class="info-value" id="panelPhone">—</div></div>
+          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span>Correo</span></div><div class="info-value" id="panelEmail">—</div></div>
+          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Dirección</span></div><div class="info-value" id="panelAddress">—</div></div>
+          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Médico</span></div><div class="info-value" id="panelMedicoInfo">—</div></div>
+          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/></svg><span>Estado</span></div><div class="info-value" id="panelStatus">—</div></div>
+          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Último estudio</span></div><div class="info-value" id="panelLastStudy">—</div></div>
+          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg><span>Total estudios</span></div><div class="info-value" id="panelTotalStudies">—</div></div>
+        </div>
+      </div>
+      <div class="panel-cards" id="panelCards" style="display:none;">
+        <div class="mini-card">
+          <div class="mini-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Próxima cita</div>
+          <div class="mini-card-value" id="panelProximaCitaFecha">—</div>
+          <div class="mini-card-sub" id="panelProximaCitaHora">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-historial" class="tab-content">
+      <div class="historial-section">
+        <h4>Historial de estudios</h4>
+        <div class="historial-list" id="historialList"></div>
+        <div class="historial-empty" id="historialEmpty" style="display:none;">
+          <p style="color:var(--txt-soft);font-size:13px;text-align:center;padding:24px 0;">Este paciente aún no tiene estudios registrados.</p>
+        </div>
+        <a href="#" id="btnVerTodoHistorial" class="btn-view-all">Ver todo el historial de estudios<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+      </div>
+    </div>
+
+    <div id="tab-reportes" class="tab-content">
+      <div class="reportes-section">
+        <h4>Reportes IA</h4>
+        <div class="ia-summary-card">
+          <div class="ia-patient-header">
+            <div class="ia-patient-avatar" id="reportPanelAvatar">PX</div>
+            <div class="ia-patient-info">
+              <div class="ia-patient-label">paciente</div>
+              <div class="ia-patient-name" id="reportPanelName">—</div>
+              <div class="ia-study-meta" id="reportPanelFolio">Folio: —</div>
+              <div class="ia-study-meta" id="reportPanelMeta">—</div>
+            </div>
+          </div>
+        </div>
+        <a href="#" class="btn-view-all" id="reportPanelBtn" data-nav="ia-reportes">Ver reporte de IA<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Modal Eliminar -->
+<div id="modalEliminar" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div style="background:var(--card);border:1px solid var(--stroke-strong);border-radius:16px;padding:32px 28px;max-width:400px;width:90%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5);">
+    <div style="width:60px;height:60px;border-radius:50%;background:rgba(255,90,110,.12);border:1px solid rgba(255,90,110,.3);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ff5a6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    </div>
+    <h3 style="font-size:17px;font-weight:700;color:var(--txt);margin:0 0 8px;">Eliminar paciente</h3>
+    <p style="font-size:13px;color:var(--txt-soft);margin:0 0 24px;line-height:1.6;">¿Estás seguro de que deseas eliminar a <strong id="modalEliminarNombre" style="color:var(--txt);"></strong>?<br>Esta acción no se puede deshacer.</p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button onclick="cancelarEliminar()" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--stroke);background:transparent;color:var(--txt);font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>
+      <button onclick="confirmarEliminar()" style="flex:1;padding:10px 0;border-radius:10px;border:none;background:#ff5a6e;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Eliminar</button>
+    </div>
+  </div>
+</div>

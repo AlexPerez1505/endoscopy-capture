@@ -10,9 +10,12 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "endoscopy-capture",
-        "width": 800,
-        "height": 600
+        "title": "ENCLAII — Endoscopy Capture",
+        "url": "app.html",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700
       }
     ],
     "security": {

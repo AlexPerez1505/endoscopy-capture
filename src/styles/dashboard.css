@@ -1,0 +1,170 @@
+/* ============ DASHBOARD · Widget grid (migrado desde dashboard/index.blade.php) ============ */
+#widgetGrid{
+  display:grid;
+  grid-template-columns:repeat(13,1fr);
+  grid-auto-rows:minmax(60px,auto);
+  gap:18px;
+  align-items:start;
+}
+.widget{position:relative;min-height:0;z-index:1}
+.widget:not(.widget-minimal) > .card{
+  height:100%;display:flex;flex-direction:column;padding:1.25em;
+  font-size:clamp(12px, min(calc(var(--widget-w-px, 300) * 0.055px), calc(var(--widget-h-px, 260) * 0.065px)), 18px);
+}
+.widget:not(.widget-minimal) > .card h3{margin-bottom:0.75em;font-size:0.85em}
+.widget:not(.widget-minimal):not([data-widget-id="next-patient"]):not([data-widget-id="ia-pending"]):not([data-widget-id="agenda-today"]) > .card{
+  position:relative;border:1.5px solid transparent;background-clip:padding-box;
+}
+.widget:not(.widget-minimal):not([data-widget-id="next-patient"]):not([data-widget-id="ia-pending"]):not([data-widget-id="agenda-today"]) > .card::before{
+  content:"";position:absolute;inset:-1.5px;z-index:-1;border-radius:var(--r-lg);
+  background:linear-gradient(180deg, rgba(0,0,0,.47) 0%, #168BD9 100%);pointer-events:none;
+}
+
+/* Drag handle */
+.widget-drag-handle{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:rgba(234,241,255,.25);cursor:grab;opacity:0;transition:opacity .15s, background .15s;z-index:10}
+.widget:hover .widget-drag-handle{opacity:1}
+.widget-drag-handle:hover{background:rgba(178,99,255,.18);color:rgba(234,241,255,.7)}
+.widget-drag-handle svg{width:14px;height:14px;pointer-events:none}
+.widget-resize-handle{position:absolute;bottom:0;right:0;width:44px;height:44px;cursor:se-resize;opacity:0;z-index:10}
+.widget:hover .widget-resize-handle{opacity:.5}
+
+/* Span de columnas */
+.widget[data-w="3"]{grid-column:span 3}
+.widget[data-w="4"]{grid-column:span 4}
+.widget[data-w="5"]{grid-column:span 5}
+.widget[data-w="6"]{grid-column:span 6}
+.widget[data-w="8"]{grid-column:span 8}
+.widget[data-w="12"]{grid-column:span 12}
+.widget[data-w="13"]{grid-column:span 13}
+
+/* Próximo paciente */
+.card-next{background:linear-gradient(135deg,#021B44 0%, #0F2E7A 100%);border-color:#2563EB;color:#fff;position:relative;overflow:visible}
+html[data-theme="light"] .card-next{background:linear-gradient(135deg,#FFFFFF 0%, #EAF1FF 100%);border-color:#2563EB;color:#1E3A8A}
+html[data-theme="light"] .card-next h3{color:#2563EB}
+.card-next h3{color:#60A5FA;font-size:0.85em}
+.card-next .name{font-family:'Sora',sans-serif;font-size:1.65em;font-weight:700;line-height:1.15;margin-bottom:0.75em}
+html[data-theme="light"] .card-next .name{color:#1E3A8A}
+.card-next .meta{display:flex;align-items:center;gap:0.5em;font-size:0.85em;color:#9BB8E8;margin-bottom:0.25em}
+.card-next .meta b{color:#fff;font-weight:600}
+html[data-theme="light"] .card-next .meta{color:#5B7DB1}
+html[data-theme="light"] .card-next .meta b{color:#1E3A8A}
+.card-next .btn-line{margin-top:auto;flex:1 0 auto;display:flex;align-items:center;justify-content:center;gap:0.5em;padding:0.6em 1em;font-size:0.85em;min-height:2.8em;border-radius:var(--r-md);border:1px solid #2563EB;color:#60A5FA;background:rgba(37,99,235,.12)}
+@media (hover:hover) and (pointer:fine){.card-next .btn-line:hover{background:rgba(37,99,235,.22)}}
+.card-next .btn-line svg{width:1em;height:1em}
+.holo{position:absolute;right:0.9em;top:50%;translate:0 -50%;width:7.5em;height:7.5em;pointer-events:none}
+.holo svg{width:100%;height:100%;stroke:#2563EB;filter:drop-shadow(0 0 14px rgba(37,99,235,.55))}
+
+/* Reporte IA */
+.card-ia{background:linear-gradient(135deg,#090807 0%, #1A0F00 100%);border-color:#E75D01;color:#fff;position:relative;overflow:visible}
+html[data-theme="light"] .card-ia{background:linear-gradient(135deg,#FFF8F0 0%, #FDE8D0 100%);color:#5C2A0A}
+.card-ia h3{color:#E75D01;font-size:0.85em}
+.card-ia .big-num{font-family:'Sora',sans-serif;font-size:2.85em;font-weight:800;line-height:1;color:#fff}
+html[data-theme="light"] .card-ia .big-num{color:#E75D01}
+.card-ia .big-label{font-size:0.95em;font-weight:600;line-height:1.25;margin:0.25em 0 0.9em;color:#F2AC3A}
+html[data-theme="light"] .card-ia .big-label{color:#B85600}
+.btn-orange{margin-top:auto;flex:1 0 auto;display:flex;align-items:center;justify-content:center;gap:0.5em;padding:0.6em 1em;border-radius:var(--r-md);border:1px solid #E75D01;font-size:0.85em;font-weight:700;color:#F2AC3A;background:rgba(231,93,1,.12);transition:background-color 150ms ease, transform 160ms var(--ease-out);min-height:2.8em}
+.btn-orange svg{width:1em;height:1em}
+.btn-orange:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){.btn-orange:hover{background:rgba(231,93,1,.22)}}
+
+/* Calendario (Agendar día) */
+.cal-head{display:flex;align-items:center;justify-content:space-between;font-size:0.85em;font-weight:700;background:rgba(46,123,246,.15);border:1px solid var(--stroke);border-radius:10px;padding:0.5em 0.75em;margin-bottom:0.75em}
+.cal-head .arrows{display:flex;gap:0.4em}
+.cal-head .arrows button{color:var(--txt-soft);padding:0 0.25em;transition:color 150ms ease}
+.cal{width:100%;border-collapse:collapse;font-size:0.75em;text-align:center;flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:auto repeat(5,1fr)}
+.cal thead,.cal tbody,.cal tr{display:contents}
+.cal th{color:var(--txt-soft);font-weight:600;padding:0.3em 0}
+.cal td{padding:0;color:var(--txt);border-radius:8px;display:grid;place-items:center;cursor:pointer}
+.cal td.off{color:var(--off);cursor:default}
+.cal td.past{opacity:.45;text-decoration:line-through;cursor:not-allowed}
+.cal td.today{background:linear-gradient(135deg,var(--blue),var(--cyan));font-weight:700;box-shadow:0 4px 14px -4px rgba(46,123,246,.8)}
+@media (hover:hover){.cal td:not(.off):not(.past):hover{background:var(--hover-bg)}}
+
+/* Acciones rápidas */
+.quick{display:flex;flex-direction:column;gap:0.75em;flex:1}
+.quick .qbtn{display:flex;align-items:center;gap:0.75em;padding:0.8em 1em;border-radius:var(--r-md);border:1px solid var(--stroke);background:var(--panel-2);font-size:0.9em;font-weight:600;transition:border-color 150ms ease, background-color 150ms ease, transform 160ms var(--ease-out);flex:1;min-height:3em}
+.quick .qbtn:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){.quick .qbtn:hover{border-color:var(--stroke-strong);background:var(--card)}}
+.quick .qbtn svg{width:1.2em;height:1.2em;color:var(--cyan)}
+.quick .qbtn.wa svg{color:#25D366}
+
+/* Tabla pacientes */
+.tbl-wrap{flex:1;overflow-x:auto;min-height:0}
+table.tbl{width:100%;border-collapse:collapse;font-size:0.9em;min-width:540px;height:100%}
+.tbl th{text-align:left;font-size:0.85em;font-weight:600;color:var(--txt-soft);padding:0.6em 0.75em;border-bottom:1px solid var(--stroke)}
+.tbl td{padding:0.85em 0.75em;border-bottom:1px solid rgba(110,160,255,.08)}
+.tbl tbody tr{transition:background-color 150ms ease}
+@media (hover:hover) and (pointer:fine){.tbl tbody tr:hover{background:rgba(110,160,255,.05)}}
+.tbl tr:last-child td{border-bottom:0}
+.pat{display:flex;align-items:center;gap:0.6em;font-weight:600}
+.pat .mini{width:2em;height:2em;border-radius:50%;background:rgba(46,123,246,.2);border:1px solid var(--stroke-strong);display:grid;place-items:center;font-size:0.7em;font-weight:700;color:var(--cyan)}
+.tbl .dots{color:var(--txt-soft);font-weight:700;letter-spacing:0.12em}
+.tbl-link{display:flex;align-items:center;justify-content:center;gap:0.5em;margin-top:auto;padding:0.5em 0;font-size:0.85em;font-weight:700;color:var(--blue);min-height:2.5em}
+.tbl-link svg{width:1em;height:1em}
+
+/* Resumen de estudios (donut) */
+.donut-box{display:flex;align-items:center;gap:1.1em;margin-bottom:1.1em;flex:1;min-height:0;min-width:0}
+.donut{position:relative;width:clamp(7em,45%,11em);height:clamp(7em,45%,11em);flex:0 0 auto}
+.donut svg{width:100%;height:100%;transform:rotate(-90deg)}
+.donut circle{fill:none;stroke-width:14;stroke-linecap:round}
+.donut .track{stroke:rgba(110,160,255,.12)}
+.donut-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.donut-center .n{font-family:'Sora',sans-serif;font-size:1.75em;font-weight:800;line-height:1}
+.donut-center .l{font-size:0.66em;color:var(--txt-soft);line-height:1.2;margin-top:0.2em}
+.legend{display:flex;flex-direction:column;gap:0.55em;font-size:0.85em;min-width:0}
+.legend i{display:inline-block;width:0.55em;height:0.55em;border-radius:50%;margin-right:0.5em}
+.legend .b i{background:var(--blue)}
+.legend .g i{background:var(--green)}
+.legend .r i{background:var(--red)}
+.next-list h4{font-size:0.78em;font-weight:600;color:var(--txt-soft);margin-bottom:0.75em}
+.next-item{display:flex;align-items:center;justify-content:space-between;gap:0.5em;padding:0.5em 0;font-size:0.85em;border-bottom:1px solid rgba(110,160,255,.08)}
+.next-item:last-child{border-bottom:0}
+.next-item .t{color:var(--txt-soft);font-size:0.75em;flex:none}
+.next-item .n{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* IA Predictiva */
+.widget:not(.widget-minimal) > .card.card-pred{
+  background:linear-gradient(180deg, #011026 0%, #041C3B 50%, #021939 75%, #021A3A 100%);
+  border-color:rgba(56,199,244,.4);display:grid;grid-template-columns:1.2fr .65fr 1fr 1.15fr;
+  gap:1.6em;align-items:stretch;flex:1;min-height:0;width:100%;overflow:hidden;container-type:inline-size;
+}
+.widget:not(.widget-minimal) > .card.card-pred > div{display:flex;flex-direction:column;min-width:0;min-height:0;overflow-wrap:break-word}
+.pred-head{display:flex;align-items:flex-start;gap:0.85em;margin-bottom:0.85em}
+.pred-head .orb{width:2.75em;height:2.75em;flex:none;border-radius:12px;border:1px solid var(--stroke-strong);display:grid;place-items:center;color:var(--cyan);background:rgba(56,199,244,.08)}
+.pred-head .orb svg{width:1.4em;height:1.4em}
+.pred-head h3{margin-bottom:0.12em;font-size:clamp(0.82em,2.6cqi,1.05em)}
+.pred-head p{font-size:clamp(0.68em,2cqi,0.82em);color:var(--txt-soft);line-height:1.4}
+.pred-note{border:1px solid var(--stroke-strong);border-radius:var(--r-md);background:rgba(46,123,246,.08);padding:0.9em 1em;font-size:clamp(0.72em,2.1cqi,0.88em);line-height:1.5}
+.pred-note b{color:var(--cyan)}
+.gauge-box{text-align:center}
+.gauge-box h4,.recs h4,.hist h4{font-family:'Sora',sans-serif;font-size:clamp(0.72em,2.1cqi,0.88em);font-weight:600;margin-bottom:0.85em}
+.gauge{position:relative;width:clamp(5.2em,18cqi,7.6em);height:clamp(5.2em,18cqi,7.6em);margin:0 auto}
+.gauge svg{width:100%;height:100%;transform:rotate(-90deg)}
+.gauge circle{fill:none;stroke-width:11;stroke-linecap:round}
+.gauge .track{stroke:rgba(110,160,255,.12)}
+.gauge .val{stroke:var(--orange);transition:stroke-dashoffset 1.2s var(--ease-out)}
+.gauge-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.gauge-center .lvl{font-size:clamp(0.62em,1.8cqi,0.78em);font-weight:700;color:var(--orange)}
+.gauge-center .pct{font-family:'Sora',sans-serif;font-size:clamp(1.05em,4.2cqi,1.55em);font-weight:800;line-height:1.05}
+.recs ul{list-style:none;flex:1;overflow:auto;min-height:0}
+.recs li{display:flex;align-items:flex-start;gap:0.6em;font-size:clamp(0.72em,2.1cqi,0.88em);line-height:1.4;padding:0.4em 0}
+.recs li svg{width:clamp(0.9em,2.8cqi,1.1em);height:clamp(0.9em,2.8cqi,1.1em);flex:none;color:var(--green);margin-top:0.06em}
+.hist{display:flex;flex-direction:column;min-height:0;overflow:auto}
+.hist h4{color:var(--green)}
+.hist-item{display:flex;align-items:center;justify-content:space-between;gap:0.75em;padding:0.55em 0;font-size:clamp(0.72em,2.1cqi,0.88em);border-bottom:1px solid rgba(110,160,255,.08)}
+.hist-item span{color:var(--txt-soft);font-size:0.85em}
+.hist .tbl-link{justify-content:flex-start;margin-top:auto}
+
+/* Responsive widgets */
+@media (max-width:1280px){
+  .widget[data-w="3"]{grid-column:span 6}
+  .widget[data-w="4"]{grid-column:span 6}
+  .widget[data-w="5"]{grid-column:span 6}
+  .widget[data-w="6"]{grid-column:span 13}
+  .widget[data-w="8"]{grid-column:span 13}
+  .widget:not(.widget-minimal) > .card.card-pred{grid-template-columns:1fr 1fr}
+}
+@media (max-width:720px){
+  .widget[data-w]{grid-column:span 13 !important}
+  .widget:not(.widget-minimal) > .card.card-pred{grid-template-columns:1fr}
+}
