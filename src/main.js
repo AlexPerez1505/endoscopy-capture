@@ -11,6 +11,7 @@ const logBox = document.getElementById('logBox');
 const connectionStatus = document.getElementById('connectionStatus');
 const recordingIndicator = document.getElementById('recordingIndicator');
 const deviceLabel = document.getElementById('deviceLabel');
+const backToAppBtn = document.getElementById('backToAppBtn');
 
 const pairStatusText = document.getElementById('pairStatusText');
 const tenantText = document.getElementById('tenantText');
@@ -32,6 +33,15 @@ let recordedChunks = [];
 
 let totalImages = 0;
 let totalVideos = 0;
+
+function goBackToApp() {
+  if (window.history.length > 1) {
+    window.history.back();
+    return;
+  }
+
+  window.location.href = './app.html#dashboard';
+}
 
 function addLog(message, type = 'info') {
   const line = document.createElement('p');
@@ -372,6 +382,7 @@ startBtn.addEventListener('click', startVideo);
 captureBtn.addEventListener('click', captureImage);
 recordBtn.addEventListener('click', startRecording);
 stopRecordBtn.addEventListener('click', stopRecording);
+backToAppBtn?.addEventListener('click', goBackToApp);
 
 brightnessInput.addEventListener('input', applyFilters);
 contrastInput.addEventListener('input', applyFilters);

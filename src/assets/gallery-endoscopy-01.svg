@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1450 1044" role="img" aria-label="Captura endoscopica azul">
+  <defs>
+    <radialGradient id="vignette" cx="50%" cy="50%" r="72%">
+      <stop offset="0%" stop-color="#7fe7ff"/>
+      <stop offset="52%" stop-color="#42c4e8"/>
+      <stop offset="100%" stop-color="#061625"/>
+    </radialGradient>
+    <linearGradient id="foldA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d88ad"/>
+      <stop offset="42%" stop-color="#77e6ff"/>
+      <stop offset="100%" stop-color="#1d789a"/>
+    </linearGradient>
+    <linearGradient id="foldB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8bf2ff"/>
+      <stop offset="58%" stop-color="#42b9dc"/>
+      <stop offset="100%" stop-color="#07536d"/>
+    </linearGradient>
+    <filter id="soft" x="-12%" y="-12%" width="124%" height="124%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <filter id="noise" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".95" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 .12"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+
+  <rect width="1450" height="1044" fill="#061625"/>
+  <ellipse cx="726" cy="522" rx="780" ry="610" fill="url(#vignette)"/>
+  <path d="M78 0 C188 234 177 618 65 1044 L0 1044 L0 0 Z" fill="#082136" opacity=".72"/>
+  <path d="M1379 0 C1284 256 1281 702 1406 1044 L1450 1044 L1450 0 Z" fill="#061625" opacity=".82"/>
+
+  <path d="M462 -28 C360 232 374 516 492 761 C564 911 674 1012 815 1044 L998 1044 C842 812 826 654 900 484 C973 316 958 132 852 -28 Z" fill="url(#foldA)"/>
+  <path d="M879 -36 C1004 217 1016 496 941 721 C901 840 909 960 976 1044 L1305 1044 C1194 784 1162 510 1221 245 C1241 156 1264 66 1306 -36 Z" fill="url(#foldB)" opacity=".9"/>
+  <path d="M214 0 C320 188 328 464 247 710 C213 813 188 927 182 1044 L0 1044 L0 0 Z" fill="#7beaff" opacity=".34"/>
+
+  <ellipse cx="726" cy="681" rx="159" ry="178" fill="#2ea6cb" opacity=".86"/>
+  <ellipse cx="730" cy="670" rx="125" ry="141" fill="#69ddf7" opacity=".38"/>
+  <path d="M705 596 C732 582 762 593 774 619 L838 833 C802 850 760 852 724 837 Z" fill="#082c44" opacity=".84"/>
+  <path d="M740 612 C765 602 785 612 796 636 L837 819 C812 831 786 832 761 823 Z" fill="#0d5876" opacity=".86"/>
+
+  <g filter="url(#soft)" opacity=".46">
+    <path d="M601 140 C681 124 749 126 832 145" stroke="#d7fbff" stroke-width="6" fill="none"/>
+    <path d="M966 62 C1014 166 1025 292 998 410" stroke="#d7fbff" stroke-width="8" fill="none"/>
+    <path d="M178 422 C258 357 310 242 324 95" stroke="#e2ffff" stroke-width="7" fill="none"/>
+  </g>
+
+  <g fill="#f6fdff" font-family="Consolas, monospace" font-size="30" font-weight="600">
+    <text x="46" y="70">ID:</text>
+    <text x="46" y="108">Name:</text>
+    <text x="46" y="184">01/01/2000</text>
+    <text x="46" y="220">00:32:41</text>
+    <text x="46" y="300">CVP:1</text>
+    <text x="46" y="338">Gr:N</text>
+  </g>
+
+  <rect width="1450" height="1044" filter="url(#noise)" opacity=".5"/>
+  <ellipse cx="726" cy="522" rx="790" ry="618" fill="none" stroke="#03111d" stroke-width="68" opacity=".54"/>
+</svg>

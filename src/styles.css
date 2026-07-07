@@ -53,6 +53,40 @@ select {
   padding: 28px;
 }
 
+.capture-back-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.capture-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.capture-back-btn span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.capture-back-btn:hover {
+  border-color: rgba(0, 122, 255, 0.45);
+  color: var(--blue);
+  transform: translateY(-1px);
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;

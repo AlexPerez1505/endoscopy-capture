@@ -5,6 +5,7 @@ import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
 import { initAgenda } from './agenda.js';
 import { initReports, initReportEditor } from './reports.js';
+import { initGaleria } from './galeria.js';
 
 const HEAD = {
   dashboard:      { title: 'Dashboard',      sub: 'Resumen general de tu actividad clínica' },
@@ -12,13 +13,13 @@ const HEAD = {
   pacientes:      { title: 'Pacientes',      sub: 'Expedientes y datos clínicos' },
   'ia-reportes':  { title: 'Reportes IA',    sub: 'Generación y edición de reportes' },
   mensajes:       { title: 'Mensajes',       sub: 'Comunicación con pacientes' },
-  galeria:        { title: 'Galería',        sub: 'Imágenes y videos de estudios' },
+  galeria:        { title: 'Galería de pacientes', sub: 'Consulta y administra imágenes y videos de estudios' },
   finanzas:       { title: 'Finanzas',       sub: 'Ingresos y facturación' },
   configuracion:  { title: 'Configuración', sub: 'Preferencias y ajustes' },
 };
 
 // Secciones ya migradas (tienen fragmento HTML en ./pages)
-const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'ia-reportes', 'ia-reportes-redactar']);
+const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'ia-reportes', 'ia-reportes-redactar', 'galeria']);
 
 const pageContent = document.getElementById('pageContent');
 const headTitle   = document.getElementById('headTitle');
@@ -66,6 +67,7 @@ async function loadPage(route) {
     if (route === 'agenda')    initAgenda();
     if (route === 'ia-reportes') initReports();
     if (route === 'ia-reportes-redactar') initReportEditor();
+    if (route === 'galeria') initGaleria();
   } catch (err) {
     pageContent.innerHTML = `<div class="card"><h3>Error</h3><p class="muted">No se pudo cargar la sección: ${err.message}</p></div>`;
   }
