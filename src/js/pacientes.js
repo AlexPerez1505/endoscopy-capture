@@ -43,11 +43,39 @@ function rowHTML(patient, globalIndex) {
         <button class="btn-more" aria-label="Más opciones" onclick="event.stopPropagation();toggleMenu(this)">⋮</button>
       </div>
       <div class="actions-dropdown" onclick="event.stopPropagation()">
-        <a href="#" onclick="event.stopPropagation(); window.location.hash='ia-reportes'; return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Crear informe</a>
-        <a href="#" onclick="event.stopPropagation(); return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>Editar información</a>
-        <a href="#" onclick="event.stopPropagation(); window.location.href='./index.html'; return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="22" x2="15" y2="22"/><line x1="12" y1="17" x2="12" y2="22"/></svg>Iniciar estudio</a>
-        <a href="#" onclick="event.stopPropagation(); window.location.hash='mensajes'; return false;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2a9.9 9.9 0 0 0-8.5 14.9L2 22l5.25-1.5A9.9 9.9 0 1 0 12.04 2z"/></svg>Enviar WhatsApp</a>
-        <a href="#" class="danger" onclick="event.stopPropagation(); deletePatient(${globalIndex}); return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Eliminar paciente</a>
+        <a href="#" onclick="event.stopPropagation(); window.location.hash='ia-reportes'; return false;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Crear informe
+        </a>
+        <a href="#" onclick="event.stopPropagation(); editarPaciente(${globalIndex}); return false;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Editar información
+        </a>
+        <a href="#" onclick="event.stopPropagation(); window.location.href='./index.html'; return false;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="22" x2="15" y2="22"/><line x1="12" y1="17" x2="12" y2="22"/></svg>
+          Iniciar estudio
+        </a>
+        <a href="#" onclick="event.stopPropagation(); window.location.hash='ia-reportes'; return false;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          Generar reporte IA
+        </a>
+        <a href="#" onclick="event.stopPropagation(); window.location.hash='agenda'; return false;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Programar cita
+        </a>
+        <a href="#" onclick="event.stopPropagation(); window.location.hash='mensajes'; return false;">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2a9.9 9.9 0 0 0-8.5 14.9L2 22l5.25-1.5A9.9 9.9 0 1 0 12.04 2z"/></svg>
+          Enviar WhatsApp
+        </a>
+        <a href="#" onclick="event.stopPropagation(); return false;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Descargar expediente PDF
+        </a>
+        <div class="dropdown-separator"></div>
+        <a href="#" class="danger" onclick="event.stopPropagation(); deletePatient(${globalIndex}); return false;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Eliminar paciente
+        </a>
       </div>
     </div>
   </div>`;
@@ -132,13 +160,30 @@ function openPanel(index) {
     } else empty.style.display = 'block';
   }
 
+  // Poblar tab Estudios
+  const estList  = document.getElementById('estudiosList');
+  const estEmpty = document.getElementById('estudiosEmpty');
+  if (estList && estEmpty) {
+    estList.innerHTML = '';
+    if (estudios.length) {
+      estEmpty.style.display = 'none';
+      estudios.forEach(est => {
+        const item = document.createElement('div');
+        item.className = 'historial-item';
+        item.innerHTML = `<div class="historial-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg></div><div class="historial-info"><div class="historial-title">${est.tipo || 'Estudio'}</div><div class="historial-doctor">${p.medico || 'Sin médico'}</div></div><div class="historial-right"><div class="historial-date">${est.fecha || 'Sin fecha'}</div></div>`;
+        estList.appendChild(item);
+      });
+    } else estEmpty.style.display = 'block';
+  }
+
   const rAvatar = document.getElementById('reportPanelAvatar');
   if (rAvatar) rAvatar.textContent = p.initials || 'PX';
   set('reportPanelName', p.name || '—');
   set('reportPanelFolio', 'Folio: ' + (p.folio || '—'));
   set('reportPanelMeta', [p.age, p.gender, p.dob].filter(Boolean).join(' · ') || 'Sin datos');
 
-  document.getElementById('contentWrapper').classList.add('panel-open');
+  document.getElementById('contentWrapper').classList.add('panel-open');  // Mostrar siempre la tab Resumen al abrir
+  showTab('resumen');
   document.querySelectorAll('.patient-row').forEach(r => r.classList.remove('active'));
   const activeRow = document.querySelector('[data-index="' + index + '"]');
   if (activeRow) activeRow.classList.add('active');
@@ -151,8 +196,9 @@ function closePanel() {
 }
 
 function showTab(tabName) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  if (window.event) window.event.target.classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('onclick') === `showTab('${tabName}')`);
+  });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('tab-' + tabName)?.classList.add('active');
 }
@@ -341,3 +387,11 @@ export function initPacientes() {
 
   renderPage(1);
 }
+
+function editarPaciente(index) {
+  const p = patientsData[index];
+  if (!p) return;
+  sessionStorage.setItem('enclaii-editar-paciente', JSON.stringify(p));
+  window.location.hash = 'editar-paciente';
+}
+window.editarPaciente = editarPaciente;

@@ -1,0 +1,309 @@
+<!-- Editar Paciente -->
+<div class="np-wrap">
+
+  <!-- Back link -->
+  <a href="#" class="np-back" data-nav="pacientes">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver a pacientes
+  </a>
+
+  <form id="formEditarPaciente" autocomplete="off" novalidate>
+
+    <!-- ── Tarjeta única ── -->
+    <section class="np-section rise d1">
+
+      <!-- Información personal -->
+      <div class="np-section-head">
+        <h2>Información personal</h2>
+        <span class="np-folio">Folio: <strong id="npFolioDisplay">P-001</strong></span>
+      </div>
+
+      <div class="np-personal-grid">
+
+        <!-- Foto -->
+        <div class="np-photo-col">
+          <div class="np-photo-box" id="npPhotoBox">
+            <svg class="np-photo-placeholder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <img id="npPhotoPreview" src="" alt="" style="display:none;">
+          </div>
+          <button type="button" class="np-btn-photo" id="npBtnPhoto">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Agregar foto
+          </button>
+          <input type="file" id="npPhotoInput" accept="image/*" style="display:none;">
+        </div>
+
+        <!-- Campos -->
+        <div class="np-fields-col">
+          <div class="np-row-3">
+            <div class="np-field np-span2">
+              <label>NOMBRE COMPLETO</label>
+              <input type="text" id="npNombre" placeholder="Nombre completo del paciente" required>
+            </div>
+            <div class="np-field">
+              <label>FECHA DE NACIMIENTO</label>
+              <input type="date" id="npFechaNac" required>
+            </div>
+            <div class="np-field">
+              <label>EDAD</label>
+              <input type="text" id="npEdad" placeholder="—" readonly>
+            </div>
+          </div>
+
+          <div class="np-row-3">
+            <div class="np-field">
+              <label>PESO</label>
+              <input type="number" id="npPeso" placeholder="Peso en kg" min="0" step="0.1">
+            </div>
+            <div class="np-field">
+              <label>ALTURA</label>
+              <input type="number" id="npAltura" placeholder="Altura en metros" min="0" step="0.01">
+            </div>
+            <div class="np-field">
+              <label>SEXO</label>
+              <select id="npSexo">
+                <option value="">Selecciona sexo</option>
+                <option value="Femenino">Femenino</option>
+                <option value="Masculino">Masculino</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="np-row-2">
+            <div class="np-field">
+              <label>DIRECCIÓN</label>
+              <input type="text" id="npDireccion" placeholder="CALLE, CP">
+            </div>
+            <div class="np-field">
+              <label>TELÉFONO</label>
+              <input type="tel" id="npTelefono" placeholder="722 162 0815">
+            </div>
+          </div>
+
+          <div class="np-row-1">
+            <div class="np-field">
+              <label>E-MAIL</label>
+              <input type="email" id="npEmail" placeholder="correo@ejemplo.com">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Divisor -->
+      <hr class="np-divider">
+
+      <!-- Información médica -->
+      <h2 style="margin-bottom:28px;">Información médica</h2>
+
+      <div class="np-medica-grid">
+
+      <div class="np-row-2">
+        <div class="np-field">
+          <label>MÉDICO</label>
+          <div class="np-input-add">
+            <input type="text" id="npMedico" placeholder="Nombre del médico">
+            <button type="button" class="np-btn-add" title="Agregar médico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="np-field">
+          <label>DIAGNÓSTICO PRELIMINAR</label>
+          <textarea id="npDiagnostico" rows="5" placeholder="Define lo que podría tener"></textarea>
+        </div>
+      </div>
+
+      <div class="np-row-2">
+        <div class="np-field">
+          <label>PROCEDIMIENTO</label>
+          <div class="np-input-add">
+            <input type="text" id="npProcedimiento" placeholder="Ej. Colonoscopía">
+            <button type="button" class="np-btn-add" title="Agregar procedimiento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="np-field">
+          <!-- vacío intencionalmente para alinear con diagnóstico -->
+        </div>
+      </div>
+
+      <div class="np-row-2">
+        <div class="np-field">
+          <label>ANESTESIÓLOGO</label>
+          <div class="np-input-add">
+            <input type="text" id="npAnestesiologo" placeholder="Nombre del anestesiólogo">
+            <button type="button" class="np-btn-add" title="Agregar anestesiólogo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="np-field">
+          <label>REFERIDO POR</label>
+          <div class="np-input-add">
+            <input type="text" id="npReferido" placeholder="Ej. Externo">
+            <button type="button" class="np-btn-add" title="Agregar referencia">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="np-row-2">
+        <div class="np-field">
+          <label>EQUIPO UTILIZADO</label>
+          <div class="np-input-add">
+            <input type="text" id="npEquipo" placeholder="Ej. Endoscopio Olympus">
+            <button type="button" class="np-btn-add" title="Agregar equipo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="np-field">
+          <!-- vacío -->
+        </div>
+      </div>
+
+      <div class="np-row-2">
+        <div class="np-field">
+          <label>ENFERMEDAD</label>
+          <textarea id="npEnfermedad" rows="4" placeholder="Describe la enfermedad o padecimiento del paciente"></textarea>
+        </div>
+        <div class="np-field">
+          <label>ALERGIAS</label>
+          <textarea id="npAlergias" rows="4" placeholder="Especifica las alergias del paciente (medicamentos, alimentos, etc.)"></textarea>
+        </div>
+      </div>
+
+      </div><!-- /np-medica-grid -->
+
+      <!-- Estudios / archivos -->
+      <div class="np-field" style="margin-top:28px;">
+        <label>ESTUDIOS (ARCHIVOS)</label>
+        <div class="np-upload-area" id="npUploadArea">
+          <button type="button" class="np-btn-upload" id="npBtnUpload">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Subir archivos
+          </button>
+          <span class="np-upload-hint">PDF, Imágenes, Word — múltiples archivos permitidos</span>
+        </div>
+        <input type="file" id="npFilesInput" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp" style="display:none;">
+        <div id="npFileList" class="np-file-list"></div>
+      </div>
+
+      <!-- Botón guardar -->
+      <div class="np-footer">
+        <button type="submit" class="np-btn-save">
+          Guardar cambios
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+
+    </section><!-- fin tarjeta única -->
+
+  </form>
+
+  <!-- ── Modal Insertar Foto ── -->
+  <div id="npFotoModal" class="npfm-overlay" style="display:none;">
+    <div class="npfm-dialog">
+
+      <div class="npfm-header">
+        <div>
+          <h2>Inserta foto del paciente</h2>
+          <p>Capture una fotografía o imagen en vivo del paciente para su expediente</p>
+        </div>
+      </div>
+
+      <div class="npfm-body">
+
+        <!-- Izquierda: preview -->
+        <div class="npfm-left">
+          <div class="npfm-label">Vista previa</div>
+          <div class="npfm-preview-box" id="npfmPreviewBox">
+            <div class="npfm-corners">
+              <span class="npfm-c tl"></span><span class="npfm-c tr"></span>
+              <span class="npfm-c bl"></span><span class="npfm-c br"></span>
+            </div>
+            <video id="npfmVideo" autoplay playsinline style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;"></video>
+            <canvas id="npfmCanvas" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;"></canvas>
+            <div class="npfm-placeholder-wrap" id="npfmPlaceholderWrap">
+              <div class="npfm-placeholder-circle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+            </div>
+            <img id="npfmImgPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;" alt="">
+          </div>
+          <div class="npfm-actions-row">
+            <button type="button" class="npfm-action-btn" id="npfmBtnGallery" title="Galería">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span>Galería</span>
+            </button>
+            <button type="button" class="npfm-action-btn npfm-action-primary" id="npfmBtnCapture" title="Tomar foto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <span>Tomar foto</span>
+            </button>
+            <button type="button" class="npfm-action-btn" id="npfmBtnFlip" title="Rotar cámara">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2v6h6M21.5 22v-6h-6"/><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"/></svg>
+              <span>Rotar cámara</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Derecha: opciones -->
+        <div class="npfm-right">
+          <div class="npfm-label">Seleccionar fuente</div>
+
+          <button type="button" class="npfm-source-btn npfm-source-active" id="npfmSrcCamera">
+            <span class="npfm-source-icon npfm-icon-blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </span>
+            <div>
+              <div class="npfm-source-title">Cámara en vivo</div>
+              <div class="npfm-source-sub">usar camara del dispositivo</div>
+            </div>
+          </button>
+
+          <button type="button" class="npfm-source-btn" id="npfmSrcFile">
+            <span class="npfm-source-icon npfm-icon-orange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            <div>
+              <div class="npfm-source-title">Subir imagen</div>
+              <div class="npfm-source-sub">Seleccionar desde archivos</div>
+            </div>
+          </button>
+          <input type="file" id="npfmFileInput" accept="image/*" style="display:none;">
+
+          <div class="npfm-label" style="margin-top:20px;">Seleccionar resolución</div>
+          <select class="npfm-select" id="npfmResolucion">
+            <option value="1920x1080">Alta (1920 x 1080)</option>
+            <option value="1280x720">Media (1280 x 720)</option>
+            <option value="640x480">Baja (640 x 480)</option>
+          </select>
+
+          <div class="npfm-tips">
+            <div class="npfm-tips-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Recomendaciones
+            </div>
+            <ul>
+              <li>Asegúrese de que el rostro esté centrado.</li>
+              <li>Buena iluminación y fondo claro.</li>
+              <li>Evite sombras o reflejos en el rostro.</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="npfm-footer">
+        <button type="button" class="npfm-btn-cancel" id="npfmBtnCancel">Cancelar</button>
+        <button type="button" class="npfm-btn-use" id="npfmBtnUse">Usar esta foto</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

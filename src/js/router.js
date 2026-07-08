@@ -5,11 +5,15 @@ import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
 import { initAgenda } from './agenda.js';
 import { initReports, initReportEditor } from './reports.js';
+import { initNuevoPaciente } from './nuevo-paciente.js';
+import { initEditarPaciente } from './editar-paciente.js';
 
 const HEAD = {
   dashboard:      { title: 'Dashboard',      sub: 'Resumen general de tu actividad clínica' },
   agenda:         { title: 'Agenda',         sub: 'Gestiona tus citas y estudios' },
   pacientes:      { title: 'Pacientes',      sub: 'Expedientes y datos clínicos' },
+  'nuevo-paciente':   { title: 'Nuevo Paciente',   sub: 'Ingresa los datos correctamente de tu paciente' },
+  'editar-paciente':  { title: 'Editar Paciente',   sub: 'Modifica los datos del paciente' },
   'ia-reportes':  { title: 'Reportes IA',    sub: 'Generación y edición de reportes' },
   mensajes:       { title: 'Mensajes',       sub: 'Comunicación con pacientes' },
   galeria:        { title: 'Galería',        sub: 'Imágenes y videos de estudios' },
@@ -18,7 +22,7 @@ const HEAD = {
 };
 
 // Secciones ya migradas (tienen fragmento HTML en ./pages)
-const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'ia-reportes', 'ia-reportes-redactar']);
+const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'ia-reportes', 'ia-reportes-redactar', 'nuevo-paciente', 'editar-paciente']);
 
 const pageContent = document.getElementById('pageContent');
 const headTitle   = document.getElementById('headTitle');
@@ -51,6 +55,10 @@ async function loadPage(route) {
     return;
   }
 
+  if (route === 'nuevo-paciente' || route === 'editar-paciente') {
+    setActiveNav('pacientes');
+  }
+
   if (!AVAILABLE.has(route)) {
     renderPlaceholder(route);
     return;
@@ -66,6 +74,8 @@ async function loadPage(route) {
     if (route === 'agenda')    initAgenda();
     if (route === 'ia-reportes') initReports();
     if (route === 'ia-reportes-redactar') initReportEditor();
+    if (route === 'nuevo-paciente') initNuevoPaciente();
+    if (route === 'editar-paciente') initEditarPaciente();
   } catch (err) {
     pageContent.innerHTML = `<div class="card"><h3>Error</h3><p class="muted">No se pudo cargar la sección: ${err.message}</p></div>`;
   }
