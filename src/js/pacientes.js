@@ -2,12 +2,12 @@
 // Migrado desde pacientes/index.blade.php. Los datos vienen de un arreglo de
 // ejemplo (SAMPLE); se reemplazará por el API de Laravel más adelante.
 
-const SAMPLE_PATIENTS = [
-  { id:1, name:'María González', initials:'MG', age:'45 años', gender:'Femenino', folio:'P-00045', dob:'16/04/1979', phone:'+52 722 162 0815', email:'maria@gmail.com', address:'Toluca, Centro 01', medico:'Dr. Domínguez', study_date:'15 Jul 2025', study_type:'Endoscopía alta', status:'completado', tiene_estudios:true, estudios:[{id:11,tipo:'Endoscopía alta',fecha:'15/07/2025'}], proxima_cita:{fecha:'20 Jul 2025',hora:'10:00 AM'} },
-  { id:2, name:'Carlos Ramírez', initials:'CR', age:'52 años', gender:'Masculino', folio:'P-00046', dob:'03/11/1972', phone:'+52 722 555 1020', email:'carlos@gmail.com', address:'Metepec, Las Flores 22', medico:'Dra. Pérez', study_date:'02 Jul 2025', study_type:'Colonoscopía', status:'en_proceso', tiene_estudios:true, estudios:[{id:12,tipo:'Colonoscopía',fecha:'02/07/2025'}], proxima_cita:null },
-  { id:3, name:'Ana Torres', initials:'AT', age:'38 años', gender:'Femenino', folio:'P-00047', dob:'27/02/1987', phone:'+52 722 333 4455', email:'ana@gmail.com', address:'Toluca, Universidad 5', medico:'Dr. Domínguez', study_date:'', study_type:'', status:'', tiene_estudios:false, estudios:[], proxima_cita:{fecha:'25 Jul 2025',hora:'12:30 PM'} },
-  { id:4, name:'Luis Hernández', initials:'LH', age:'60 años', gender:'Masculino', folio:'P-00048', dob:'09/09/1965', phone:'+52 722 777 8899', email:'luis@gmail.com', address:'Lerma, Reforma 8', medico:'Dra. Pérez', study_date:'28 Jun 2025', study_type:'Gastroscopía', status:'cancelado', tiene_estudios:true, estudios:[{id:14,tipo:'Gastroscopía',fecha:'28/06/2025'}], proxima_cita:null },
-  { id:5, name:'Sofía Martínez', initials:'SM', age:'29 años', gender:'Femenino', folio:'P-00049', dob:'14/05/1996', phone:'+52 722 111 2233', email:'sofia@gmail.com', address:'Toluca, Sor Juana 14', medico:'Dr. Domínguez', study_date:'10 Jun 2025', study_type:'Endoscopía alta', status:'completado', tiene_estudios:true, estudios:[{id:15,tipo:'Endoscopía alta',fecha:'10/06/2025'}], proxima_cita:null },
+export let SAMPLE_PATIENTS = [
+  { id:1, name:'María González', initials:'MG', age:'45 años', gender:'Femenino', folio:'P-00045', dob:'16/04/1979', phone:'+52 722 162 0815', email:'maria@gmail.com', address:'Toluca, Centro 01', medico:'Dr. Domínguez', study_date:'15 Jul 2025', study_type:'Endoscopía alta', status:'completado', tiene_estudios:false, estudios:[], proxima_cita:null },
+  { id:2, name:'Carlos Ramírez', initials:'CR', age:'52 años', gender:'Masculino', folio:'P-00046', dob:'03/11/1972', phone:'+52 722 555 1020', email:'carlos@gmail.com', address:'Metepec, Las Flores 22', medico:'Dra. Pérez', study_date:'02 Jul 2025', study_type:'Colonoscopía', status:'en_proceso', tiene_estudios:false, estudios:[], proxima_cita:null },
+  { id:3, name:'Ana Torres', initials:'AT', age:'38 años', gender:'Femenino', folio:'P-00047', dob:'27/02/1987', phone:'+52 722 333 4455', email:'ana@gmail.com', address:'Toluca, Universidad 5', medico:'Dr. Domínguez', study_date:'', study_type:'', status:'', tiene_estudios:false, estudios:[], proxima_cita:null },
+  { id:4, name:'Luis Hernández', initials:'LH', age:'60 años', gender:'Masculino', folio:'P-00048', dob:'09/09/1965', phone:'+52 722 777 8899', email:'luis@gmail.com', address:'Lerma, Reforma 8', medico:'Dra. Pérez', study_date:'28 Jun 2025', study_type:'Gastroscopía', status:'cancelado', tiene_estudios:false, estudios:[], proxima_cita:null },
+  { id:5, name:'Sofía Martínez', initials:'SM', age:'29 años', gender:'Femenino', folio:'P-00049', dob:'14/05/1996', phone:'+52 722 111 2233', email:'sofia@gmail.com', address:'Toluca, Sor Juana 14', medico:'Dr. Domínguez', study_date:'10 Jun 2025', study_type:'Endoscopía alta', status:'completado', tiene_estudios:false, estudios:[], proxima_cita:null },
 ];
 
 const statusTexts = { completed:'Completado', waiting:'En espera', cancelled:'Cancelado' };
@@ -133,17 +133,7 @@ function openPanel(index) {
   set('panelMedicoInfo', p.medico || 'Sin médico');
   set('panelStatus', p.status ? p.status.charAt(0).toUpperCase() + p.status.slice(1) : 'Sin estado');
   const estudios = p.estudios || [];
-  set('panelLastStudy', estudios.length ? `${estudios[0].tipo} (${estudios[0].fecha})` : 'Sin estudios');
   set('panelTotalStudies', estudios.length);
-
-  const panelCards = document.getElementById('panelCards');
-  if (panelCards) {
-    if (p.proxima_cita) {
-      set('panelProximaCitaFecha', p.proxima_cita.fecha || '—');
-      set('panelProximaCitaHora', p.proxima_cita.hora || '—');
-      panelCards.style.display = 'block';
-    } else panelCards.style.display = 'none';
-  }
 
   const list = document.getElementById('historialList');
   const empty = document.getElementById('historialEmpty');
@@ -163,17 +153,32 @@ function openPanel(index) {
   // Poblar tab Estudios
   const estList  = document.getElementById('estudiosList');
   const estEmpty = document.getElementById('estudiosEmpty');
+  const btnTodos = document.getElementById('btnVerTodosEstudios');
   if (estList && estEmpty) {
     estList.innerHTML = '';
     if (estudios.length) {
       estEmpty.style.display = 'none';
+      if (btnTodos) btnTodos.style.display = 'flex';
       estudios.forEach(est => {
         const item = document.createElement('div');
-        item.className = 'historial-item';
-        item.innerHTML = `<div class="historial-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg></div><div class="historial-info"><div class="historial-title">${est.tipo || 'Estudio'}</div><div class="historial-doctor">${p.medico || 'Sin médico'}</div></div><div class="historial-right"><div class="historial-date">${est.fecha || 'Sin fecha'}</div></div>`;
+        item.className = 'estudio-item';
+        const nombre = est.nombre || (est.tipo ? est.tipo + '.pdf' : 'Estudio');
+        const size   = est.size || '';
+        const fecha  = est.fecha || '';
+        const url    = est.url || '#';
+        item.innerHTML = `
+          <div class="estudio-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          <div class="estudio-info">
+            <div class="estudio-name">${nombre}</div>
+            <div class="estudio-meta">${size}${size && fecha ? ' · ' : ''}${fecha}</div>
+          </div>
+          <a href="${url}" target="_blank" class="estudio-view" onclick="event.stopPropagation()">Ver</a>`;
         estList.appendChild(item);
       });
-    } else estEmpty.style.display = 'block';
+    } else {
+      estEmpty.style.display = 'block';
+      if (btnTodos) btnTodos.style.display = 'none';
+    }
   }
 
   const rAvatar = document.getElementById('reportPanelAvatar');

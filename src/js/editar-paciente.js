@@ -1,5 +1,6 @@
 // ================= Editar Paciente · Inicializador =================
 import { initNuevoPaciente } from './nuevo-paciente.js';
+import { SAMPLE_PATIENTS } from './pacientes.js';
 
 export function initEditarPaciente() {
   // Reutiliza toda la lógica del formulario (modal foto, archivos, edad, etc.)
@@ -54,8 +55,46 @@ export function initEditarPaciente() {
         document.getElementById('npNombre')?.focus();
         return;
       }
-      // TODO: enviar al API de Laravel (PUT /pacientes/{id})
-      console.log('Paciente actualizado:', { id: p.id, nombre });
+
+      const formatSize = bytes => {
+        if (!bytes) return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      };
+
+      const idx = SAMPLE_PATIENTS.findIndex(x => x.id === p.id);
+      if (idx > -1) {
+        const target = SAMPLE_PATIENTS[idx];
+        const fechaHoy = new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const nuevosArchivos = (initNuevoPaciente.getUploadedFiles ? initNuevoPaciente.getUploadedFiles() : []).map((file, i) => ({
+          id: Date.now() + i,
+          tipo: file.name.split('.').slice(0, -1).join('.') || 'Estudio',
+          fecha: fechaHoy,
+          nombre: file.name,
+          size: formatSize(file.size),
+          url: URL.createObjectURL(file),
+        }));
+
+        target.name    = nombre;
+        target.initials = nombre.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+        target.age     = document.getElementById('npEdad')?.value || target.age;
+        target.gender  = document.getElementById('npSexo')?.value || target.gender;
+        target.dob     = document.getElementById('npFechaNac')?.value || target.dob;
+        target.phone   = document.getElementById('npTelefono')?.value.trim() || target.phone;
+        target.email   = document.getElementById('npEmail')?.value.trim() || target.email;
+        target.address = document.getElementById('npDireccion')?.value.trim() || target.address;
+        target.medico  = document.getElementById('npMedico')?.value.trim() || target.medico;
+        target.estudios = [...(target.estudios || []), ...nuevosArchivos];
+        target.tiene_estudios = target.estudios.length > 0;
+        if (nuevosArchivos.length) {
+          const ult = nuevosArchivos[nuevosArchivos.length - 1];
+          target.study_date = ult.fecha;
+          target.study_type = ult.tipo;
+        }
+        console.log('Paciente actualizado:', target);
+      }
+
       sessionStorage.removeItem('enclaii-editar-paciente');
       window.location.hash = 'pacientes';
     }, { once: true });

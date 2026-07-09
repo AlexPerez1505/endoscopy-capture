@@ -82,7 +82,7 @@
         </span>
       </span>
       <span>Folio</span>
-      <span class="cell-fecha">Nacimiento</span>
+      <span class="cell-fecha">Fech. Nacimiento</span>
       <span>
         Último estudio
         <span class="ordenar-container">
@@ -154,26 +154,19 @@
           <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Dirección</span></div><div class="info-value" id="panelAddress">—</div></div>
           <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Médico</span></div><div class="info-value" id="panelMedicoInfo">—</div></div>
           <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/></svg><span>Estado</span></div><div class="info-value" id="panelStatus">—</div></div>
-          <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Último estudio</span></div><div class="info-value" id="panelLastStudy">—</div></div>
           <div class="info-item"><div class="info-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg><span>Total estudios</span></div><div class="info-value" id="panelTotalStudies">—</div></div>
-        </div>
-      </div>
-      <div class="panel-cards" id="panelCards" style="display:none;">
-        <div class="mini-card">
-          <div class="mini-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Próxima cita</div>
-          <div class="mini-card-value" id="panelProximaCitaFecha">—</div>
-          <div class="mini-card-sub" id="panelProximaCitaHora">—</div>
         </div>
       </div>
     </div>
 
     <div id="tab-estudios" class="tab-content">
       <div class="estudios-section">
-        <h4>Estudios del paciente</h4>
+        <h4>Estudios</h4>
         <div class="estudios-list" id="estudiosList"></div>
         <div class="historial-empty" id="estudiosEmpty" style="display:none;">
           <p style="color:var(--txt-soft);font-size:13px;text-align:center;padding:24px 0;">Este paciente aún no tiene estudios registrados.</p>
         </div>
+        <a href="#" class="btn-view-all" id="btnVerTodosEstudios">Ver todos los estudios<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
       </div>
     </div>
 

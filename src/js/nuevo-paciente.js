@@ -1,9 +1,11 @@
 // ================= Nuevo Paciente · Inicializador =================
 
+import { SAMPLE_PATIENTS } from './pacientes.js';
+
 export function initNuevoPaciente() {
 
   // ── Folio automático ──
-  const currentCount = 1; // TODO: obtener del API
+  const currentCount = SAMPLE_PATIENTS.length + 1;
   const folio = 'P-' + String(currentCount).padStart(3, '0');
   const folioEl = document.getElementById('npFolioDisplay');
   if (folioEl) folioEl.textContent = folio;
@@ -167,20 +169,35 @@ export function initNuevoPaciente() {
   const btnUpload  = document.getElementById('npBtnUpload');
   const filesInput = document.getElementById('npFilesInput');
   const fileList   = document.getElementById('npFileList');
+  let uploadedFiles = [];
+  initNuevoPaciente.getUploadedFiles = () => uploadedFiles;
+
+  function formatSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
 
   if (btnUpload && filesInput) {
     btnUpload.addEventListener('click', () => filesInput.click());
     filesInput.addEventListener('change', () => {
       Array.from(filesInput.files).forEach(file => {
+        uploadedFiles.push(file);
         const item = document.createElement('div');
         item.className = 'np-file-item';
+        item.dataset.filename = file.name;
         item.innerHTML = `
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           <span>${file.name}</span>
           <button type="button" class="np-file-remove" aria-label="Quitar archivo">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>`;
-        item.querySelector('.np-file-remove').addEventListener('click', () => item.remove());
+        item.querySelector('.np-file-remove').addEventListener('click', () => {
+          const idx = uploadedFiles.findIndex(f => f.name === file.name && f.size === file.size);
+          if (idx > -1) uploadedFiles.splice(idx, 1);
+          item.remove();
+        });
         if (fileList) fileList.appendChild(item);
       });
       filesInput.value = '';
@@ -200,6 +217,16 @@ export function initNuevoPaciente() {
         return;
       }
 
+      const fechaHoy = new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' });
+      const estudios = uploadedFiles.map((file, i) => ({
+        id: Date.now() + i,
+        tipo: file.name.split('.').slice(0, -1).join('.') || 'Estudio',
+        fecha: fechaHoy,
+        nombre: file.name,
+        size: formatSize(file.size),
+        url: URL.createObjectURL(file),
+      }));
+
       const newPatient = {
         id: Date.now(),
         name: nombre,
@@ -213,12 +240,14 @@ export function initNuevoPaciente() {
         address: document.getElementById('npDireccion')?.value.trim() || '',
         medico: document.getElementById('npMedico')?.value.trim() || '',
         status: '',
-        tiene_estudios: false,
-        estudios: [],
+        tiene_estudios: estudios.length > 0,
+        estudios,
+        study_date: estudios.length ? estudios[estudios.length - 1].fecha : '',
+        study_type: estudios.length ? estudios[estudios.length - 1].tipo : '',
         proxima_cita: null,
       };
 
-      // TODO: enviar al API de Laravel. Por ahora redirige a pacientes.
+      SAMPLE_PATIENTS.push(newPatient);
       console.log('Nuevo paciente:', newPatient);
       window.location.hash = 'pacientes';
     });

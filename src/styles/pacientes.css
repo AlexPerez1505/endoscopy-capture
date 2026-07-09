@@ -139,6 +139,15 @@
 /* Estudios / Historial */
 .estudios-section h4{font-size:14px;font-weight:600;margin-bottom:16px;color:var(--txt)}
 .estudios-list{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
+.estudio-item{display:flex;align-items:center;gap:14px;padding:14px;background:var(--panel-2);border:1px solid var(--stroke);border-radius:var(--r-md);transition:all 150ms ease}
+.estudio-item:hover{border-color:var(--stroke-strong);background:var(--card)}
+.estudio-icon{width:42px;height:42px;border-radius:50%;background:rgba(56,199,244,.15);display:grid;place-items:center;flex:none}
+.estudio-icon svg{width:20px;height:20px;color:var(--cyan)}
+.estudio-info{flex:1;min-width:0}
+.estudio-name{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.estudio-meta{font-size:12px;color:var(--txt-soft)}
+.estudio-view{font-size:13px;font-weight:600;color:var(--cyan);text-decoration:none;flex:none}
+.estudio-view:hover{color:#5ad4ff}
 
 /* Historial */
 .tab-content{display:none}
