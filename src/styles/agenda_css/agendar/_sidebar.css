@@ -1,0 +1,30 @@
+/* _sidebar.css — panel derecho: filtros + próximas citas */
+
+.filter-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.filter-dot.done {
+  background: linear-gradient(to bottom, #042226 20%, #4C9242 80%);
+  border: 1.38px solid #284D23;
+}
+
+.filter-dot.wait {
+  background: linear-gradient(to bottom, #351909 29%, #9B491A 100%);
+  border: 1.24px solid #E75D01;
+}
+
+.filter-dot.cancel {
+  background: linear-gradient(to bottom, #251117 38%, #D90000 100%);
+  border: 1.27px solid #D90000;
+}
+
+.filter-dot.soon {
+  background: linear-gradient(to bottom, #0B1331 43%, #B263FF 100%);
+  border: 1.27px solid #B263FF;
+}
