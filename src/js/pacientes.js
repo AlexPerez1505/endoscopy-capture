@@ -1,14 +1,13 @@
 // ================= Pacientes · Inicializador =================
-// Migrado desde pacientes/index.blade.php. Los datos vienen de un arreglo de
-// ejemplo (SAMPLE); se reemplazará por el API de Laravel más adelante.
+// Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
 
-const SAMPLE_PATIENTS = [
-  { id:1, name:'María González', initials:'MG', age:'45 años', gender:'Femenino', folio:'P-00045', dob:'16/04/1979', phone:'+52 722 162 0815', email:'maria@gmail.com', address:'Toluca, Centro 01', medico:'Dr. Domínguez', study_date:'15 Jul 2025', study_type:'Endoscopía alta', status:'completado', tiene_estudios:true, estudios:[{id:11,tipo:'Endoscopía alta',fecha:'15/07/2025'}], proxima_cita:{fecha:'20 Jul 2025',hora:'10:00 AM'} },
-  { id:2, name:'Carlos Ramírez', initials:'CR', age:'52 años', gender:'Masculino', folio:'P-00046', dob:'03/11/1972', phone:'+52 722 555 1020', email:'carlos@gmail.com', address:'Metepec, Las Flores 22', medico:'Dra. Pérez', study_date:'02 Jul 2025', study_type:'Colonoscopía', status:'en_proceso', tiene_estudios:true, estudios:[{id:12,tipo:'Colonoscopía',fecha:'02/07/2025'}], proxima_cita:null },
-  { id:3, name:'Ana Torres', initials:'AT', age:'38 años', gender:'Femenino', folio:'P-00047', dob:'27/02/1987', phone:'+52 722 333 4455', email:'ana@gmail.com', address:'Toluca, Universidad 5', medico:'Dr. Domínguez', study_date:'', study_type:'', status:'', tiene_estudios:false, estudios:[], proxima_cita:{fecha:'25 Jul 2025',hora:'12:30 PM'} },
-  { id:4, name:'Luis Hernández', initials:'LH', age:'60 años', gender:'Masculino', folio:'P-00048', dob:'09/09/1965', phone:'+52 722 777 8899', email:'luis@gmail.com', address:'Lerma, Reforma 8', medico:'Dra. Pérez', study_date:'28 Jun 2025', study_type:'Gastroscopía', status:'cancelado', tiene_estudios:true, estudios:[{id:14,tipo:'Gastroscopía',fecha:'28/06/2025'}], proxima_cita:null },
-  { id:5, name:'Sofía Martínez', initials:'SM', age:'29 años', gender:'Femenino', folio:'P-00049', dob:'14/05/1996', phone:'+52 722 111 2233', email:'sofia@gmail.com', address:'Toluca, Sor Juana 14', medico:'Dr. Domínguez', study_date:'10 Jun 2025', study_type:'Endoscopía alta', status:'completado', tiene_estudios:true, estudios:[{id:15,tipo:'Endoscopía alta',fecha:'10/06/2025'}], proxima_cita:null },
-];
+const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = (
+  localStorage.getItem('enclaii-api-url') ||
+  DEFAULT_API_BASE_URL
+).replace(/\/+$/, '');
+const PATIENTS_ENDPOINT = `${API_BASE_URL}/tauri/pacientes`;
+const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 const statusTexts = { completed:'Completado', waiting:'En espera', cancelled:'Cancelado' };
 const estadosMap = { 'en_proceso':'waiting', 'completado':'completed', 'cancelado':'cancelled', 'archivado':'completed' };
@@ -20,24 +19,204 @@ let currentPage = 1;
 let _deleteIndex = null;
 let _currentPanelIndex = null;
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function setPatientsLoading() {
+  const body = document.getElementById('patientsTableBody');
+  if (body) {
+    body.innerHTML = `<div style="padding:32px 20px;text-align:center;color:var(--txt-soft);">Cargando pacientes desde Laravel...</div>`;
+  }
+
+  const info = document.getElementById('paginationInfo');
+  if (info) info.textContent = 'Conectando con Laravel';
+
+  const pagination = document.getElementById('paginationControls');
+  if (pagination) pagination.innerHTML = '';
+}
+
+function renderPatientsError(error) {
+  if (error.code === 'UNAUTHORIZED') {
+    renderLaravelLogin(error.message);
+    return;
+  }
+
+  const body = document.getElementById('patientsTableBody');
+  const message = escapeHtml(error.message || 'No se pudieron cargar los pacientes.');
+
+  if (body) {
+    body.innerHTML = `
+      <div style="padding:32px 20px;text-align:center;color:var(--txt-soft);">
+        <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con Laravel</strong>
+        <span>${message}</span>
+      </div>`;
+  }
+
+  const info = document.getElementById('paginationInfo');
+  if (info) info.textContent = 'Sin conexión con Laravel';
+}
+
+function encodeBasicCredentials(email, password) {
+  const bytes = new TextEncoder().encode(`${email}:${password}`);
+  let binary = '';
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary);
+}
+
+function authHeader() {
+  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
+  return token ? `Basic ${token}` : '';
+}
+
+function renderLaravelLogin(message = 'Inicia sesión con tu usuario de Laravel.') {
+  const body = document.getElementById('patientsTableBody');
+  const info = document.getElementById('paginationInfo');
+  const safeMessage = escapeHtml(message);
+
+  if (body) {
+    body.innerHTML = `
+      <form id="laravelPatientsLoginForm" style="max-width:420px;margin:32px auto;padding:24px;border:1px solid var(--stroke);border-radius:14px;background:var(--card);">
+        <strong style="display:block;color:var(--txt);font-size:16px;margin-bottom:8px;">Conectar con Laravel</strong>
+        <p style="color:var(--txt-soft);font-size:13px;line-height:1.5;margin:0 0 18px;">${safeMessage}</p>
+        <label style="display:block;color:var(--txt-soft);font-size:12px;margin-bottom:6px;">Correo</label>
+        <input id="laravelPatientsEmail" type="email" autocomplete="username" required style="width:100%;margin-bottom:12px;padding:10px 12px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--txt);">
+        <label style="display:block;color:var(--txt-soft);font-size:12px;margin-bottom:6px;">Contraseña</label>
+        <input id="laravelPatientsPassword" type="password" autocomplete="current-password" required style="width:100%;margin-bottom:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--txt);">
+        <button type="submit" style="width:100%;padding:11px 14px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;">Conectar pacientes</button>
+      </form>`;
+  }
+
+  if (info) info.textContent = 'Esperando credenciales de Laravel';
+
+  document.getElementById('laravelPatientsLoginForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById('laravelPatientsEmail')?.value.trim();
+    const password = document.getElementById('laravelPatientsPassword')?.value || '';
+
+    if (!email || !password) return;
+
+    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
+    await loadPatientsFromLaravel();
+  });
+}
+
+function normalizePatientsPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.patients)) return payload.patients;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+async function fetchLaravelPatients() {
+  const headers = {
+    Accept: 'application/json',
+  };
+  const authorization = authHeader();
+
+  if (authorization) {
+    headers.Authorization = authorization;
+  }
+
+  const response = await fetch(PATIENTS_ENDPOINT, {
+    headers,
+    credentials: 'include',
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+
+  if (response.status === 401 || response.status === 419) {
+    const error = new Error('Ingresa tus credenciales de Laravel para cargar pacientes.');
+    error.code = 'UNAUTHORIZED';
+    throw error;
+  }
+
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Laravel no devolvió JSON. Revisa sesión y ruta: ${PATIENTS_ENDPOINT}`);
+  }
+
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || `Laravel respondió HTTP ${response.status}.`);
+  }
+
+  return normalizePatientsPayload(payload);
+}
+
+function fillMedicoSelect() {
+  const medicoSelect = document.getElementById('fMedico');
+  if (!medicoSelect) return;
+
+  medicoSelect.innerHTML = '<option value="">Seleccionar médico</option>';
+
+  [...new Set(patientsData.map(p => p.medico).filter(m => m && m !== 'Sin médico'))]
+    .sort()
+    .forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      medicoSelect.appendChild(opt);
+    });
+}
+
+async function loadPatientsFromLaravel() {
+  setPatientsLoading();
+
+  try {
+    patientsData = await fetchLaravelPatients();
+    patientsDataFiltered = [...patientsData];
+    currentPage = 1;
+    fillMedicoSelect();
+    renderPage(1);
+  } catch (error) {
+    console.error(error);
+
+    if (error.code === 'UNAUTHORIZED') {
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+
+    renderPatientsError(error);
+  }
+}
+
 function rowHTML(patient, globalIndex) {
   const st = patient.status ? (estadosMap[patient.status] || patient.status) : '';
   const stText = st ? (statusTexts[st] || st) : '';
+  const name = escapeHtml(patient.name || 'Paciente sin nombre');
+  const initials = escapeHtml(patient.initials || 'PX');
+  const age = escapeHtml(patient.age || 'Sin edad');
+  const gender = escapeHtml(patient.gender || 'No especificado');
+  const folio = escapeHtml(patient.folio || 'Sin folio');
+  const dob = escapeHtml(patient.dob || 'Sin fecha');
+  const studyDate = escapeHtml(patient.study_date || '');
+  const studyType = escapeHtml(patient.study_type || '');
+  const fotoUrl = escapeHtml(patient.foto_url || '');
+
   return `<div class="patient-row" onclick="openPanel(${globalIndex})" data-index="${globalIndex}" data-status="${st || 'none'}">
     <div class="patient-info">
-      <div class="patient-avatar">${patient.foto_url ? `<img src="${patient.foto_url}" alt="${patient.name}">` : (patient.initials || 'PX')}</div>
+      <div class="patient-avatar">${fotoUrl ? `<img src="${fotoUrl}" alt="${name}">` : initials}</div>
       <div>
-        <div class="patient-name">${patient.name || 'Paciente sin nombre'}</div>
-        <div class="patient-meta">${patient.age || 'Sin edad'} · ${patient.gender || 'No especificado'}</div>
+        <div class="patient-name">${name}</div>
+        <div class="patient-meta">${age} · ${gender}</div>
       </div>
     </div>
-    <div class="cell">${patient.folio || 'Sin folio'}</div>
-    <div class="cell cell-fecha cell-muted">${patient.dob || 'Sin fecha'}</div>
+    <div class="cell">${folio}</div>
+    <div class="cell cell-fecha cell-muted">${dob}</div>
     <div class="cell-study">
-      ${patient.study_date ? `<span class="date study-date">${patient.study_date}</span>` : ''}
-      ${patient.study_type ? `<span class="type">${patient.study_type}</span>` : ''}
+      ${studyDate ? `<span class="date study-date">${studyDate}</span>` : ''}
+      ${studyType ? `<span class="type">${studyType}</span>` : ''}
     </div>
-    <div class="col-status">${st ? `<span class="status ${st}">${stText}</span>` : ''}</div>
+    <div class="col-status">${st ? `<span class="status ${escapeHtml(st)}">${escapeHtml(stText)}</span>` : ''}</div>
     <div class="actions-wrapper">
       <div class="actions">
         <button class="btn-more" aria-label="Más opciones" onclick="event.stopPropagation();toggleMenu(this)">⋮</button>
@@ -99,7 +278,7 @@ function openPanel(index) {
   const avatar = document.getElementById('panelAvatar');
   if (avatar) avatar.textContent = p.initials || 'PX';
   set('panelName', p.name);
-  set('panelFolio', 'Folio: ' + p.folio);
+  set('panelFolio', 'Folio: ' + (p.folio || '—'));
   set('panelAge', p.age); set('panelGender', p.gender); set('panelDob', p.dob);
   set('panelPhone', p.phone); set('panelEmail', p.email); set('panelAddress', p.address);
   set('panelMedicoInfo', p.medico || 'Sin médico');
@@ -126,7 +305,7 @@ function openPanel(index) {
       estudios.slice(0, 5).forEach(est => {
         const item = document.createElement('div');
         item.className = 'historial-item';
-        item.innerHTML = `<div class="historial-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg></div><div class="historial-info"><div class="historial-title">${est.tipo || 'Estudio'}</div><div class="historial-doctor">${p.medico || 'Sin médico'}</div></div><div class="historial-right"><div class="historial-date">${est.fecha || 'Sin fecha'}</div></div>`;
+        item.innerHTML = `<div class="historial-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/></svg></div><div class="historial-info"><div class="historial-title">${escapeHtml(est.tipo || 'Estudio')}</div><div class="historial-doctor">${escapeHtml(p.medico || 'Sin médico')}</div></div><div class="historial-right"><div class="historial-date">${escapeHtml(est.fecha || 'Sin fecha')}</div></div>`;
         list.appendChild(item);
       });
     } else empty.style.display = 'block';
@@ -181,14 +360,9 @@ function cancelarEliminar() {
 }
 function confirmarEliminar() {
   if (_deleteIndex === null) return;
-  patientsData.splice(_deleteIndex, 1);
-  patientsDataFiltered = [...patientsData];
   _deleteIndex = null;
   document.getElementById('modalEliminar').style.display = 'none';
-  closePanel();
-  const totalPages = Math.ceil(patientsData.length / PAGE_SIZE);
-  if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
-  renderPage(currentPage || 1);
+  alert('La eliminación desde Tauri todavía no está conectada a Laravel.');
 }
 
 /* ---- Filtros / búsqueda ---- */
@@ -245,8 +419,10 @@ function applyFilters() {
 function filterPatients() {
   const term = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
   patientsDataFiltered = term === '' ? [...patientsData] : patientsData.filter(p =>
-    p.name.toLowerCase().includes(term) || p.folio.toLowerCase().includes(term) ||
-    (p.phone && p.phone.toLowerCase().includes(term)) || (p.email && p.email.toLowerCase().includes(term)));
+    String(p.name || '').toLowerCase().includes(term) ||
+    String(p.folio || '').toLowerCase().includes(term) ||
+    String(p.phone || '').toLowerCase().includes(term) ||
+    String(p.email || '').toLowerCase().includes(term));
   currentPage = 1;
   renderPage(1);
 }
@@ -317,18 +493,11 @@ Object.assign(window, {
   applyFilters, filterPatients, toggleEstadoFilter, filterByEstado, toggleOrdenar, ordenarPor,
 });
 
-export function initPacientes() {
-  patientsData = SAMPLE_PATIENTS.map(p => ({ ...p }));
-  patientsDataFiltered = [...patientsData];
+export async function initPacientes() {
+  patientsData = [];
+  patientsDataFiltered = [];
   currentPage = 1;
-
-  // Poblar select de médicos
-  const medicoSelect = document.getElementById('fMedico');
-  if (medicoSelect) {
-    [...new Set(patientsData.map(p => p.medico).filter(m => m && m !== 'Sin médico'))].sort().forEach(m => {
-      const opt = document.createElement('option'); opt.value = m; opt.textContent = m; medicoSelect.appendChild(opt);
-    });
-  }
+  setPatientsLoading();
 
   ['fNombre','fMedico','fEstado','fUltimoEstudio','fFechaNacimiento','fFolio'].forEach(id => {
     const el = document.getElementById(id);
@@ -339,5 +508,5 @@ export function initPacientes() {
   document.addEventListener('click', onDocClick);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFilters(); });
 
-  renderPage(1);
+  await loadPatientsFromLaravel();
 }

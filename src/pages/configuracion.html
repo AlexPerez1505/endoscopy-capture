@@ -1,0 +1,399 @@
+<section class="settings-page">
+  <div id="settingsAppRoot">
+    <div id="settingsAlert" class="settings-alert is-hidden"></div>
+
+    <nav class="settings-tabs rise d1" aria-label="Pestanas de configuracion">
+      <button class="is-active" type="button" data-settings-tab="general">General</button>
+      <button type="button" data-settings-tab="qr">QR y Pre-registro</button>
+      <button type="button" data-settings-tab="plan">Plan y almacenamiento</button>
+      <button type="button" data-settings-tab="integraciones">Integraciones</button>
+      <button type="button" data-settings-tab="seguridad">Seguridad</button>
+      <button type="button" data-settings-tab="perfil">Perfil</button>
+    </nav>
+
+    <article class="settings-card settings-panel is-active rise d2" data-settings-panel="general">
+      <header class="settings-card-head">
+        <h2>Preferencias generales</h2>
+        <p>Configura los ajustes generales de la aplicacion</p>
+      </header>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+        </span>
+        <span class="settings-copy"><strong>Modo lectura</strong><small>Aplica un filtro amarillo en toda la pantalla para reducir el esfuerzo visual</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="reading_mode"><span></span></label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15 15 0 0 1 0 20"></path><path d="M12 2a15 15 0 0 0 0 20"></path></svg>
+        </span>
+        <span class="settings-copy"><strong>Idioma</strong><small>Selecciona el idioma de la aplicacion</small></span>
+        <label class="settings-select">
+          <select data-local-setting="language">
+            <option value="es">Espanol</option>
+            <option value="en">English</option>
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </span>
+        <span class="settings-copy"><strong>Zona horaria</strong><small>Configura tu zona horaria local</small></span>
+        <label class="settings-select wide">
+          <select data-setting="timezone">
+            <option value="America/Mexico_City">(GMT-06:00) Ciudad de Mexico</option>
+            <option value="America/Bogota">(GMT-05:00) Bogota</option>
+            <option value="America/Lima">(GMT-05:00) Lima</option>
+            <option value="America/New_York">(GMT-04:00) Nueva York</option>
+            <option value="America/Argentina/Buenos_Aires">(GMT-03:00) Buenos Aires</option>
+            <option value="Europe/Madrid">(GMT+02:00) Madrid</option>
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        </span>
+        <span class="settings-copy"><strong>Formato de fecha</strong><small>Selecciona el formato de fecha</small></span>
+        <label class="settings-select">
+          <select data-setting="date_format">
+            <option>DD/MM/YYYY</option>
+            <option>MM/DD/YYYY</option>
+            <option>YYYY-MM-DD</option>
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </span>
+        <span class="settings-copy"><strong>Formato de hora</strong><small>Selecciona el formato de hora</small></span>
+        <label class="settings-select">
+          <select data-setting="time_format">
+            <option>12 horas (AM/PM)</option>
+            <option>24 horas</option>
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        </span>
+        <span class="settings-copy"><strong>Guardar cambios automaticamente</strong><small>Guarda los cambios en formularios automaticamente</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="autosave"><span></span></label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </span>
+        <span class="settings-copy"><strong>Confirmar antes de eliminar</strong><small>Mostrar confirmacion antes de eliminar elementos</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="confirm_delete"><span></span></label>
+      </div>
+
+      <div class="settings-section-head">
+        <h2>Apariencia y comportamiento</h2>
+        <p>Personaliza como funciona la aplicacion</p>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+        </span>
+        <span class="settings-copy"><strong>Vista predeterminada al iniciar</strong><small>Selecciona la vista que se muestra al iniciar la aplicacion</small></span>
+        <label class="settings-select">
+          <select data-setting="default_view">
+            <option>Dashboard</option>
+            <option>Agenda</option>
+            <option>Pacientes</option>
+            <option>QR</option>
+            <option>IA Reportes</option>
+            <option>Mensajes</option>
+            <option value="Galer&iacute;a">Galeria</option>
+            <option>Nuevo estudio</option>
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        </span>
+        <span class="settings-copy"><strong>Elementos por pagina</strong><small>Numero de elementos a mostrar en las tablas</small></span>
+        <label class="settings-select">
+          <select data-setting="items_per_page">
+            <option>10</option>
+            <option>25</option>
+            <option>50</option>
+            <option>100</option>
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"></path></svg>
+        </span>
+        <span class="settings-copy"><strong>Animaciones y transiciones</strong><small>Habilitar animaciones en la interfaz</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="animations"><span></span></label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg>
+        </span>
+        <span class="settings-copy"><strong>Modo compacto</strong><small>Reducir espacios y mostrar mas informacion</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="compact"><span></span></label>
+      </div>
+
+      <div class="settings-section-head">
+        <h2>Notificaciones</h2>
+        <p>Configura cuando y como recibir notificaciones</p>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-10 6L2 7"></path></svg>
+        </span>
+        <span class="settings-copy"><strong>Notificaciones por email</strong><small>Recibir notificaciones importantes por correo electronico</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="notif_email"><span></span></label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+        </span>
+        <span class="settings-copy"><strong>Notificaciones push</strong><small>Recibir notificaciones push en el navegador</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="notif_push"><span></span></label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        </span>
+        <span class="settings-copy"><strong>Nuevos estudios asignados</strong><small>Cuando se te asigna un nuevo estudio</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="notif_new_studies"><span></span></label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"></path></svg>
+        </span>
+        <span class="settings-copy"><strong>Reportes generados</strong><small>Cuando la IA genera un nuevo reporte</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="notif_reports"><span></span></label>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        </span>
+        <span class="settings-copy"><strong>Recordatorios de citas</strong><small>Recordatorios de citas y seguimiento</small></span>
+        <label class="settings-switch"><input type="checkbox" data-setting="notif_reminders"><span></span></label>
+      </div>
+    </article>
+
+    <div class="settings-panel" data-settings-panel="qr">
+      <header class="settings-qr-head rise d2">
+        <h2>QR y Pre-registro</h2>
+        <p>Define como se generan los enlaces QR y que datos debe completar el paciente.</p>
+      </header>
+
+      <div class="settings-qr-layout">
+        <div class="settings-qr-stack">
+        <article class="settings-card settings-qr-card rise d2">
+          <header class="settings-card-head">
+            <h2>Valores predeterminados del QR</h2>
+            <p>Estos datos se aplican automaticamente al generar un nuevo QR. En el modulo QR aun puedes modificarlos antes de crear el codigo.</p>
+          </header>
+          <label class="settings-field">
+            <span>Vigencia predeterminada</span>
+            <select data-setting="qr_default_expiration_hours">
+              <option value="24">24 horas</option>
+              <option value="48">48 horas</option>
+              <option value="168">7 dias</option>
+            </select>
+          </label>
+          <label class="settings-field">
+            <span>Mensaje para el paciente</span>
+            <textarea id="cfgQrMessage" data-setting="qr_default_patient_message" maxlength="150"></textarea>
+            <small><b data-count-for="cfgQrMessage">0</b>/150</small>
+          </label>
+          <label class="settings-field">
+            <span>Plantilla para WhatsApp</span>
+            <textarea id="cfgQrWhatsapp" data-setting="qr_whatsapp_template" maxlength="500"></textarea>
+            <em>Puedes usar: <b>{enlace}</b>, <b>{codigo}</b>, <b>{mensaje}</b> y <b>{clinica}</b>.</em>
+          </label>
+        </article>
+
+        <article class="settings-card settings-qr-card rise d3">
+          <header class="settings-card-head">
+            <h2>Formulario publico del paciente</h2>
+            <p>Controla foto, consentimiento y campos obligatorios del formulario que abre el paciente desde su celular.</p>
+          </header>
+          <div class="settings-row compact"><span class="settings-copy"><strong>Solicitar fotografia del paciente</strong><small>Muestra la seccion de foto en el formulario publico.</small></span><label class="settings-switch"><input type="checkbox" data-setting="qr_patient_photo_enabled"><span></span></label></div>
+          <div class="settings-row compact"><span class="settings-copy"><strong>Fotografia obligatoria</strong><small>No permite enviar el pre-registro sin foto.</small></span><label class="settings-switch"><input type="checkbox" data-setting="qr_patient_photo_required"><span></span></label></div>
+          <div class="settings-row compact"><span class="settings-copy"><strong>Permitir tomar foto con camara</strong><small>En celular abre la camara frontal cuando el navegador lo permite.</small></span><label class="settings-switch"><input type="checkbox" data-setting="qr_allow_camera_photo"><span></span></label></div>
+          <div class="settings-row compact"><span class="settings-copy"><strong>Permitir elegir foto de galeria</strong><small>Permite subir una imagen ya guardada en el dispositivo.</small></span><label class="settings-switch"><input type="checkbox" data-setting="qr_allow_gallery_photo"><span></span></label></div>
+          <label class="settings-field">
+            <span>Texto del consentimiento</span>
+            <textarea id="cfgQrConsent" data-setting="qr_consent_text" maxlength="700"></textarea>
+            <em>Usa <b>{clinica}</b> para insertar el nombre de la clinica automaticamente.</em>
+          </label>
+
+          <div class="settings-qr-subtitle">Campos obligatorios adicionales</div>
+          <div class="settings-check-grid">
+            <label><input type="checkbox" value="identificacion" data-setting-list="qr_required_fields"><span><b>Identificacion</b><small>Documento, folio externo o referencia del paciente.</small></span></label>
+            <label><input type="checkbox" value="sexo" data-setting-list="qr_required_fields"><span><b>Sexo</b><small>Dato util para expediente y atencion clinica.</small></span></label>
+            <label><input type="checkbox" value="email" data-setting-list="qr_required_fields"><span><b>Correo electronico</b><small>Contacto alterno para confirmaciones o avisos.</small></span></label>
+            <label><input type="checkbox" value="direccion" data-setting-list="qr_required_fields"><span><b>Direccion</b><small>Domicilio del paciente.</small></span></label>
+            <label><input type="checkbox" value="peso" data-setting-list="qr_required_fields"><span><b>Peso</b><small>Peso aproximado en kilogramos.</small></span></label>
+            <label><input type="checkbox" value="altura" data-setting-list="qr_required_fields"><span><b>Altura</b><small>Altura en metros.</small></span></label>
+            <label><input type="checkbox" value="procedimiento" data-setting-list="qr_required_fields"><span><b>Procedimiento solicitado</b><small>Estudio o procedimiento que se realizara.</small></span></label>
+            <label><input type="checkbox" value="motivo_consulta" data-setting-list="qr_required_fields"><span><b>Motivo de consulta</b><small>Razon principal de la atencion.</small></span></label>
+            <label><input type="checkbox" value="alergias" data-setting-list="qr_required_fields"><span><b>Alergias</b><small>Alergias conocidas o ninguna.</small></span></label>
+            <label><input type="checkbox" value="enfermedades" data-setting-list="qr_required_fields"><span><b>Enfermedades actuales</b><small>Diagnosticos o padecimientos actuales.</small></span></label>
+            <label><input type="checkbox" value="medicamentos_actuales" data-setting-list="qr_required_fields"><span><b>Medicamentos actuales</b><small>Tratamientos que toma el paciente.</small></span></label>
+            <label><input type="checkbox" value="antecedentes_medicos" data-setting-list="qr_required_fields"><span><b>Antecedentes medicos</b><small>Cirugias, hospitalizaciones o antecedentes relevantes.</small></span></label>
+            <label><input type="checkbox" value="observaciones" data-setting-list="qr_required_fields"><span><b>Observaciones</b><small>Notas adicionales del paciente.</small></span></label>
+          </div>
+        </article>
+        </div>
+
+        <div class="settings-qr-stack">
+        <article class="settings-card settings-qr-card rise d3">
+          <header class="settings-card-head">
+            <h2>Duplicados y revision</h2>
+            <p>Evita crear expedientes repetidos cuando un pre-registro coincide con un paciente existente.</p>
+          </header>
+          <div class="settings-row compact"><span class="settings-copy"><strong>Detectar pacientes duplicados</strong><small>Compara telefono y correo antes de aceptar un pre-registro.</small></span><label class="settings-switch"><input type="checkbox" data-setting="qr_duplicate_check"><span></span></label></div>
+          <label class="settings-field">
+            <span>Accion con posible duplicado</span>
+            <select data-setting="qr_duplicate_action">
+              <option value="warn">Solo mostrar advertencia</option>
+              <option value="block_acceptance">Bloquear aceptacion hasta revisar</option>
+            </select>
+          </label>
+        </article>
+
+        <article class="settings-card settings-qr-card rise d4">
+          <header class="settings-card-head">
+            <h2>Vista previa de uso</h2>
+            <p>Asi se usaran estos ajustes en el modulo QR.</p>
+          </header>
+          <div class="settings-preview-box">
+            <span>WHATSAPP</span>
+            <p id="cfgQrWhatsappPreview">Hola, te comparto tu enlace de pre-registro de ENCLAII: https://enclaii.app/registro-paciente/ejemplo</p>
+          </div>
+          <div class="settings-preview-box">
+            <span>CONSENTIMIENTO</span>
+            <p id="cfgQrConsentPreview">Autorizo el envio de estos datos y, si la adjunto, mi fotografia a Clinica principal para preparar mi atencion y crear mi expediente despues de que el personal medico revise la informacion.</p>
+          </div>
+          <div class="settings-preview-pills">
+            <span>Nombre, nacimiento y telefono siempre obligatorios</span>
+            <span>QR de un solo uso</span>
+            <span>Foto se copia al expediente al aceptar</span>
+          </div>
+        </article>
+
+        <div class="settings-qr-note rise d5">
+          Si marcas "fotografia obligatoria" pero desactivas camara y galeria, el sistema no exigira foto para no bloquear al paciente. Lo ideal es dejar activa al menos una opcion.
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-panel" data-settings-panel="plan">
+      <article class="settings-card rise d2">
+        <header class="settings-card-head">
+          <h2>Plan y almacenamiento</h2>
+          <p>Resumen de la cuenta activa en Laravel.</p>
+        </header>
+        <div class="settings-metric-grid">
+          <div><span>Plan actual</span><strong data-config-bind="planLabel">--</strong></div>
+          <div><span>Estado</span><strong data-config-bind="planStatus">--</strong></div>
+          <div><span>Miembros incluidos</span><strong data-config-bind="memberLimit">--</strong></div>
+        </div>
+        <div class="settings-storage">
+          <div><span>Almacenamiento usado</span><strong>18.4 GB / 50 GB</strong></div>
+          <i><b style="width:37%"></b></i>
+        </div>
+      </article>
+    </div>
+
+    <div class="settings-panel" data-settings-panel="integraciones">
+      <article class="settings-card rise d2">
+        <header class="settings-card-head">
+          <h2>Integraciones</h2>
+          <p>Conexiones locales usadas por la app de escritorio.</p>
+        </header>
+        <label class="settings-field">
+          <span>Endpoint Laravel</span>
+          <input data-local-setting="api_url" type="url" placeholder="http://localhost:8000">
+        </label>
+        <div class="settings-row compact">
+          <span class="settings-copy"><strong>Firma medica</strong><small data-config-bind="signatureStatus">Sin informacion</small></span>
+          <span class="settings-pill" data-config-bind="signatureUpdated">--</span>
+        </div>
+      </article>
+    </div>
+
+    <div class="settings-panel" data-settings-panel="seguridad">
+      <article class="settings-card rise d2">
+        <header class="settings-card-head">
+          <h2>Seguridad</h2>
+          <p>Permisos criticos y auditoria de acciones sensibles.</p>
+        </header>
+        <div class="settings-row">
+          <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></span>
+          <span class="settings-copy"><strong>Contrasena para estudios</strong><small>Solicita validacion al cambiar estudios sensibles</small></span>
+          <label class="settings-switch"><input type="checkbox" data-setting="require_password_for_studies"><span></span></label>
+        </div>
+        <div class="settings-row">
+          <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
+          <span class="settings-copy"><strong>Contrasena para pacientes</strong><small>Solicita validacion al editar expedientes</small></span>
+          <label class="settings-switch"><input type="checkbox" data-setting="require_password_for_patients"><span></span></label>
+        </div>
+        <div class="settings-row">
+          <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg></span>
+          <span class="settings-copy"><strong>Auditoria de acciones sensibles</strong><small>Registra cambios criticos del sistema</small></span>
+          <label class="settings-switch"><input type="checkbox" data-setting="audit_sensitive_actions"><span></span></label>
+        </div>
+      </article>
+    </div>
+
+    <div class="settings-panel" data-settings-panel="perfil">
+      <article class="settings-card rise d2">
+        <header class="settings-card-head">
+          <h2>Perfil</h2>
+          <p>Informacion principal de tu cuenta Laravel.</p>
+        </header>
+        <div class="settings-profile-card">
+          <span data-config-bind="userInitials">DR</span>
+          <div>
+            <strong data-config-bind="userName">Doctor</strong>
+            <small data-config-bind="userRole">Medico</small>
+          </div>
+        </div>
+        <div class="settings-profile-grid">
+          <label class="settings-field"><span>Correo</span><input data-config-bind="userEmail" readonly></label>
+          <label class="settings-field"><span>Clinica</span><input data-config-bind="clinicName" readonly></label>
+          <label class="settings-field"><span>Especialidad</span><input data-config-bind="specialty" readonly></label>
+          <label class="settings-field"><span>Cedula profesional</span><input data-config-bind="professionalLicense" readonly></label>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>

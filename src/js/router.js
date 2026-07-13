@@ -3,23 +3,31 @@
 
 import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
-import { initAgenda } from './agenda.js';
+import { initAgenda } from './agenda/index.js';
 import { initReports, initReportEditor } from './reports.js';
 import { initGaleria } from './galeria.js';
+import { initMensajes } from './mensajes.js';
+import { initQr } from './qr.js';
+import { initConfiguracion } from './configuracion.js';
 
 const HEAD = {
   dashboard:      { title: 'Dashboard',      sub: 'Resumen general de tu actividad clínica' },
   agenda:         { title: 'Agenda',         sub: 'Gestiona tus citas y estudios' },
   pacientes:      { title: 'Pacientes',      sub: 'Expedientes y datos clínicos' },
-  'ia-reportes':  { title: 'Reportes IA',    sub: 'Generación y edición de reportes' },
-  mensajes:       { title: 'Mensajes',       sub: 'Comunicación con pacientes' },
+  qr:             { title: 'Pre-registro QR', sub: 'Genera codigos seguros y recibe los datos del paciente antes de su cita' },
+  'ia-reportes':  { title: 'Reportes',       sub: 'Genera, analiza y revisa reportes inteligentes impulsados por IA' },
+  'ia-reportes-redactar': { title: 'Reporte', sub: 'Redacta y estructura el informe clínico' },
+  mensajes:       { title: 'Mensajes',       sub: 'Gestiona tus conversaciones con pacientes' },
   galeria:        { title: 'Galería de pacientes', sub: 'Consulta y administra imágenes y videos de estudios' },
   finanzas:       { title: 'Finanzas',       sub: 'Ingresos y facturación' },
-  configuracion:  { title: 'Configuración', sub: 'Preferencias y ajustes' },
+  configuracion:  { title: 'Configuracion', sub: 'Personaliza tu experiencia y gestiona los ajustes de tu cuenta y sistema' },
 };
 
 // Secciones ya migradas (tienen fragmento HTML en ./pages)
-const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'ia-reportes', 'ia-reportes-redactar', 'galeria']);
+const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'qr', 'ia-reportes', 'ia-reportes-redactar', 'galeria', 'mensajes', 'configuracion']);
+const PAGE_FILES = {
+  agenda: './pages/agenda_html/index.blade.html',
+};
 
 const pageContent = document.getElementById('pageContent');
 const headTitle   = document.getElementById('headTitle');
@@ -44,6 +52,7 @@ async function loadPage(route) {
   const meta = HEAD[route] || { title: route, sub: '' };
   headTitle.textContent = meta.title;
   headSub.textContent = meta.sub || '';
+  document.body.dataset.route = route;
   setActiveNav(route);
 
   if (route === 'nuevo-estudio') {
@@ -58,16 +67,20 @@ async function loadPage(route) {
   }
 
   try {
-    const res = await fetch(`./pages/${route}.html`);
+    const pageUrl = PAGE_FILES[route] || `./pages/${route}.html`;
+    const res = await fetch(pageUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     pageContent.innerHTML = await res.text();
 
     if (route === 'dashboard') initDashboard();
     if (route === 'pacientes') initPacientes();
     if (route === 'agenda')    initAgenda();
+    if (route === 'qr') initQr();
     if (route === 'ia-reportes') initReports();
     if (route === 'ia-reportes-redactar') initReportEditor();
     if (route === 'galeria') initGaleria();
+    if (route === 'mensajes') initMensajes();
+    if (route === 'configuracion') initConfiguracion();
   } catch (err) {
     pageContent.innerHTML = `<div class="card"><h3>Error</h3><p class="muted">No se pudo cargar la sección: ${err.message}</p></div>`;
   }
