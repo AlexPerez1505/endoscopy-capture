@@ -1,11 +1,35 @@
 // ================= IA Reportes · Inicializador =================
 // Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
 
+import { laravelFetch } from './laravel.js';
+
 const DEFAULT_API_BASE_URL = 'http://localhost:8000';
-const API_BASE_URL = (
-  localStorage.getItem('enclaii-api-url') ||
-  DEFAULT_API_BASE_URL
-).replace(/\/+$/, '');
+const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+function currentLaravelOrigin() {
+  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
+  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
+  if (window.location.port && window.location.port !== '8000') return '';
+  return window.location.origin;
+}
+
+function isLocalLaravelUrl(value) {
+  try {
+    const url = new URL(value);
+    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
+  } catch (_) {
+    return false;
+  }
+}
+
+function apiBaseUrl() {
+  const saved = (localStorage.getItem('enclaii-api-url') || '').replace(/\/+$/, '');
+  const currentOrigin = currentLaravelOrigin();
+  if (saved) return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
+  return currentOrigin || DEFAULT_API_BASE_URL;
+}
+
+const API_BASE_URL = apiBaseUrl();
 const REPORTS_ENDPOINT = `${API_BASE_URL}/tauri/reportes`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
@@ -214,7 +238,7 @@ async function fetchLaravelReports() {
     headers.Authorization = authorization;
   }
 
-  const response = await fetch(REPORTS_ENDPOINT, {
+  const response = await laravelFetch(REPORTS_ENDPOINT, {
     headers,
     credentials: 'include',
   });

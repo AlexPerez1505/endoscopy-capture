@@ -79,6 +79,11 @@
           <div class="panel-block">
 
             <div class="connection-box">
+              <p><strong>Estado:</strong> <span id="pairStatusText">Conectando</span></p>
+              <p><strong>Laravel:</strong> <span id="tenantText">--</span></p>
+              <p><strong>Paciente:</strong> <span id="patientText">--</span></p>
+              <p><strong>Estudio:</strong> <span id="studyText">--</span></p>
+              <p><strong>Sesion:</strong> <span id="sessionText">--</span></p>
             </div>
           </div>
 
@@ -88,7 +93,7 @@
             <label class="field">
               <span>Dispositivo</span>
               <select id="deviceSelect">
-                <option value="">Sin dispositivos detectados</option>
+                <option value="__default_camera__">Camara predeterminada</option>
               </select>
             </label>
           </div>

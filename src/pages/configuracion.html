@@ -316,21 +316,136 @@
     </div>
 
     <div class="settings-panel" data-settings-panel="plan">
-      <article class="settings-card rise d2">
-        <header class="settings-card-head">
-          <h2>Plan y almacenamiento</h2>
-          <p>Resumen de la cuenta activa en Laravel.</p>
-        </header>
-        <div class="settings-metric-grid">
-          <div><span>Plan actual</span><strong data-config-bind="planLabel">--</strong></div>
-          <div><span>Estado</span><strong data-config-bind="planStatus">--</strong></div>
-          <div><span>Miembros incluidos</span><strong data-config-bind="memberLimit">--</strong></div>
+      <div class="settings-plan-layout">
+        <div class="settings-plan-main">
+          <article class="settings-card settings-plan-card rise d2">
+            <header class="settings-card-head">
+              <h2>Plan y almacenamiento</h2>
+              <p>Administra tu plan actual, uso de almacenamiento y opciones disponibles.</p>
+            </header>
+
+            <div class="settings-plan-section-label">Tu plan actual</div>
+            <section class="settings-current-plan">
+              <span class="settings-plan-icon purple">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m2 8 4 10h12l4-10-6 4-4-7-4 7-6-4z"></path><path d="M6 21h12"></path></svg>
+              </span>
+              <div class="settings-current-plan-copy">
+                <strong data-config-bind="planLabel">--</strong>
+                <span class="settings-pill" data-config-bind="planStatus">--</span>
+                <small>Renovacion <b data-plan-bind="renewalDate">--</b></small>
+              </div>
+              <button class="settings-outline-btn" type="button" data-plan-action="manage">Gestionar plan</button>
+            </section>
+
+            <section class="settings-storage-panel">
+              <header class="settings-storage-head">
+                <span class="settings-mini-icon cyan">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H8a6 6 0 1 1 5.7-7.9A4.5 4.5 0 1 1 17.5 19z"></path></svg>
+                </span>
+                <div>
+                  <h3>Almacenamiento en la nube</h3>
+                  <p><b data-plan-bind="storageUsedText">--</b> de <b data-plan-bind="storageTotalText">--</b> utilizados</p>
+                </div>
+              </header>
+              <div class="settings-storage-progress" aria-label="Uso de almacenamiento">
+                <span data-plan-progress="storage"></span>
+              </div>
+              <div class="settings-storage-legend">
+                <span><i class="used"></i> Usado: <b data-plan-bind="storageUsedText">--</b></span>
+                <span><i></i> Disponible: <b data-plan-bind="storageAvailableText">--</b></span>
+              </div>
+              <div class="settings-storage-types" data-storage-categories>
+                <div class="settings-storage-type" data-storage-category="images">
+                  <span class="settings-mini-icon purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                  </span>
+                  <small>Imagenes</small>
+                  <strong data-storage-bind="images.value">--</strong>
+                  <em data-storage-bind="images.percent">--</em>
+                </div>
+                <div class="settings-storage-type" data-storage-category="videos">
+                  <span class="settings-mini-icon green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-3v10L15 14v-4z"></path><rect x="3" y="6" width="12" height="12" rx="2"></rect></svg>
+                  </span>
+                  <small>Videos</small>
+                  <strong data-storage-bind="videos.value">--</strong>
+                  <em data-storage-bind="videos.percent">--</em>
+                </div>
+                <div class="settings-storage-type" data-storage-category="other">
+                  <span class="settings-mini-icon amber">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                  </span>
+                  <small>Otros archivos</small>
+                  <strong data-storage-bind="other.value">--</strong>
+                  <em data-storage-bind="other.percent">--</em>
+                </div>
+              </div>
+              <button class="settings-storage-detail" type="button" data-plan-action="storage-detail">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path></svg>
+                <span>Ver detalle de almacenamiento</span>
+              </button>
+            </section>
+          </article>
+
+          <article class="settings-card settings-plan-card settings-upgrade-card rise d3">
+            <header class="settings-card-head">
+              <h2>Necesitas mas espacio?</h2>
+              <p>Actualiza tu plan y obten mas almacenamiento y beneficios adicionales.</p>
+            </header>
+            <div class="settings-plan-options" data-plan-options></div>
+          </article>
         </div>
-        <div class="settings-storage">
-          <div><span>Almacenamiento usado</span><strong>18.4 GB / 50 GB</strong></div>
-          <i><b style="width:37%"></b></i>
-        </div>
-      </article>
+
+        <aside class="settings-plan-side">
+          <article class="settings-card settings-side-plan-card rise d2">
+            <header class="settings-card-head">
+              <h2>Resumen de tu plan</h2>
+            </header>
+            <div class="settings-summary-list">
+              <div><span>Plan actual</span><strong data-config-bind="planLabel">--</strong></div>
+              <div><span>Estado</span><strong class="success" data-config-bind="planStatus">--</strong></div>
+              <div><span>Renovacion</span><strong data-plan-bind="renewalDate">--</strong></div>
+              <div><span>Miembros incluidos</span><strong data-config-bind="memberLimit">--</strong></div>
+            </div>
+          </article>
+
+          <article class="settings-card settings-side-plan-card rise d3">
+            <header class="settings-card-head">
+              <h2>Facturacion y pago</h2>
+            </header>
+            <div class="settings-summary-list">
+              <div><span>Proxima fecha de cobro</span><strong data-plan-bind="nextChargeDate">--</strong></div>
+              <div><span>Historial de facturas</span><button type="button" data-plan-action="invoices">Ver</button></div>
+            </div>
+            <button class="settings-action-wide" type="button" data-plan-action="payment-method">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path></svg>
+              <span>Agregar metodo de pago</span>
+            </button>
+          </article>
+
+          <article class="settings-card settings-side-plan-card rise d4">
+            <header class="settings-card-head">
+              <h2>Historial de uso</h2>
+              <p>Tu consumo de almacenamiento en los ultimos 6 meses.</p>
+            </header>
+            <div class="settings-usage-chart" data-usage-chart></div>
+          </article>
+
+          <article class="settings-card settings-side-plan-card settings-recommendation-card rise d5">
+            <header class="settings-recommendation-head">
+              <span class="settings-mini-icon amber">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"></path></svg>
+              </span>
+              <h2>Recomendaciones</h2>
+            </header>
+            <p data-plan-bind="recommendationText">Conecta Laravel para ver recomendaciones del uso actual.</p>
+            <button class="settings-action-wide" type="button" data-plan-action="recommendations">
+              <span>Ver recomendaciones</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            </button>
+          </article>
+        </aside>
+      </div>
     </div>
 
     <div class="settings-panel" data-settings-panel="integraciones">

@@ -1,12 +1,37 @@
 // ================= Pacientes · Inicializador =================
 // Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
 
+import { laravelFetch } from './laravel.js';
+
 const DEFAULT_API_BASE_URL = 'http://localhost:8000';
-const API_BASE_URL = (
-  localStorage.getItem('enclaii-api-url') ||
-  DEFAULT_API_BASE_URL
-).replace(/\/+$/, '');
+const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+function currentLaravelOrigin() {
+  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
+  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
+  if (window.location.port && window.location.port !== '8000') return '';
+  return window.location.origin;
+}
+
+function isLocalLaravelUrl(value) {
+  try {
+    const url = new URL(value);
+    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
+  } catch (_) {
+    return false;
+  }
+}
+
+function apiBaseUrl() {
+  const saved = (localStorage.getItem('enclaii-api-url') || '').replace(/\/+$/, '');
+  const currentOrigin = currentLaravelOrigin();
+  if (saved) return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
+  return currentOrigin || DEFAULT_API_BASE_URL;
+}
+
+const API_BASE_URL = apiBaseUrl();
 const PATIENTS_ENDPOINT = `${API_BASE_URL}/tauri/pacientes`;
+const START_STUDY_ENDPOINT = `${API_BASE_URL}/tauri/estudios/iniciar`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 const statusTexts = { completed:'Completado', waiting:'En espera', cancelled:'Cancelado' };
@@ -127,7 +152,7 @@ async function fetchLaravelPatients() {
     headers.Authorization = authorization;
   }
 
-  const response = await fetch(PATIENTS_ENDPOINT, {
+  const response = await laravelFetch(PATIENTS_ENDPOINT, {
     headers,
     credentials: 'include',
   });
@@ -224,7 +249,7 @@ function rowHTML(patient, globalIndex) {
       <div class="actions-dropdown" onclick="event.stopPropagation()">
         <a href="#" onclick="event.stopPropagation(); window.location.hash='ia-reportes'; return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Crear informe</a>
         <a href="#" onclick="event.stopPropagation(); return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>Editar información</a>
-        <a href="#" onclick="event.stopPropagation(); window.location.href='./index.html'; return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="22" x2="15" y2="22"/><line x1="12" y1="17" x2="12" y2="22"/></svg>Iniciar estudio</a>
+        <a href="#" onclick="event.stopPropagation(); startPatientStudy(${globalIndex}); return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="22" x2="15" y2="22"/><line x1="12" y1="17" x2="12" y2="22"/></svg>Iniciar estudio</a>
         <a href="#" onclick="event.stopPropagation(); window.location.hash='mensajes'; return false;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2a9.9 9.9 0 0 0-8.5 14.9L2 22l5.25-1.5A9.9 9.9 0 1 0 12.04 2z"/></svg>Enviar WhatsApp</a>
         <a href="#" class="danger" onclick="event.stopPropagation(); deletePatient(${globalIndex}); return false;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Eliminar paciente</a>
       </div>
@@ -359,10 +384,7 @@ function cancelarEliminar() {
   document.getElementById('modalEliminar').style.display = 'none';
 }
 function confirmarEliminar() {
-  if (_deleteIndex === null) return;
-  _deleteIndex = null;
-  document.getElementById('modalEliminar').style.display = 'none';
-  alert('La eliminación desde Tauri todavía no está conectada a Laravel.');
+  confirmarEliminarConLaravel();
 }
 
 /* ---- Filtros / búsqueda ---- */
@@ -486,11 +508,161 @@ function onDocClick(e) {
   }
 }
 
+async function deletePatientFromLaravel(patient) {
+  const headers = {
+    Accept: 'application/json',
+  };
+  const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
+
+  const id = patient.id || patient.uuid || patient.patient_id;
+  const request = id
+    ? {
+        url: `${PATIENTS_ENDPOINT}/${encodeURIComponent(id)}`,
+        options: { method: 'DELETE', headers, credentials: 'include' },
+      }
+    : {
+        url: `${PATIENTS_ENDPOINT}/eliminar`,
+        options: {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folio: patient.folio || '',
+            email: patient.email || '',
+            phone: patient.phone || '',
+            name: patient.name || '',
+          }),
+          credentials: 'include',
+        },
+      };
+
+  const response = await laravelFetch(request.url, request.options);
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json') ? await response.json() : {};
+
+  if (response.status === 401 || response.status === 419) {
+    const error = new Error('Ingresa tus credenciales de Laravel para eliminar pacientes.');
+    error.code = 'UNAUTHORIZED';
+    throw error;
+  }
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al eliminar paciente.`);
+  }
+
+  return payload;
+}
+
+async function confirmarEliminarConLaravel() {
+  if (_deleteIndex === null) return;
+  const patient = patientsData[_deleteIndex];
+  if (!patient) return;
+
+  const deleteButton = document.querySelector('#modalEliminar button[onclick="confirmarEliminar()"]');
+  if (deleteButton) {
+    deleteButton.disabled = true;
+    deleteButton.textContent = 'Eliminando...';
+  }
+
+  try {
+    await deletePatientFromLaravel(patient);
+    patientsData = patientsData.filter((_, index) => index !== _deleteIndex);
+    patientsDataFiltered = patientsDataFiltered.filter((item) => item !== patient);
+    closePanel();
+    renderPage(Math.min(currentPage, Math.max(Math.ceil(patientsDataFiltered.length / PAGE_SIZE), 1)));
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Laravel no pudo eliminar el paciente.');
+  } finally {
+    if (deleteButton) {
+      deleteButton.disabled = false;
+      deleteButton.textContent = 'Eliminar';
+    }
+    _deleteIndex = null;
+    document.getElementById('modalEliminar').style.display = 'none';
+  }
+}
+
+async function startPatientStudy(index) {
+  const patient = patientsData[index];
+  if (!patient) return;
+
+  const patientId = patient.patient_id || patient.id;
+  if (!patientId) {
+    alert('Este paciente no tiene ID de Laravel para iniciar estudio.');
+    return;
+  }
+
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+  const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
+
+  try {
+    const response = await laravelFetch(START_STUDY_ENDPOINT, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        patientId: String(patientId),
+        tipo: patient.study_type || patient.procedimiento || 'Endoscopia',
+        medico: patient.medico || '',
+      }),
+    });
+    const contentType = response.headers.get('content-type') || '';
+    const payload = contentType.includes('application/json') ? await response.json() : {};
+
+    if (response.status === 401 || response.status === 419) {
+      const error = new Error('Ingresa tus credenciales de Laravel para iniciar estudios.');
+      error.code = 'UNAUTHORIZED';
+      throw error;
+    }
+
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al iniciar estudio.`);
+    }
+
+    const study = payload.study || payload.estudio || payload.data || {};
+    const studyId = study.study_id || study.estudio_id || study.id;
+    const patientName = study.patient_name || study.paciente_nombre || patient.name || '';
+    const studyLabel = study.label || [study.tipo || study.type || 'Estudio', study.folio].filter(Boolean).join(' ');
+
+    if (!studyId) {
+      throw new Error('Laravel inicio el estudio, pero no devolvio study_id.');
+    }
+
+    const params = new URLSearchParams({
+      patient_id: String(patientId),
+      study_id: String(studyId),
+      patient_name: patientName,
+      study_label: studyLabel,
+    });
+
+    ['patient_id', 'paciente_id', 'patientId'].forEach((key) => sessionStorage.setItem(`enclaii-${key}`, String(patientId)));
+    ['study_id', 'estudio_id', 'studyId'].forEach((key) => sessionStorage.setItem(`enclaii-${key}`, String(studyId)));
+    sessionStorage.setItem('enclaii-patient_name', patientName);
+    sessionStorage.setItem('enclaii-study_label', studyLabel);
+
+    window.location.href = `./index.html?${params.toString()}`;
+  } catch (error) {
+    console.error(error);
+    if (error.code === 'UNAUTHORIZED') {
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+      renderLaravelLogin(error.message);
+      return;
+    }
+    alert(error.message || 'Laravel no pudo iniciar el estudio.');
+  }
+}
+
 // Exponer funciones globalmente para los onclick inline del HTML
 Object.assign(window, {
   renderPage, openPanel, closePanel, showTab, toggleMenu, deletePatient,
-  cancelarEliminar, confirmarEliminar, openFilters, closeFilters, clearFilters,
+  cancelarEliminar, confirmarEliminar: confirmarEliminarConLaravel, openFilters, closeFilters, clearFilters,
   applyFilters, filterPatients, toggleEstadoFilter, filterByEstado, toggleOrdenar, ordenarPor,
+  startPatientStudy,
 });
 
 export async function initPacientes() {

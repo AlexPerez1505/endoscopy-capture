@@ -1,124 +1,7 @@
-function createMockImages(count) {
-  const baseNames = [
-    'captura_1782863211901.jpg',
-    'captura_1782863210752.jpg',
-    'captura_1782863209319.jpg',
-  ];
+import { apiBaseUrl, authHeader, laravelFetch } from './laravel.js';
 
-  return Array.from({ length: count }, (_, index) => ({
-    id: `img-${index + 1}`,
-    type: 'image',
-    file: index === 0 ? 'imagen_001_endoscopia.jpg' : baseNames[index] || `captura_17828632${String(1000 + index).padStart(4, '0')}.jpg`,
-    study: 'Captura del estudio E-0006',
-    date: '30/06/2026',
-    time: index === 0 ? '00:32:41' : '5:46 PM',
-    theme: index === 0 ? 'endoscopy' : `theme-${(index % 4) + 1}`,
-    src: index === 0 ? './assets/gallery-endoscopy-01.svg' : '',
-  }));
-}
-
-const GALLERY_PATIENTS = [
-  {
-    id: 'P-003',
-    name: 'Kevin Martinez',
-    initials: 'KM',
-    age: '24 a&ntilde;os',
-    gender: '--',
-    lastStudy: '30/06/2026',
-    studyDate: '2026-06-30',
-    studies: 1,
-    photos: 1,
-    videos: 0,
-    status: 'Activo',
-    studyStatus: 'done',
-    doctor: 'Dr. Ricardo Martinez',
-    procedure: 'Endoscopia alta',
-    tone: 'is-purple',
-    phone: '',
-    detailStudies: 1,
-    media: createMockImages(1),
-  },
-  {
-    id: 'P-006',
-    name: 'Prueba Nueve',
-    initials: 'PN',
-    age: '--',
-    gender: 'masculino',
-    lastStudy: '--',
-    studyDate: '',
-    studies: 0,
-    photos: 0,
-    videos: 0,
-    status: 'Activo',
-    studyStatus: 'pending',
-    doctor: 'Dra. Paula Medina',
-    procedure: 'Colonoscopia',
-    tone: 'is-blue',
-    phone: '',
-    detailStudies: 0,
-    media: [],
-  },
-  {
-    id: 'P-005',
-    name: 'Prueba Siete',
-    initials: 'PS',
-    age: '--',
-    gender: '--',
-    lastStudy: '--',
-    studyDate: '',
-    studies: 0,
-    photos: 0,
-    videos: 0,
-    status: 'Activo',
-    studyStatus: 'process',
-    doctor: 'Dr. Ricardo Martinez',
-    procedure: 'Gastroscopia',
-    tone: 'is-pink',
-    phone: '',
-    detailStudies: 0,
-    media: [],
-  },
-  {
-    id: 'P-004',
-    name: 'Ricardo Martinez Regino',
-    initials: 'RM',
-    age: '20 a&ntilde;os',
-    gender: '--',
-    lastStudy: '--',
-    studyDate: '',
-    studies: 0,
-    photos: 0,
-    videos: 0,
-    status: 'Activo',
-    studyStatus: 'pending',
-    doctor: 'Dr. Ricardo Martinez',
-    procedure: 'Endoscopia alta',
-    tone: 'is-mint',
-    phone: '',
-    detailStudies: 0,
-    media: [],
-  },
-  {
-    id: 'P-001',
-    name: 'Ricardo Prueba3',
-    initials: 'RP',
-    age: '--',
-    gender: '--',
-    lastStudy: '30/06/2026',
-    studyDate: '2026-06-30',
-    studies: 6,
-    photos: 21,
-    videos: 0,
-    status: 'Activo',
-    studyStatus: 'done',
-    doctor: 'Dr. Ricardo Martinez',
-    procedure: 'Endoscopia alta',
-    tone: 'is-purple',
-    phone: '',
-    detailStudies: 4,
-    media: createMockImages(21),
-  },
-];
+let GALLERY_PATIENTS = [];
+let galleryLoadPromise = null;
 
 const DEFAULT_FILTERS = {
   patient: '',
@@ -138,6 +21,102 @@ let currentViewerMedia = null;
 let defaultGallerySub = '';
 let pendingImageFilter = 'none';
 let appliedImageFilter = 'none';
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+function safeCssToken(value, fallback) {
+  const token = String(value || '');
+  return /^[a-z0-9_-]+$/i.test(token) ? token : fallback;
+}
+
+function normalizeGalleryMedia(media = {}, index = 0) {
+  const type = media.type === 'video' ? 'video' : 'image';
+
+  return {
+    id: String(media.id ?? `${type}-${index + 1}`),
+    type,
+    file: String(media.file || media.filename || media.nombre_original || 'Captura'),
+    study: String(media.study || media.estudio || media.study_label || 'Captura del estudio'),
+    date: String(media.date || media.fecha || '--'),
+    studyDate: String(media.studyDate || media.study_date || media.fecha_estudio || ''),
+    time: String(media.time || media.hora || ''),
+    theme: String(media.theme || `theme-${(index % 4) + 1}`),
+    src: String(media.src || media.url || ''),
+  };
+}
+
+function normalizeGalleryPatient(patient = {}, index = 0) {
+  const media = Array.isArray(patient.media)
+    ? patient.media.map((item, mediaIndex) => normalizeGalleryMedia(item, mediaIndex))
+    : [];
+  const photos = Number(patient.photos ?? patient.fotos ?? media.filter(item => item.type === 'image').length) || 0;
+  const videos = Number(patient.videos ?? media.filter(item => item.type === 'video').length) || 0;
+
+  return {
+    id: String(patient.id ?? patient.patient_id ?? `P-${String(index + 1).padStart(3, '0')}`),
+    name: String(patient.name || patient.nombre || 'Paciente sin nombre'),
+    initials: String(patient.initials || patient.ini || 'PX').slice(0, 3),
+    age: String(patient.age || patient.edad || '--'),
+    gender: String(patient.gender || patient.sexo || '--'),
+    lastStudy: String(patient.lastStudy || patient.ultimo || '--'),
+    studyDate: String(patient.studyDate || patient.study_date || ''),
+    studies: Number(patient.studies ?? patient.estudios) || 0,
+    photos,
+    videos,
+    status: String(patient.status || patient.estado || 'Activo'),
+    studyStatus: String(patient.studyStatus || patient.study_status || 'pending'),
+    doctor: String(patient.doctor || patient.medico || 'Sin medico'),
+    procedure: String(patient.procedure || patient.procedimiento || 'Estudio'),
+    tone: String(patient.tone || ['is-purple', 'is-blue', 'is-pink', 'is-mint'][index % 4]),
+    phone: String(patient.phone || patient.telefono || ''),
+    detailStudies: Number(patient.detailStudies ?? patient.detail_studies ?? patient.studies ?? patient.estudios) || 0,
+    media,
+  };
+}
+
+function setGalleryEmptyText(message) {
+  const empty = document.getElementById('galleryEmptyState');
+  if (empty) empty.textContent = message;
+}
+
+async function loadGalleryData() {
+  if (galleryLoadPromise) return galleryLoadPromise;
+
+  galleryLoadPromise = (async () => {
+    const headers = { Accept: 'application/json' };
+    const authorization = authHeader();
+    if (authorization) headers.Authorization = authorization;
+
+    const response = await laravelFetch(`${apiBaseUrl()}/tauri/galeria`, { headers });
+    if (!response.ok) {
+      throw new Error(`Laravel respondio HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const patients = payload.patients || payload.pacientes || payload.data || [];
+    GALLERY_PATIENTS = Array.isArray(patients)
+      ? patients.map((patient, index) => normalizeGalleryPatient(patient, index))
+      : [];
+    return true;
+  })().catch(error => {
+    console.error('No se pudo cargar la galeria desde Laravel:', error);
+    GALLERY_PATIENTS = [];
+    setGalleryEmptyText('No se pudo cargar la galeria desde Laravel.');
+    return false;
+  }).finally(() => {
+    galleryLoadPromise = null;
+  });
+
+  return galleryLoadPromise;
+}
 
 function normalizeText(value) {
   return String(value || '').toLowerCase().trim();
@@ -260,20 +239,24 @@ function matchesSearch(patient, term) {
 }
 
 function patientRow(patient) {
+  const tone = safeCssToken(patient.tone, 'is-purple');
+  const patientId = escapeHtml(patient.id);
+  const patientName = escapeHtml(patient.name);
+
   return `
     <article class="gallery-patient-row">
-      <div class="gallery-avatar ${patient.tone}">${patient.initials}</div>
+      <div class="gallery-avatar ${tone}">${escapeHtml(patient.initials)}</div>
       <div class="gallery-patient-main">
-        <div class="gallery-patient-name">${patient.name}</div>
+        <div class="gallery-patient-name">${patientName}</div>
         <div class="gallery-meta">
-          <span>ID: ${patient.id}</span>
+          <span>ID: ${patientId}</span>
           <span class="gallery-dot">&bull;</span>
-          <span>${patient.age}</span>
+          <span>${escapeHtml(patient.age)}</span>
           <span class="gallery-dot">&bull;</span>
-          <span>${patient.gender}</span>
+          <span>${escapeHtml(patient.gender)}</span>
         </div>
         <div class="gallery-counts">
-          <span>&Uacute;ltimo estudio: ${patient.lastStudy}</span>
+          <span>&Uacute;ltimo estudio: ${escapeHtml(patient.lastStudy)}</span>
           <span class="gallery-dot">&bull;</span>
           <span>Estudios: <b>${patient.studies}</b></span>
           <span class="gallery-dot">&bull;</span>
@@ -282,8 +265,8 @@ function patientRow(patient) {
           <span>Videos: <b>${patient.videos}</b></span>
         </div>
       </div>
-      <div class="gallery-status">${patient.status}</div>
-      <button class="gallery-open-btn" type="button" data-open-gallery="${patient.id}" aria-label="Abrir galeria de ${patient.name}">
+      <div class="gallery-status">${escapeHtml(patient.status)}</div>
+      <button class="gallery-open-btn" type="button" data-open-gallery="${patientId}" aria-label="Abrir galeria de ${patientName}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="9 18 15 12 9 6"></polyline>
         </svg>
@@ -316,19 +299,20 @@ function mediaCard(media) {
   const label = media.type === 'video' ? 'VID' : 'IMG';
   const action = media.type === 'video' ? 'Ver video' : 'Ver imagen';
   const assetClass = media.src ? ' has-asset' : '';
-  const assetStyle = media.src ? ` style="background-image:url('${media.src}')"` : '';
+  const assetStyle = media.src ? ` style="background-image:url(&quot;${escapeHtml(media.src)}&quot;)"` : '';
+  const theme = safeCssToken(media.theme, 'theme-1');
 
   return `
     <article class="gallery-media-card">
-      <div class="gallery-media-thumb gallery-thumb-${media.theme}${assetClass}"${assetStyle}>
+      <div class="gallery-media-thumb gallery-thumb-${theme}${assetClass}"${assetStyle}>
         <span class="gallery-media-badge">${label}</span>
-        <span class="gallery-media-time">${media.time}</span>
+        <span class="gallery-media-time">${escapeHtml(media.time)}</span>
       </div>
       <div class="gallery-media-info">
-        <strong>${media.file}</strong>
-        <span>${media.study}</span>
-        <span>${media.date}</span>
-        <button type="button" data-view-media="${media.id}">${action}</button>
+        <strong>${escapeHtml(media.file)}</strong>
+        <span>${escapeHtml(media.study)}</span>
+        <span>${escapeHtml(media.date)}</span>
+        <button type="button" data-view-media="${escapeHtml(media.id)}">${action}</button>
       </div>
     </article>
   `;
@@ -337,8 +321,8 @@ function mediaCard(media) {
 function applyMediaVisual(element, media, baseClass) {
   if (!element || !media) return;
 
-  element.className = `${baseClass} gallery-thumb-${media.theme}${media.src ? ' has-asset' : ''}`;
-  element.style.backgroundImage = media.src ? `url('${media.src}')` : '';
+  element.className = `${baseClass} gallery-thumb-${safeCssToken(media.theme, 'theme-1')}${media.src ? ' has-asset' : ''}`;
+  element.style.backgroundImage = media.src ? `url("${String(media.src).replace(/["\\\n\r]/g, '')}")` : '';
 }
 
 function colorFilterValue(mode) {
@@ -446,13 +430,13 @@ function openPatientGallery(patientId) {
   const videoTotal = media.filter(item => item.type === 'video').length;
 
   if (avatar) {
-    avatar.className = `gallery-avatar ${patient.tone}`;
+    avatar.className = `gallery-avatar ${safeCssToken(patient.tone, 'is-purple')}`;
     avatar.textContent = patient.initials;
   }
 
   if (name) name.textContent = patient.name;
   if (meta) {
-    meta.innerHTML = `ID: ${patient.id} &middot; ${patient.age} &middot; ${patient.gender} &middot; &Uacute;ltimo estudio: ${patient.lastStudy}`;
+    meta.innerHTML = `ID: ${escapeHtml(patient.id)} &middot; ${escapeHtml(patient.age)} &middot; ${escapeHtml(patient.gender)} &middot; &Uacute;ltimo estudio: ${escapeHtml(patient.lastStudy)}`;
   }
   if (studies) studies.textContent = patient.detailStudies ?? patient.studies;
   if (photos) photos.textContent = imageTotal;
@@ -477,14 +461,15 @@ function closePatientGallery() {
 }
 
 function viewerThumb(media, index, activeId) {
-  const style = media.src ? ` style="background-image:url('${media.src}')"` : '';
+  const style = media.src ? ` style="background-image:url(&quot;${escapeHtml(media.src)}&quot;)"` : '';
   const assetClass = media.src ? ' has-asset' : '';
   const activeClass = media.id === activeId ? ' is-active' : '';
+  const theme = safeCssToken(media.theme, 'theme-1');
 
   return `
-    <button class="gallery-study-thumb gallery-thumb-${media.theme}${assetClass}${activeClass}"${style} type="button" data-select-viewer-media="${media.id}">
+    <button class="gallery-study-thumb gallery-thumb-${theme}${assetClass}${activeClass}"${style} type="button" data-select-viewer-media="${escapeHtml(media.id)}">
       <span>${index + 1}</span>
-      <em>${media.time}</em>
+      <em>${escapeHtml(media.time)}</em>
     </button>
   `;
 }
@@ -529,6 +514,18 @@ function openImageViewer(mediaId) {
   document.getElementById('galleryDetailView')?.classList.add('is-hidden');
   document.getElementById('galleryImageViewer')?.classList.remove('is-hidden');
   renderImageViewer(mediaId);
+}
+
+function openMediaViewer(mediaId) {
+  const media = currentDetailPatient?.media?.find(item => item.id === mediaId);
+  if (!media) return;
+
+  if (media.type === 'video' && media.src) {
+    window.open(media.src, '_blank', 'noopener');
+    return;
+  }
+
+  openImageViewer(mediaId);
 }
 
 function closeImageViewer() {
@@ -718,7 +715,7 @@ export function initGaleria() {
   [imageGrid, videoGrid].forEach(grid => {
     grid?.addEventListener('click', event => {
       const button = event.target.closest('[data-view-media]');
-      if (button) openImageViewer(button.dataset.viewMedia);
+      if (button) openMediaViewer(button.dataset.viewMedia);
     });
   });
 
@@ -771,5 +768,18 @@ export function initGaleria() {
   document.getElementById('galleryImageFiltersPanel')?.classList.add('is-hidden');
   setFilterPanelOpen(!window.matchMedia('(max-width: 1100px)').matches);
   updateAdjustmentLabels();
+  setGalleryEmptyText('Cargando galeria desde Laravel...');
   renderGalleryPatients();
+  loadGalleryData().then(ok => {
+    if (!ok) {
+      renderGalleryPatients();
+      return;
+    }
+
+    setGalleryEmptyText('No se encontraron pacientes.');
+    fillPatientSelect();
+    fillSelect('filterDoctor', uniqueValues('doctor'));
+    fillSelect('filterProcedure', uniqueValues('procedure'));
+    renderGalleryPatients();
+  });
 }
