@@ -1,6 +1,13 @@
 // ================= Router SPA de ENCLAII =================
 // Carga fragmentos HTML desde ./pages y ejecuta el inicializador de cada sección.
 
+const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
+
+if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+  window.location.href = './login.html';
+  throw new Error('Sin sesion activa, redirigiendo a login.');
+}
+
 import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
 import { initAgenda } from './agenda/index.js';
