@@ -1,4 +1,8 @@
-import { apiBaseUrl, authHeader, laravelFetch } from './laravel.js';
+import { apiBaseUrl, laravelFetch } from './laravel.js';
+
+const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
+const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
+const GALLERY_ENDPOINT = `${apiBaseUrl()}/api/tauri/galeria`;
 
 let GALLERY_PATIENTS = [];
 let galleryLoadPromise = null;
@@ -21,6 +25,7 @@ let currentViewerMedia = null;
 let defaultGallerySub = '';
 let pendingImageFilter = 'none';
 let appliedImageFilter = 'none';
+let galleryTemplate = '';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -87,6 +92,65 @@ function setGalleryEmptyText(message) {
   if (empty) empty.textContent = message;
 }
 
+function authHeader() {
+  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
+  return token ? `Bearer ${token}` : '';
+}
+
+async function loginToLaravel(email, password) {
+  const response = await laravelFetch(LOGIN_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || 'No se pudo iniciar sesion con Laravel.');
+  }
+
+  return payload.token;
+}
+
+function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Laravel.') {
+  root.innerHTML = `
+    <form id="laravelGaleriaLoginForm" style="max-width:420px;margin:42px auto;padding:24px;border:1px solid var(--stroke,#26314a);border-radius:14px;background:var(--card,#101a33);">
+      <strong style="display:block;color:var(--txt,#fff);font-size:16px;margin-bottom:8px;">Conectar Galeria con Laravel</strong>
+      <p style="color:var(--txt-soft,#94a3b8);font-size:13px;line-height:1.5;margin:0 0 18px;">${escapeHtml(message)}</p>
+      <label style="display:block;margin-bottom:12px;">
+        <span style="display:block;font-size:12px;color:var(--txt-soft,#94a3b8);margin-bottom:4px;">Correo</span>
+        <input id="laravelGaleriaEmail" type="email" required style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--stroke,#26314a);background:transparent;color:inherit;" />
+      </label>
+      <label style="display:block;margin-bottom:18px;">
+        <span style="display:block;font-size:12px;color:var(--txt-soft,#94a3b8);margin-bottom:4px;">Contrasena</span>
+        <input id="laravelGaleriaPassword" type="password" required style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--stroke,#26314a);background:transparent;color:inherit;" />
+      </label>
+      <button type="submit" class="btn-primary" style="width:100%;padding:10px;border-radius:8px;">Iniciar sesion</button>
+    </form>`;
+
+  document.getElementById('laravelGaleriaLoginForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById('laravelGaleriaEmail')?.value.trim();
+    const password = document.getElementById('laravelGaleriaPassword')?.value || '';
+    if (!email || !password) return;
+
+    try {
+      const token = await loginToLaravel(email, password);
+      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      if (galleryTemplate) root.innerHTML = galleryTemplate;
+      initGaleria();
+    } catch (error) {
+      console.error(error);
+      renderLaravelLogin(root, error.message || 'No se pudo iniciar sesion.');
+    }
+  });
+}
+
 async function loadGalleryData() {
   if (galleryLoadPromise) return galleryLoadPromise;
 
@@ -95,7 +159,14 @@ async function loadGalleryData() {
     const authorization = authHeader();
     if (authorization) headers.Authorization = authorization;
 
-    const response = await laravelFetch(`${apiBaseUrl()}/tauri/galeria`, { headers });
+    const response = await laravelFetch(GALLERY_ENDPOINT, { headers });
+
+    if (response.status === 401 || response.status === 419) {
+      const error = new Error('Ingresa tus credenciales de Laravel para cargar la galeria.');
+      error.code = 'UNAUTHORIZED';
+      throw error;
+    }
+
     if (!response.ok) {
       throw new Error(`Laravel respondio HTTP ${response.status}`);
     }
@@ -109,6 +180,13 @@ async function loadGalleryData() {
   })().catch(error => {
     console.error('No se pudo cargar la galeria desde Laravel:', error);
     GALLERY_PATIENTS = [];
+
+    if (error.code === 'UNAUTHORIZED') {
+      const root = document.getElementById('pageContent');
+      if (root) renderLaravelLogin(root, error.message);
+      return 'unauthorized';
+    }
+
     setGalleryEmptyText('No se pudo cargar la galeria desde Laravel.');
     return false;
   }).finally(() => {
@@ -666,6 +744,9 @@ function fillPatientSelect() {
 }
 
 export function initGaleria() {
+  const root = document.getElementById('pageContent');
+  if (root && !galleryTemplate) galleryTemplate = root.innerHTML;
+
   const search = document.getElementById('gallerySearchInput');
   const patientList = document.getElementById('galleryPatientList');
   const filterButton = document.getElementById('galleryFilterBtn');
@@ -771,6 +852,8 @@ export function initGaleria() {
   setGalleryEmptyText('Cargando galeria desde Laravel...');
   renderGalleryPatients();
   loadGalleryData().then(ok => {
+    if (ok === 'unauthorized') return;
+
     if (!ok) {
       renderGalleryPatients();
       return;

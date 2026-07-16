@@ -31,7 +31,7 @@ function apiBaseUrl() {
 }
 
 const API_BASE_URL = apiBaseUrl();
-const DASHBOARD_ENDPOINT = `${API_BASE_URL}/tauri/dashboard`;
+const DASHBOARD_ENDPOINT = `${API_BASE_URL}/api/tauri/dashboard`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -46,19 +46,28 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function encodeBasicCredentials(email, password) {
-  const bytes = new TextEncoder().encode(`${email}:${password}`);
-  let binary = '';
-  bytes.forEach(byte => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary);
-}
-
 function authHeader() {
   const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+  return token ? `Bearer ${token}` : '';
+}
+
+async function loginToLaravel(email, password) {
+  const response = await laravelFetch(`${API_BASE_URL}/api/tauri/login`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || 'No se pudo iniciar sesión con Laravel.');
+  }
+
+  return payload.token;
 }
 
 function setText(root, bind, value) {
@@ -101,9 +110,14 @@ function renderLaravelLogin(root, message = 'Inicia sesión con tu usuario de La
 
     if (!email || !password) return;
 
-    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
-    restoreDashboardShell(root);
-    await loadDashboard(root);
+    try {
+      const token = await loginToLaravel(email, password);
+      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      restoreDashboardShell(root);
+      await loadDashboard(root);
+    } catch (error) {
+      renderLaravelLogin(root, error.message);
+    }
   });
 }
 

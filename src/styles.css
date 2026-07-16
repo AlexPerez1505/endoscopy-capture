@@ -271,8 +271,8 @@ video {
   text-align: center;
 }
 
-.empty-state.is-hidden {
-  display: none;
+.is-hidden {
+  display: none !important;
 }
 
 .empty-state h3 {

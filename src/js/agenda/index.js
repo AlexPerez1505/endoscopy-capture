@@ -43,7 +43,8 @@ function apiBaseUrl() {
 }
 
 const API_BASE_URL = apiBaseUrl();
-const AGENDA_ENDPOINT = `${API_BASE_URL}/tauri/agenda`;
+const AGENDA_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda`;
+const LOGIN_ENDPOINT = `${API_BASE_URL}/api/tauri/login`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 let appointmentsData = [];
@@ -59,19 +60,28 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function encodeBasicCredentials(email, password) {
-  const bytes = new TextEncoder().encode(`${email}:${password}`);
-  let binary = '';
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary);
-}
-
 function authHeader() {
   const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+  return token ? `Bearer ${token}` : '';
+}
+
+async function loginToLaravel(email, password) {
+  const response = await laravelFetch(LOGIN_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || 'No se pudo iniciar sesion.');
+  }
+
+  return payload.token;
 }
 
 function agendaEndpointForVisibleMonth() {
@@ -282,9 +292,15 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
 
     if (!email || !password) return;
 
-    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
-    restoreAgendaShell(root);
-    await loadAgendaFromLaravel(root);
+    try {
+      const token = await loginToLaravel(email, password);
+      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      restoreAgendaShell(root);
+      await loadAgendaFromLaravel(root);
+    } catch (error) {
+      console.error(error);
+      renderLaravelLogin(root, error.message || 'No se pudo iniciar sesion.');
+    }
   });
 }
 

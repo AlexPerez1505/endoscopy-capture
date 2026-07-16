@@ -1,7 +1,14 @@
-import { apiBaseUrl, authHeader, laravelFetch } from './js/laravel.js';
+import { apiBaseUrl, laravelFetch } from './js/laravel.js';
 
-const CAPTURE_ENDPOINT = `${apiBaseUrl()}/tauri/capturas`;
-const ACTIVE_STUDY_ENDPOINT = `${apiBaseUrl()}/tauri/estudio-activo`;
+const PAIR_ENDPOINT = `${apiBaseUrl()}/api/tauri/pair/redeem`;
+const START_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/estudios/iniciar`;
+const IMAGES_ENDPOINT = `${apiBaseUrl()}/api/tauri/images`;
+const VIDEOS_ENDPOINT = `${apiBaseUrl()}/api/tauri/videos`;
+const FINISH_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/finish-session`;
+const DEVICE_TOKEN_KEY = 'enclaii-device-token';
+const DEVICE_SESSION_KEY = 'enclaii-device-session-id';
+const DEVICE_UID_KEY = 'enclaii-device-uid';
+const USER_TOKEN_KEY = 'enclaii-tauri-basic-auth';
 
 const preview = document.getElementById('preview');
 const emptyState = document.getElementById('emptyState');
@@ -18,6 +25,13 @@ const recordingIndicator = document.getElementById('recordingIndicator');
 const deviceLabel = document.getElementById('deviceLabel');
 const backToAppBtn = document.getElementById('backToAppBtn');
 
+const pairCard = document.getElementById('pairCard');
+const captureLayout = document.getElementById('captureLayout');
+const pairForm = document.getElementById('pairForm');
+const pairCodeInput = document.getElementById('pairCodeInput');
+const pairSkipBtn = document.getElementById('pairSkipBtn');
+const pairStatusMsg = document.getElementById('pairStatusMsg');
+
 const pairStatusText = document.getElementById('pairStatusText');
 const tenantText = document.getElementById('tenantText');
 const patientText = document.getElementById('patientText');
@@ -31,6 +45,12 @@ const resetFiltersBtn = document.getElementById('resetFiltersBtn');
 
 const imageCount = document.getElementById('imageCount');
 const videoCount = document.getElementById('videoCount');
+const captureThumbnails = document.getElementById('captureThumbnails');
+const finishStudyBtn = document.getElementById('finishStudyBtn');
+const finishStudyModal = document.getElementById('finishStudyModal');
+const finishStudyThumbnails = document.getElementById('finishStudyThumbnails');
+const finishStudySummary = document.getElementById('finishStudySummary');
+const finishStudyCloseBtn = document.getElementById('finishStudyCloseBtn');
 
 let currentStream = null;
 let mediaRecorder = null;
@@ -39,11 +59,15 @@ let recordedChunks = [];
 let totalImages = 0;
 let totalVideos = 0;
 let activeStudyContext = {};
-let activeStudyLoaded = false;
+let isDevicePaired = false;
+let captureAuthMode = null; // 'device' (codigo de 6 digitos) o 'user' (sesion directa)
+let capturedItems = [];
 
 const DEFAULT_CAMERA_VALUE = '__default_camera__';
 
 function goBackToApp() {
+  finishActiveSession();
+
   if (window.history.length > 1) {
     window.history.back();
     return;
@@ -127,7 +151,7 @@ function captureContext() {
 function renderLaravelConnection() {
   const context = captureContext();
 
-  if (pairStatusText) pairStatusText.textContent = 'Conectado a Laravel';
+  if (pairStatusText) pairStatusText.textContent = isDevicePaired ? 'Vinculado a Laravel' : 'Sin vincular';
   if (tenantText) tenantText.textContent = apiBaseUrl();
   if (patientText) patientText.textContent = context.patientName || (context.patientId ? `ID ${context.patientId}` : 'Sin paciente');
   if (studyText) studyText.textContent = context.studyLabel || (context.studyId ? `ID ${context.studyId}` : 'Sin estudio');
@@ -147,93 +171,209 @@ function blobToBase64(blob) {
   });
 }
 
-function normalizeActiveStudy(payload = {}) {
-  const study = payload.study || payload.estudio || payload.data || payload;
-
-  return {
-    patientId: firstText(study.patient_id, study.paciente_id, study.patientId),
-    studyId: firstText(study.study_id, study.estudio_id, study.id, study.studyId),
-    sessionId: firstText(study.session_id, study.sesion_id, study.sessionId),
-    patientName: firstText(study.patient_name, study.paciente_nombre, study.patient),
-    studyLabel: firstText(study.label, study.study_label, study.estudio_label, [study.tipo || study.type, study.folio].filter(Boolean).join(' ')),
-  };
+function getDeviceUid() {
+  let uid = localStorage.getItem(DEVICE_UID_KEY);
+  if (!uid) {
+    uid = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+    localStorage.setItem(DEVICE_UID_KEY, uid);
+  }
+  return uid;
 }
 
-async function loadActiveStudyContext({ silent = false } = {}) {
-  const headers = { Accept: 'application/json' };
-  const authorization = authHeader();
-  if (authorization) headers.Authorization = authorization;
+function deviceAuthHeader() {
+  const token = sessionStorage.getItem(DEVICE_TOKEN_KEY);
+  return token ? `Bearer ${token}` : '';
+}
+
+function userAuthHeader() {
+  const token = sessionStorage.getItem(USER_TOKEN_KEY);
+  return token ? `Bearer ${token}` : '';
+}
+
+function activeCaptureAuthHeader() {
+  return captureAuthMode === 'device' ? deviceAuthHeader() : userAuthHeader();
+}
+
+function persistPairing(data) {
+  sessionStorage.setItem(DEVICE_TOKEN_KEY, data.token);
+  sessionStorage.setItem(DEVICE_SESSION_KEY, String(data.session_id));
+
+  if (data.paciente_id) sessionStorage.setItem('enclaii-patient_id', String(data.paciente_id));
+  if (data.paciente_nombre) sessionStorage.setItem('enclaii-patient_name', data.paciente_nombre);
+  if (data.estudio_id || data.study_id) sessionStorage.setItem('enclaii-study_id', String(data.estudio_id || data.study_id));
+  if (data.estudio_tipo) sessionStorage.setItem('enclaii-study_label', data.estudio_tipo);
+
+  activeStudyContext = {
+    patientId: firstText(data.paciente_id, activeStudyContext.patientId),
+    studyId: firstText(data.estudio_id, data.study_id, activeStudyContext.studyId),
+    sessionId: String(data.session_id),
+    patientName: firstText(data.paciente_nombre, activeStudyContext.patientName),
+    studyLabel: firstText(data.estudio_tipo, activeStudyContext.studyLabel),
+  };
+
+  captureAuthMode = 'device';
+  isDevicePaired = true;
+}
+
+async function pairWithCode(code) {
+  const response = await laravelFetch(PAIR_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      code,
+      device_name: 'Endoscopy Capture Desktop',
+      device_uid: getDeviceUid(),
+    }),
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json') ? await response.json() : {};
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al vincular el dispositivo.`);
+  }
+
+  persistPairing(payload.data || {});
+  return payload.data;
+}
+
+/**
+ * Inicia una sesion de captura directamente con el token de usuario ya
+ * logueado en Tauri, usando el paciente_id que llego desde "Iniciar estudio"
+ * en Pacientes. No requiere el codigo de 6 digitos generado en la web.
+ */
+async function startDirectSession() {
+  const authorization = userAuthHeader();
   const context = captureContext();
-  const params = new URLSearchParams();
-  if (context.studyId) params.set('study_id', context.studyId);
-  if (context.patientId) params.set('patient_id', context.patientId);
-  if (context.sessionId) params.set('session_id', context.sessionId);
-  const endpoint = params.toString()
-    ? `${ACTIVE_STUDY_ENDPOINT}?${params.toString()}`
-    : ACTIVE_STUDY_ENDPOINT;
+
+  if (!authorization || !context.patientId) {
+    return null;
+  }
+
+  const response = await laravelFetch(START_SESSION_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: authorization,
+    },
+    body: JSON.stringify({
+      paciente_id: context.patientId,
+      estudio_id: context.studyId || undefined,
+    }),
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json') ? await response.json() : {};
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al iniciar la sesion de captura.`);
+  }
+
+  const data = payload.data || {};
+
+  sessionStorage.setItem(DEVICE_SESSION_KEY, String(data.session_id));
+
+  activeStudyContext = {
+    patientId: firstText(data.paciente_id, activeStudyContext.patientId),
+    studyId: firstText(data.estudio_id, activeStudyContext.studyId),
+    sessionId: String(data.session_id),
+    patientName: firstText(data.paciente_nombre, activeStudyContext.patientName),
+    studyLabel: firstText(data.estudio_tipo, activeStudyContext.studyLabel),
+  };
+
+  captureAuthMode = 'user';
+  isDevicePaired = true;
+
+  return data;
+}
+
+function addCaptureThumbnail(url, label, type) {
+  capturedItems.push({ url, label, type });
+
+  if (!captureThumbnails || !url) return;
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.title = label;
+  link.style.display = 'block';
+
+  if (type === 'video') {
+    link.textContent = `Video: ${label}`;
+    link.style.padding = '8px';
+    link.style.fontSize = '12px';
+    link.style.border = '1px solid var(--border, #ccc)';
+    link.style.borderRadius = '8px';
+  } else {
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = label;
+    img.style.width = '100%';
+    img.style.borderRadius = '8px';
+    img.style.aspectRatio = '1 / 1';
+    img.style.objectFit = 'cover';
+    link.appendChild(img);
+  }
+
+  captureThumbnails.prepend(link);
+}
+
+function showCaptureLayout() {
+  pairCard?.classList.add('is-hidden');
+  captureLayout?.classList.remove('is-hidden');
+  renderConnection();
+}
+
+async function finishActiveSession() {
+  const sessionId = sessionStorage.getItem(DEVICE_SESSION_KEY);
+  const authorization = activeCaptureAuthHeader();
+  if (!sessionId || !authorization) return;
 
   try {
-    const response = await laravelFetch(endpoint, {
-      headers,
-      credentials: 'include',
+    await laravelFetch(FINISH_SESSION_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: authorization,
+      },
+      body: JSON.stringify({ session_id: Number(sessionId) }),
     });
-    const contentType = response.headers.get('content-type') || '';
-    const payload = contentType.includes('application/json') ? await response.json() : {};
-
-    activeStudyLoaded = true;
-
-    if (!response.ok || payload?.ok === false) {
-      activeStudyContext = {};
-      renderConnection();
-      if (!silent) addLog(payload?.message || 'No hay estudio activo en Laravel.', 'error');
-      return activeStudyContext;
-    }
-
-    activeStudyContext = normalizeActiveStudy(payload);
-    renderConnection();
-    if (!silent && activeStudyContext.studyId) {
-      addLog(`Estudio activo conectado: ${activeStudyContext.studyLabel || `ID ${activeStudyContext.studyId}`}.`, 'success');
-    }
   } catch (error) {
-    activeStudyLoaded = true;
-    activeStudyContext = {};
-    renderConnection();
-    if (!silent) addLog(`No se pudo leer el estudio activo: ${error.message}`, 'error');
+    console.error('No se pudo finalizar la sesion de captura.', error);
   }
-
-  return activeStudyContext;
-}
-
-async function ensureCaptureContext() {
-  let context = captureContext();
-  if (!context.patientId && !context.studyId) {
-    await loadActiveStudyContext({ silent: true });
-    context = captureContext();
-  }
-  return context;
 }
 
 async function uploadCaptureToLaravel(blob, filename, captureType) {
-  const headers = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-  const authorization = authHeader();
-  if (authorization) headers.Authorization = authorization;
-  const context = await ensureCaptureContext();
+  const authorization = activeCaptureAuthHeader();
+  const sessionId = sessionStorage.getItem(DEVICE_SESSION_KEY);
 
-  const response = await laravelFetch(CAPTURE_ENDPOINT, {
+  if (!authorization || !sessionId) {
+    throw new Error('Vincula el dispositivo con el codigo de Laravel (o selecciona un paciente desde Pacientes) para guardar las capturas en la base de datos.');
+  }
+
+  const endpoint = captureType === 'video' ? VIDEOS_ENDPOINT : IMAGES_ENDPOINT;
+  const fileField = captureType === 'video' ? 'filename' : 'filename';
+  const timestampField = captureType === 'video' ? 'ended_at' : 'captured_at';
+
+  const response = await laravelFetch(endpoint, {
     method: 'POST',
-    headers,
-    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: authorization,
+    },
     body: JSON.stringify({
-      ...context,
-      capture_type: captureType,
-      filename,
+      session_id: Number(sessionId),
+      [fileField]: filename,
       mime_type: blob.type || 'application/octet-stream',
       data_base64: await blobToBase64(blob),
-      captured_at: new Date().toISOString(),
-      source: 'tauri',
+      [timestampField]: new Date().toISOString(),
     }),
   });
 
@@ -243,22 +383,15 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
     : { message: await response.text() };
 
   if (response.status === 401 || response.status === 419) {
-    throw new Error('Ingresa tus credenciales de Laravel para guardar capturas.');
+    throw new Error('El dispositivo no esta vinculado o el token expiro. Vuelve a ingresar el codigo.');
   }
 
   if (!response.ok || payload?.ok === false) {
     throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al guardar la captura.`);
   }
 
-  if (payload.capture) {
-    activeStudyContext = {
-      ...activeStudyContext,
-      patientId: firstText(payload.capture.patient_id, activeStudyContext.patientId),
-      studyId: firstText(payload.capture.study_id, activeStudyContext.studyId),
-      patientName: firstText(payload.capture.patient_name, activeStudyContext.patientName),
-      studyLabel: firstText(payload.capture.study_label, activeStudyContext.studyLabel),
-    };
-    renderConnection();
+  if (payload.data?.url) {
+    addCaptureThumbnail(payload.data.url, filename, captureType);
   }
 
   return payload;
@@ -609,6 +742,101 @@ function handleRemoteKey(event) {
   }
 }
 
+function handleRemoteClick(event) {
+  if (!isDevicePaired || !currentStream || captureLayout?.classList.contains('is-hidden')) return;
+
+  const isInteractive = event.target.closest('button, a, input, select, textarea, label');
+  if (isInteractive) return;
+
+  captureImage();
+}
+
+pairForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const code = (pairCodeInput?.value || '').trim();
+  if (code.length !== 6) {
+    if (pairStatusMsg) pairStatusMsg.textContent = 'Ingresa los 6 digitos del codigo.';
+    return;
+  }
+
+  if (pairStatusMsg) pairStatusMsg.textContent = 'Vinculando dispositivo...';
+
+  try {
+    await pairWithCode(code);
+    if (pairStatusMsg) pairStatusMsg.textContent = '';
+    addLog('Dispositivo vinculado. Ya puedes detectar la camara.', 'success');
+    showCaptureLayout();
+    detectDevices();
+  } catch (error) {
+    console.error(error);
+    if (pairStatusMsg) pairStatusMsg.textContent = error.message || 'No se pudo vincular el dispositivo.';
+  }
+});
+
+pairSkipBtn?.addEventListener('click', () => {
+  addLog('Continuando sin vincular. Las capturas no se guardaran en Laravel.', 'error');
+  showCaptureLayout();
+  detectDevices();
+});
+
+async function finishStudy() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    stopRecording();
+  }
+
+  if (capturedItems.length === 0) {
+    addLog('Toma al menos una foto o video antes de finalizar el estudio.', 'error');
+    return;
+  }
+
+  await finishActiveSession();
+
+  if (finishStudySummary) {
+    const patientLabel = activeStudyContext.patientName || 'este paciente';
+    finishStudySummary.textContent = capturedItems.length
+      ? `Se guardaron ${totalImages} foto(s) y ${totalVideos} video(s) para ${patientLabel}.`
+      : `No se tomaron capturas para ${patientLabel} en esta sesion.`;
+  }
+
+  if (finishStudyThumbnails) {
+    finishStudyThumbnails.innerHTML = '';
+    capturedItems.forEach((item) => {
+      const link = document.createElement('a');
+      link.href = item.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+
+      if (item.type === 'video') {
+        link.textContent = `Video: ${item.label}`;
+        link.style.display = 'block';
+        link.style.padding = '10px';
+        link.style.border = '1px solid var(--border, #ccc)';
+        link.style.borderRadius = '8px';
+      } else {
+        const img = document.createElement('img');
+        img.src = item.url;
+        img.alt = item.label;
+        img.style.width = '100%';
+        img.style.aspectRatio = '1 / 1';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = '8px';
+        link.appendChild(img);
+      }
+
+      finishStudyThumbnails.appendChild(link);
+    });
+  }
+
+  finishStudyModal?.classList.remove('is-hidden');
+}
+
+finishStudyBtn?.addEventListener('click', finishStudy);
+finishStudyCloseBtn?.addEventListener('click', () => {
+  finishStudyModal?.classList.add('is-hidden');
+  window.location.href = './pages/pacientes.html';
+});
+
 detectDevicesBtn.addEventListener('click', detectDevices);
 startBtn.addEventListener('click', startVideo);
 captureBtn.addEventListener('click', captureImage);
@@ -622,19 +850,39 @@ saturationInput.addEventListener('input', applyFilters);
 resetFiltersBtn.addEventListener('click', resetFilters);
 
 document.addEventListener('keydown', handleRemoteKey);
+document.addEventListener('click', handleRemoteClick);
 navigator.mediaDevices?.addEventListener?.('devicechange', () => {
   detectDevices();
 });
 
 window.addEventListener('beforeunload', () => {
+  finishActiveSession();
   if (currentStream) {
     currentStream.getTracks().forEach((track) => track.stop());
   }
 });
 
-renderConnection();
-setStatus('Listo', 'idle');
-addLog('Conexion Laravel activada. Las capturas se guardan por Laravel.');
-addLog('Atajos activos: F8 o Espacio = foto, F9 = grabar, F10 = detener.');
-loadActiveStudyContext();
-detectDevices();
+async function bootstrap() {
+  renderConnection();
+  setStatus('Listo', 'idle');
+  addLog('Atajos activos: F8 o Espacio = foto, F9 = grabar, F10 = detener. El boton fisico del endoscopio (mouse) tambien toma foto.');
+
+  const context = captureContext();
+
+  if (context.patientId && userAuthHeader()) {
+    try {
+      await startDirectSession();
+      addLog(`Estudio listo para ${activeStudyContext.patientName || `paciente ${context.patientId}`}. Detectando camara...`, 'success');
+      showCaptureLayout();
+      detectDevices();
+      return;
+    } catch (error) {
+      console.error(error);
+      addLog(`No se pudo iniciar la sesion automaticamente: ${error.message}`, 'error');
+    }
+  }
+
+  addLog('Ingresa el codigo de Laravel para vincular este equipo, o detecta la camara sin vincular.');
+}
+
+bootstrap();

@@ -30,8 +30,7 @@ function apiBaseUrl() {
 }
 
 const API_BASE_URL = apiBaseUrl();
-const PATIENTS_ENDPOINT = `${API_BASE_URL}/tauri/pacientes`;
-const START_STUDY_ENDPOINT = `${API_BASE_URL}/tauri/estudios/iniciar`;
+const PATIENTS_ENDPOINT = `${API_BASE_URL}/api/tauri/pacientes`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 const statusTexts = { completed:'Completado', waiting:'En espera', cancelled:'Cancelado' };
@@ -87,19 +86,28 @@ function renderPatientsError(error) {
   if (info) info.textContent = 'Sin conexión con Laravel';
 }
 
-function encodeBasicCredentials(email, password) {
-  const bytes = new TextEncoder().encode(`${email}:${password}`);
-  let binary = '';
-  bytes.forEach(byte => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary);
-}
-
 function authHeader() {
   const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+  return token ? `Bearer ${token}` : '';
+}
+
+async function loginToLaravel(email, password) {
+  const response = await laravelFetch(`${API_BASE_URL}/api/tauri/login`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || 'No se pudo iniciar sesión con Laravel.');
+  }
+
+  return payload.token;
 }
 
 function renderLaravelLogin(message = 'Inicia sesión con tu usuario de Laravel.') {
@@ -130,13 +138,19 @@ function renderLaravelLogin(message = 'Inicia sesión con tu usuario de Laravel.
 
     if (!email || !password) return;
 
-    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
-    await loadPatientsFromLaravel();
+    try {
+      const token = await loginToLaravel(email, password);
+      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      await loadPatientsFromLaravel();
+    } catch (error) {
+      renderLaravelLogin(error.message);
+    }
   });
 }
 
 function normalizePatientsPayload(payload) {
   if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.pacientes)) return payload.pacientes;
   if (Array.isArray(payload?.patients)) return payload.patients;
   if (Array.isArray(payload?.data)) return payload.data;
   return [];
@@ -583,7 +597,7 @@ async function confirmarEliminarConLaravel() {
   }
 }
 
-async function startPatientStudy(index) {
+function startPatientStudy(index) {
   const patient = patientsData[index];
   if (!patient) return;
 
@@ -593,68 +607,23 @@ async function startPatientStudy(index) {
     return;
   }
 
-  const headers = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-  const authorization = authHeader();
-  if (authorization) headers.Authorization = authorization;
+  const patientName = patient.name || '';
+  const studyLabel = patient.study_type || patient.procedimiento || 'Endoscopia';
 
-  try {
-    const response = await laravelFetch(START_STUDY_ENDPOINT, {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify({
-        patientId: String(patientId),
-        tipo: patient.study_type || patient.procedimiento || 'Endoscopia',
-        medico: patient.medico || '',
-      }),
-    });
-    const contentType = response.headers.get('content-type') || '';
-    const payload = contentType.includes('application/json') ? await response.json() : {};
+  const params = new URLSearchParams({
+    patient_id: String(patientId),
+    patient_name: patientName,
+    study_label: studyLabel,
+  });
 
-    if (response.status === 401 || response.status === 419) {
-      const error = new Error('Ingresa tus credenciales de Laravel para iniciar estudios.');
-      error.code = 'UNAUTHORIZED';
-      throw error;
-    }
+  ['patient_id', 'paciente_id', 'patientId'].forEach((key) => sessionStorage.setItem(`enclaii-${key}`, String(patientId)));
+  sessionStorage.setItem('enclaii-patient_name', patientName);
+  sessionStorage.setItem('enclaii-study_label', studyLabel);
 
-    if (!response.ok || payload?.ok === false) {
-      throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al iniciar estudio.`);
-    }
-
-    const study = payload.study || payload.estudio || payload.data || {};
-    const studyId = study.study_id || study.estudio_id || study.id;
-    const patientName = study.patient_name || study.paciente_nombre || patient.name || '';
-    const studyLabel = study.label || [study.tipo || study.type || 'Estudio', study.folio].filter(Boolean).join(' ');
-
-    if (!studyId) {
-      throw new Error('Laravel inicio el estudio, pero no devolvio study_id.');
-    }
-
-    const params = new URLSearchParams({
-      patient_id: String(patientId),
-      study_id: String(studyId),
-      patient_name: patientName,
-      study_label: studyLabel,
-    });
-
-    ['patient_id', 'paciente_id', 'patientId'].forEach((key) => sessionStorage.setItem(`enclaii-${key}`, String(patientId)));
-    ['study_id', 'estudio_id', 'studyId'].forEach((key) => sessionStorage.setItem(`enclaii-${key}`, String(studyId)));
-    sessionStorage.setItem('enclaii-patient_name', patientName);
-    sessionStorage.setItem('enclaii-study_label', studyLabel);
-
-    window.location.href = `./index.html?${params.toString()}`;
-  } catch (error) {
-    console.error(error);
-    if (error.code === 'UNAUTHORIZED') {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
-      renderLaravelLogin(error.message);
-      return;
-    }
-    alert(error.message || 'Laravel no pudo iniciar el estudio.');
-  }
+  // Lleva directo a la pantalla de emparejamiento/captura. Ahi se ingresa
+  // el codigo de 6 digitos generado en Laravel (Nuevo estudio > Generar
+  // codigo Tauri) para vincular la camara al estudio de este paciente.
+  window.location.href = `./index.html?${params.toString()}`;
 }
 
 // Exponer funciones globalmente para los onclick inline del HTML
