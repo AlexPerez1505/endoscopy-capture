@@ -3,10 +3,14 @@
 
 import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
-import { initAgenda } from './agenda.js';
-import { initReports, initReportEditor } from './reports.js';
+import { initAgenda } from './agenda/index.js';
+import { initReports, initReportEditor, initReportGenerator } from './reports.js';
 import { initNuevoPaciente } from './nuevo-paciente.js';
 import { initEditarPaciente } from './editar-paciente.js';
+import { initGaleria } from './galeria.js';
+import { initMensajes } from './mensajes.js';
+import { initQr } from './qr.js';
+import { initConfiguracion } from './configuracion.js';
 
 const HEAD = {
   dashboard:      { title: 'Dashboard',      sub: 'Resumen general de tu actividad clínica' },
@@ -14,15 +18,21 @@ const HEAD = {
   pacientes:      { title: 'Pacientes',      sub: 'Expedientes y datos clínicos' },
   'nuevo-paciente':   { title: 'Nuevo Paciente',   sub: 'Ingresa los datos correctamente de tu paciente' },
   'editar-paciente':  { title: 'Editar Paciente',   sub: 'Modifica los datos del paciente' },
-  'ia-reportes':  { title: 'Reportes IA',    sub: 'Generación y edición de reportes' },
-  mensajes:       { title: 'Mensajes',       sub: 'Comunicación con pacientes' },
-  galeria:        { title: 'Galería',        sub: 'Imágenes y videos de estudios' },
+  qr:             { title: 'Pre-registro QR', sub: 'Genera codigos seguros y recibe los datos del paciente antes de su cita' },
+  'ia-reportes':  { title: 'Reportes',       sub: 'Genera, analiza y revisa reportes inteligentes impulsados por IA' },
+  'ia-reportes-redactar': { title: 'Reporte', sub: 'Redacta y estructura el informe clínico' },
+  'ia-reportes-generar': { title: 'Genera reporte AI', sub: 'La AI analizará la información clínica y generará un reporte preliminar' },
+  mensajes:       { title: 'Mensajes',       sub: 'Gestiona tus conversaciones con pacientes' },
+  galeria:        { title: 'Galería de pacientes', sub: 'Consulta y administra imágenes y videos de estudios' },
   finanzas:       { title: 'Finanzas',       sub: 'Ingresos y facturación' },
-  configuracion:  { title: 'Configuración', sub: 'Preferencias y ajustes' },
+  configuracion:  { title: 'Configuracion', sub: 'Personaliza tu experiencia y gestiona los ajustes de tu cuenta y sistema' },
 };
 
 // Secciones ya migradas (tienen fragmento HTML en ./pages)
-const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'ia-reportes', 'ia-reportes-redactar', 'nuevo-paciente', 'editar-paciente']);
+const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'qr', 'ia-reportes', 'ia-reportes-redactar', 'ia-reportes-generar', 'galeria', 'mensajes', 'configuracion', 'nuevo-paciente', 'editar-paciente']);
+const PAGE_FILES = {
+  agenda: './pages/agenda_html/index.blade.html',
+};
 
 const pageContent = document.getElementById('pageContent');
 const headTitle   = document.getElementById('headTitle');
@@ -30,7 +40,9 @@ const headSub     = document.getElementById('headSub');
 
 function setActiveNav(route) {
   document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.nav === route);
+    const nav = el.dataset.nav;
+    const isActive = nav === route || (route && route.startsWith(nav + '-'));
+    el.classList.toggle('active', isActive);
   });
 }
 
@@ -47,6 +59,7 @@ async function loadPage(route) {
   const meta = HEAD[route] || { title: route, sub: '' };
   headTitle.textContent = meta.title;
   headSub.textContent = meta.sub || '';
+  document.body.dataset.route = route;
   setActiveNav(route);
 
   if (route === 'nuevo-estudio') {
@@ -65,17 +78,23 @@ async function loadPage(route) {
   }
 
   try {
-    const res = await fetch(`./pages/${route}.html`);
+    const pageUrl = PAGE_FILES[route] || `./pages/${route}.html`;
+    const res = await fetch(pageUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     pageContent.innerHTML = await res.text();
 
     if (route === 'dashboard') initDashboard();
     if (route === 'pacientes') initPacientes();
     if (route === 'agenda')    initAgenda();
+    if (route === 'qr') initQr();
     if (route === 'ia-reportes') initReports();
     if (route === 'ia-reportes-redactar') initReportEditor();
+    if (route === 'ia-reportes-generar') initReportGenerator();
     if (route === 'nuevo-paciente') initNuevoPaciente();
     if (route === 'editar-paciente') initEditarPaciente();
+    if (route === 'galeria') initGaleria();
+    if (route === 'mensajes') initMensajes();
+    if (route === 'configuracion') initConfiguracion();
   } catch (err) {
     pageContent.innerHTML = `<div class="card"><h3>Error</h3><p class="muted">No se pudo cargar la sección: ${err.message}</p></div>`;
   }

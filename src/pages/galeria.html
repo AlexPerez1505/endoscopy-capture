@@ -1,0 +1,413 @@
+<section class="gallery-page rise d2">
+  <div class="gallery-shell" id="galleryListView">
+    <div class="gallery-main">
+      <div class="gallery-toolbar">
+        <label class="gallery-search" for="gallerySearchInput">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input id="gallerySearchInput" type="search" placeholder="Buscar paciente por nombre, ID o tel&eacute;fono...">
+        </label>
+
+        <button class="gallery-filter-btn" id="galleryFilterBtn" type="button" aria-expanded="true" aria-controls="galleryFilterPanel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+          <span>Filtros</span>
+        </button>
+      </div>
+
+      <div class="gallery-list" id="galleryPatientList"></div>
+      <div class="gallery-empty" id="galleryEmptyState">No se encontraron pacientes.</div>
+
+      <div class="table-footer">
+        <span id="galleryPaginationInfo">Mostrando 0 pacientes</span>
+        <div class="pagination" id="galleryPaginationControls"></div>
+      </div>
+    </div>
+
+    <aside class="gallery-filters is-open" id="galleryFilterPanel" aria-label="Filtros de galeria">
+      <div class="gallery-filters-head">
+        <h2>Filtros</h2>
+        <button class="gallery-filter-close" id="galleryFilterClose" type="button" aria-label="Cerrar filtros">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="gallery-filter-body">
+        <div class="gallery-filter-section">
+          <label class="gallery-filter-label" for="filterPatient">Paciente</label>
+          <select class="gallery-filter-control" id="filterPatient">
+            <option value="">Todos los pacientes</option>
+          </select>
+        </div>
+
+        <div class="gallery-filter-section">
+          <label class="gallery-filter-label" for="filterDoctor">M&eacute;dico</label>
+          <select class="gallery-filter-control" id="filterDoctor">
+            <option value="">Todos los m&eacute;dicos</option>
+          </select>
+        </div>
+
+        <div class="gallery-filter-section">
+          <label class="gallery-filter-label" for="filterProcedure">Tipo de procedimiento</label>
+          <select class="gallery-filter-control" id="filterProcedure">
+            <option value="">Todos los procedimientos</option>
+          </select>
+        </div>
+
+        <div class="gallery-filter-section">
+          <span class="gallery-filter-label">Fecha del estudio</span>
+          <div class="gallery-date-presets">
+            <button class="gallery-date-btn" type="button" data-date-filter="today">Hoy</button>
+            <button class="gallery-date-btn" type="button" data-date-filter="week">Esta semana</button>
+            <button class="gallery-date-btn is-active" type="button" data-date-filter="month">Este mes</button>
+            <button class="gallery-date-btn" type="button" data-date-filter="custom">Rango personalizado</button>
+          </div>
+          <div class="gallery-date-grid">
+            <label>
+              <span>Desde</span>
+              <input class="gallery-filter-control" id="filterDateFrom" type="date" value="2026-07-01">
+            </label>
+            <label>
+              <span>Hasta</span>
+              <input class="gallery-filter-control" id="filterDateTo" type="date" value="2026-07-31">
+            </label>
+          </div>
+        </div>
+
+        <div class="gallery-filter-section">
+          <span class="gallery-filter-label">Tipo de archivo</span>
+          <div class="gallery-radio-row">
+            <label class="gallery-radio">
+              <input type="radio" name="filterFileType" value="all" checked>
+              <span>Todos</span>
+            </label>
+            <label class="gallery-radio">
+              <input type="radio" name="filterFileType" value="images">
+              <span>Im&aacute;genes</span>
+            </label>
+            <label class="gallery-radio">
+              <input type="radio" name="filterFileType" value="videos">
+              <span>Videos</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="gallery-filter-section">
+          <span class="gallery-filter-label">Estado del estudio</span>
+          <div class="gallery-radio-row">
+            <label class="gallery-radio">
+              <input type="radio" name="filterStatus" value="all" checked>
+              <span>Todos</span>
+            </label>
+            <label class="gallery-radio">
+              <input type="radio" name="filterStatus" value="pending">
+              <span>Pendiente</span>
+            </label>
+            <label class="gallery-radio">
+              <input type="radio" name="filterStatus" value="process">
+              <span>En proceso</span>
+            </label>
+            <label class="gallery-radio">
+              <input type="radio" name="filterStatus" value="done">
+              <span>Finalizado</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="gallery-filter-actions">
+        <button class="gallery-clear-btn" id="galleryClearFilters" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+          <span>Limpiar filtros</span>
+        </button>
+        <button class="gallery-apply-btn" id="galleryApplyFilters" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Aplicar filtros</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <section class="gallery-detail is-hidden" id="galleryDetailView" aria-label="Galeria del paciente">
+    <div class="gallery-detail-toolbar">
+      <button class="gallery-back-btn" id="galleryBackBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Volver a pacientes</span>
+      </button>
+
+      <label class="gallery-detail-search" for="galleryDetailSearch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input id="galleryDetailSearch" type="search" placeholder="Buscar video o imagen...">
+      </label>
+    </div>
+
+    <article class="gallery-detail-card">
+      <div class="gallery-detail-identity">
+        <div class="gallery-avatar is-purple" id="galleryDetailAvatar">RP</div>
+        <div>
+          <h2 id="galleryDetailName">Ricardo Prueba3</h2>
+          <p id="galleryDetailMeta">ID: P-001 &middot; -- &middot; -- &middot; &Uacute;ltimo estudio: 30/06/2026</p>
+        </div>
+      </div>
+
+      <div class="gallery-detail-stats">
+        <div class="gallery-detail-stat">
+          <strong id="galleryDetailStudies">4</strong>
+          <span>Estudios</span>
+        </div>
+        <div class="gallery-detail-stat">
+          <strong id="galleryDetailPhotos">21</strong>
+          <span>Fotos</span>
+        </div>
+        <div class="gallery-detail-stat">
+          <strong id="galleryDetailVideos">0</strong>
+          <span>Videos</span>
+        </div>
+      </div>
+    </article>
+
+    <section class="gallery-media-section">
+      <div class="gallery-section-head">
+        <h3>Videos</h3>
+        <span id="galleryVideoCount">0 archivos</span>
+      </div>
+      <div class="gallery-media-grid" id="galleryVideoGrid"></div>
+      <p class="gallery-section-empty" id="galleryVideoEmpty">No hay videos para este paciente.</p>
+    </section>
+
+    <section class="gallery-media-section">
+      <div class="gallery-section-head">
+        <h3>Im&aacute;genes</h3>
+        <span id="galleryImageCount">0 archivos</span>
+      </div>
+      <div class="gallery-media-grid" id="galleryImageGrid"></div>
+      <p class="gallery-section-empty" id="galleryImageEmpty">No hay im&aacute;genes para este paciente.</p>
+    </section>
+  </section>
+
+  <section class="gallery-image-viewer is-hidden" id="galleryImageViewer" aria-label="Visor de imagen">
+    <div class="gallery-viewer-topbar">
+      <button class="gallery-back-btn" id="galleryViewerBack" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Volver a la galer&iacute;a</span>
+      </button>
+
+      <div class="gallery-viewer-actions">
+        <button class="gallery-action-btn primary-soft" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+          </svg>
+          <span>Agregar al reporte</span>
+        </button>
+        <button class="gallery-action-btn success" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"></path>
+          </svg>
+          <span>Enviar por WhatsApp</span>
+        </button>
+        <button class="gallery-action-btn blue" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Descargar</span>
+        </button>
+        <button class="gallery-action-btn success" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+          <span>Guardar copia</span>
+        </button>
+        <button class="gallery-action-btn success" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+          <span>Guardar</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="gallery-viewer-layout">
+      <div class="gallery-viewer-workspace">
+        <div class="gallery-viewer-frame">
+          <div class="gallery-viewer-image" id="galleryViewerImage">
+            <span class="gallery-viewer-counter" id="galleryViewerCounter">Imagen 1 de 1</span>
+            <span class="gallery-viewer-mini-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <path d="m21 15-5-5L5 21"></path>
+              </svg>
+            </span>
+            <div class="gallery-zoom-controls">
+              <button type="button" aria-label="Acercar">+</button>
+              <span>148%</span>
+              <button type="button" aria-label="Alejar">-</button>
+              <button type="button" aria-label="Pantalla completa">[]</button>
+            </div>
+            <span class="gallery-resolution-badge">
+              <strong>1920 x 1080</strong>
+              <span id="galleryViewerFrameTime">17:46:53</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="gallery-viewer-toolstrip">
+          <button type="button">Zoom</button>
+          <button type="button" id="galleryAnnotateBtn">Anotar</button>
+          <button class="active" type="button">IA Hallazgos</button>
+          <button type="button" id="galleryImageFiltersBtn">Filtros</button>
+          <button type="button">Imprimir</button>
+          <button type="button">Pantalla completa</button>
+        </div>
+
+        <div class="gallery-study-strip">
+          <div class="gallery-study-strip-head">
+            <h3 id="galleryStudyStripTitle">Im&aacute;genes del estudio (0)</h3>
+            <div>
+              <button id="galleryViewerPrev" type="button" aria-label="Imagen anterior">&lsaquo;</button>
+              <button id="galleryViewerNext" type="button" aria-label="Imagen siguiente">&rsaquo;</button>
+            </div>
+          </div>
+          <div class="gallery-study-thumbs" id="galleryStudyThumbs"></div>
+        </div>
+      </div>
+
+      <aside class="gallery-viewer-sidebar">
+        <section class="gallery-drawing-panel is-hidden" id="galleryDrawingPanel">
+          <h3>Herramientas de dibujo</h3>
+
+          <div class="gallery-drawing-row">
+            <span>Color</span>
+            <button class="gallery-color-swatch" type="button" aria-label="Color verde"></button>
+          </div>
+
+          <label class="gallery-drawing-slider">
+            <span>Tama&ntilde;o <b>12</b></span>
+            <input type="range" min="1" max="24" value="12">
+          </label>
+
+          <label class="gallery-drawing-slider">
+            <span>Opacidad</span>
+            <input type="range" min="0" max="100" value="100">
+          </label>
+
+          <div class="gallery-drawing-grid">
+            <button class="active" type="button">Pincel</button>
+            <button type="button">Borrador</button>
+            <button type="button">
+              <span class="draw-line"></span>
+            </button>
+            <button type="button">
+              <span class="draw-circle"></span>
+            </button>
+            <button type="button">
+              <span class="draw-arrow">→</span>
+            </button>
+            <button type="button">Deshacer</button>
+            <button type="button">Rehacer</button>
+            <button type="button">Guardar</button>
+            <button class="danger" type="button">Limpiar</button>
+          </div>
+        </section>
+
+        <section class="gallery-image-filters-panel is-hidden" id="galleryImageFiltersPanel">
+          <h3>Ajustes de imagen</h3>
+
+          <div class="gallery-filter-preview" id="galleryFilterPreview"></div>
+
+          <div class="gallery-adjust-section">
+            <span class="gallery-adjust-title">Filtro de color</span>
+            <div class="gallery-color-filter-grid">
+              <button class="active" type="button" data-color-filter="none">Original</button>
+              <button type="button" data-color-filter="grayscale">Escala de grises</button>
+              <button type="button" data-color-filter="invert">Invertido</button>
+              <button type="button" data-color-filter="sepia">Sepia</button>
+            </div>
+          </div>
+
+          <div class="gallery-adjust-section">
+            <span class="gallery-adjust-title">Ajustes</span>
+            <label class="gallery-adjust-slider">
+              <span>Brillo <b id="galleryBrightnessValue">100%</b></span>
+              <input id="galleryBrightnessInput" type="range" min="50" max="150" value="100">
+            </label>
+            <label class="gallery-adjust-slider">
+              <span>Contraste <b id="galleryContrastValue">100%</b></span>
+              <input id="galleryContrastInput" type="range" min="50" max="150" value="100">
+            </label>
+            <label class="gallery-adjust-slider">
+              <span>Saturaci&oacute;n <b id="gallerySaturationValue">100%</b></span>
+              <input id="gallerySaturationInput" type="range" min="0" max="200" value="100">
+            </label>
+          </div>
+
+          <div class="gallery-image-filter-actions">
+            <button class="apply" id="galleryApplyImageFilters" type="button">Aplicar filtros</button>
+            <button class="reset" id="galleryResetImageFilters" type="button">Restablecer</button>
+          </div>
+        </section>
+
+        <section class="gallery-info-panel">
+          <h3>Informaci&oacute;n de la imagen</h3>
+          <dl>
+            <dt>ID de imagen</dt><dd id="galleryInfoId">IMG-0001</dd>
+            <dt>Fecha de captura</dt><dd id="galleryInfoDate">30/06/2026 &middot; 00:32 AM</dd>
+            <dt>Tipo de estudio</dt><dd>Endoscopia Digestiva Alta</dd>
+            <dt>Equipo</dt><dd>Pentax EPK-i7010</dd>
+            <dt>Resoluci&oacute;n</dt><dd>1920 x 1080</dd>
+            <dt>Duraci&oacute;n del video</dt><dd>00:15:42</dd>
+            <dt>Fotograma</dt><dd id="galleryInfoFrame">17:46:53</dd>
+          </dl>
+        </section>
+
+        <section class="gallery-info-panel">
+          <h3>IA Hallazgos <span>Beta</span></h3>
+          <ul class="gallery-ai-list">
+            <li><i class="green"></i><strong>Gastritis antral leve</strong><span>Confianza: 92%</span></li>
+            <li><i class="orange"></i><strong>Eritema leve</strong><span>Confianza: 88%</span></li>
+            <li><i class="green"></i><strong>Sin &uacute;lceras visibles</strong><span>Confianza: 95%</span></li>
+          </ul>
+          <button class="gallery-analysis-btn" type="button">Ver an&aacute;lisis detallado</button>
+        </section>
+
+        <section class="gallery-info-panel">
+          <h3>Etiquetas</h3>
+          <div class="gallery-tags">
+            <span>Est&oacute;mago</span>
+            <span>Antro</span>
+            <span>Gastritis</span>
+            <span>Piloro</span>
+            <span>Duodeno</span>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </section>
+</section>

@@ -1,0 +1,136 @@
+<section class="qr-page">
+  <div id="qrAppRoot">
+    <div id="qrAlert" class="qr-alert is-hidden"></div>
+
+    <div class="qr-stats rise d2">
+      <article class="qr-stat-card">
+        <span>QR activos</span>
+        <strong data-qr-bind="activeCount">0</strong>
+      </article>
+      <article class="qr-stat-card">
+        <span>Pre-registros pendientes</span>
+        <strong data-qr-bind="pendingCount">0</strong>
+      </article>
+      <article class="qr-stat-card">
+        <span>Expedientes aceptados</span>
+        <strong data-qr-bind="acceptedCount">0</strong>
+      </article>
+    </div>
+
+    <div class="qr-layout rise d3">
+      <article class="qr-card qr-generator">
+        <header class="qr-card-head">
+          <h2>Generar nuevo QR</h2>
+          <p>Configura un enlace seguro y compartelo con el paciente para que complete sus datos.</p>
+        </header>
+
+        <div class="qr-builder">
+          <div class="qr-preview">
+            <div class="qr-preview-box unavailable" id="qrPreviewBox">
+              <div class="qr-empty-preview">Genera tu primer codigo QR para comenzar.</div>
+            </div>
+            <span class="qr-status-badge revoked" id="qrPreviewStatus">Sin QR</span>
+          </div>
+
+          <form class="qr-create-form" id="qrCreateForm">
+            <fieldset>
+              <legend>Vigencia del enlace</legend>
+              <div class="qr-expiration-group">
+                <label><input type="radio" name="expires_in_hours" value="24"><span>24 horas</span></label>
+                <label><input type="radio" name="expires_in_hours" value="48" checked><span>48 horas</span></label>
+                <label><input type="radio" name="expires_in_hours" value="168"><span>7 dias</span></label>
+              </div>
+            </fieldset>
+
+            <label class="qr-message-field">
+              <span>Mensaje para el paciente <em>(opcional)</em></span>
+              <textarea id="qrPatientMessage" name="patient_message" maxlength="150" placeholder="Por favor completa tus datos con la mayor informacion posible. Gracias."></textarea>
+              <small><b id="qrMessageCount">0</b>/150</small>
+            </label>
+
+            <button class="qr-primary-btn" type="submit" id="qrGenerateBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+              <span>Generar nuevo codigo</span>
+            </button>
+          </form>
+        </div>
+
+        <div class="qr-current-info is-hidden" id="qrCurrentInfo">
+          <div class="qr-code-line">
+            <span>Codigo: <strong id="qrCurrentCode">QR-0000-0000</strong></span>
+            <button type="button" data-qr-action="copy-code" aria-label="Copiar codigo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="qr-dates">
+            <span><b>Creado:</b> <span id="qrCreatedAt">--</span></span>
+            <span><b>Expira:</b> <span id="qrExpiresAt">--</span></span>
+          </div>
+        </div>
+
+        <div class="qr-actions">
+          <button class="qr-action-btn whatsapp" type="button" data-qr-action="share-whatsapp" disabled>
+            <span>Enviar por WhatsApp</span>
+          </button>
+          <button class="qr-action-btn" type="button" data-qr-action="copy-link" disabled>
+            <span>Copiar enlace</span>
+          </button>
+          <button class="qr-action-btn" type="button" data-qr-action="download-svg" disabled>
+            <span>Descargar SVG</span>
+          </button>
+          <button class="qr-action-btn print" type="button" data-qr-action="print" disabled>
+            <span>Imprimir QR</span>
+          </button>
+        </div>
+
+        <div class="qr-note">
+          <span>Cada codigo acepta un solo envio. Una vez utilizado, el QR queda inactivo automaticamente.</span>
+        </div>
+
+        <section class="qr-history">
+          <h3>Historial de QR</h3>
+          <div class="qr-history-tabs" id="qrHistoryTabs">
+            <button class="active" type="button" data-qr-history="active">Activos <span>0</span></button>
+            <button type="button" data-qr-history="submitted">Utilizados <span>0</span></button>
+            <button type="button" data-qr-history="expired">Expirados <span>0</span></button>
+            <button type="button" data-qr-history="revoked">Cancelados <span>0</span></button>
+          </div>
+          <div class="qr-history-table-wrap">
+            <table class="qr-history-table">
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Vigencia</th>
+                  <th>Creado</th>
+                  <th>Expira</th>
+                  <th>Estado</th>
+                  <th>Registros</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="qrHistoryBody">
+                <tr><td colspan="7"><div class="qr-empty-row">Cargando historial...</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </article>
+
+      <article class="qr-card qr-prereg-card">
+        <header class="qr-card-head">
+          <h2>Pre-registros recibidos</h2>
+          <p>Revisa la informacion antes de crear el expediente definitivo.</p>
+        </header>
+        <div class="qr-prereg-list" id="qrPreregList">
+          <div class="qr-empty-row">Cargando pre-registros...</div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
