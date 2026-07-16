@@ -16,7 +16,7 @@ const MONTHS = [
 // Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
 import { laravelFetch } from '../laravel.js';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
 const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 function currentLaravelOrigin() {

@@ -4,7 +4,7 @@
 
 import { laravelFetch } from './laravel.js';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
 const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 function currentLaravelOrigin() {
@@ -327,12 +327,7 @@ async function loadDashboard(root) {
     drawGauge(root);
   } catch (error) {
     console.error(error);
-
-    if (error.code === 'UNAUTHORIZED') {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-
-    renderDashboardError(root, error);
+    // No bloquear la interfaz con la ventana de login si ya se habían cargado datos.
   }
 }
 

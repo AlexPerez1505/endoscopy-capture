@@ -3,7 +3,7 @@
 
 import { laravelFetch } from './laravel.js';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 const LOCAL_SETTINGS = {
   language: 'enclaii-lang',
