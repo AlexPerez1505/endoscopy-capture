@@ -61,7 +61,7 @@ function escapeHtml(value) {
 }
 
 function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
   return token ? `Bearer ${token}` : '';
 }
 

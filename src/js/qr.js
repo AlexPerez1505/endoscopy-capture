@@ -56,8 +56,8 @@ function encodeBasicCredentials(email, password) {
 }
 
 function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  return token ? `Bearer ${token}` : '';
 }
 
 async function qrRequest(path = '', options = {}) {
