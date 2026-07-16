@@ -1,11 +1,15 @@
 import { apiBaseUrl, laravelFetch } from './laravel.js';
 
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
+const OPEN_PATIENT_STORAGE_KEY = 'enclaii-open-gallery-patient';
 const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
 const GALLERY_ENDPOINT = `${apiBaseUrl()}/api/tauri/galeria`;
 
+const GALLERY_PAGE_SIZE = 15;
+
 let GALLERY_PATIENTS = [];
 let galleryLoadPromise = null;
+let galleryCurrentPage = 1;
 
 const DEFAULT_FILTERS = {
   patient: '',
@@ -353,10 +357,39 @@ function patientRow(patient) {
   `;
 }
 
-function renderGalleryPatients() {
+function renderGalleryPaginationControls(page, totalPages) {
+  const container = document.getElementById('galleryPaginationControls');
+  if (!container) return;
+
+  if (totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = `<button class="page-btn" data-gallery-page="${page - 1}" ${page === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+  const delta = 2;
+  const pages = [];
+
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= delta) pages.push(i);
+    else if (pages[pages.length - 1] !== '...') pages.push('...');
+  }
+
+  pages.forEach(p => {
+    html += p === '...'
+      ? '<button class="page-btn" disabled>&hellip;</button>'
+      : `<button class="page-btn${p === page ? ' active' : ''}" data-gallery-page="${p}">${p}</button>`;
+  });
+
+  html += `<button class="page-btn" data-gallery-page="${page + 1}" ${page === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
+  container.innerHTML = html;
+}
+
+function renderGalleryPatients(page = galleryCurrentPage) {
   const list = document.getElementById('galleryPatientList');
   const empty = document.getElementById('galleryEmptyState');
   const search = document.getElementById('gallerySearchInput');
+  const info = document.getElementById('galleryPaginationInfo');
 
   if (!list || !empty) return;
 
@@ -365,8 +398,24 @@ function renderGalleryPatients() {
     matchesSearch(patient, term) && matchesAppliedFilters(patient)
   );
 
-  list.innerHTML = patients.map(patientRow).join('');
-  empty.classList.toggle('is-visible', patients.length === 0);
+  const total = patients.length;
+  const totalPages = Math.max(Math.ceil(total / GALLERY_PAGE_SIZE), 1);
+  galleryCurrentPage = Math.min(Math.max(page, 1), totalPages);
+
+  const start = (galleryCurrentPage - 1) * GALLERY_PAGE_SIZE;
+  const end = Math.min(start + GALLERY_PAGE_SIZE, total);
+  const pageItems = patients.slice(start, end);
+
+  list.innerHTML = pageItems.map(patientRow).join('');
+  empty.classList.toggle('is-visible', total === 0);
+
+  if (info) {
+    info.textContent = total === 0
+      ? 'Mostrando 0 pacientes'
+      : `Mostrando ${start + 1} a ${end} de ${total} pacientes`;
+  }
+
+  renderGalleryPaginationControls(galleryCurrentPage, totalPages);
 }
 
 function countText(count) {
@@ -716,12 +765,12 @@ function clearFilterForm() {
   setDatePreset('custom');
 
   appliedFilters = { ...DEFAULT_FILTERS };
-  renderGalleryPatients();
+  renderGalleryPatients(1);
 }
 
 function applyFilterForm() {
   appliedFilters = readFilterForm();
-  renderGalleryPatients();
+  renderGalleryPatients(1);
 
   if (window.matchMedia('(max-width: 1100px)').matches) {
     setFilterPanelOpen(false);
@@ -769,6 +818,7 @@ export function initGaleria() {
   appliedFilters = { ...DEFAULT_FILTERS };
   activeDatePreset = 'month';
   dateFilterEnabled = false;
+  galleryCurrentPage = 1;
   currentDetailPatient = null;
   currentViewerMedia = null;
   pendingImageFilter = 'none';
@@ -781,10 +831,16 @@ export function initGaleria() {
   setDatePreset('month');
   dateFilterEnabled = false;
 
-  search?.addEventListener('input', renderGalleryPatients);
+  search?.addEventListener('input', () => renderGalleryPatients(1));
   patientList?.addEventListener('click', event => {
     const button = event.target.closest('[data-open-gallery]');
     if (button) openPatientGallery(button.dataset.openGallery);
+  });
+
+  document.getElementById('galleryPaginationControls')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-gallery-page]');
+    if (!button || button.disabled) return;
+    renderGalleryPatients(Number(button.dataset.galleryPage));
   });
   filterButton?.addEventListener('click', toggleGalleryFilters);
   filterClose?.addEventListener('click', () => setFilterPanelOpen(false));
@@ -864,5 +920,11 @@ export function initGaleria() {
     fillSelect('filterDoctor', uniqueValues('doctor'));
     fillSelect('filterProcedure', uniqueValues('procedure'));
     renderGalleryPatients();
+
+    const pendingPatientId = sessionStorage.getItem(OPEN_PATIENT_STORAGE_KEY);
+    if (pendingPatientId) {
+      sessionStorage.removeItem(OPEN_PATIENT_STORAGE_KEY);
+      openPatientGallery(pendingPatientId);
+    }
   });
 }

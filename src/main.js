@@ -50,7 +50,7 @@ const finishStudyBtn = document.getElementById('finishStudyBtn');
 const finishStudyModal = document.getElementById('finishStudyModal');
 const finishStudyThumbnails = document.getElementById('finishStudyThumbnails');
 const finishStudySummary = document.getElementById('finishStudySummary');
-const finishStudyCloseBtn = document.getElementById('finishStudyCloseBtn');
+const finishStudyGalleryBtn = document.getElementById('finishStudyGalleryBtn');
 
 let currentStream = null;
 let mediaRecorder = null;
@@ -774,8 +774,25 @@ pairForm?.addEventListener('submit', async (event) => {
   }
 });
 
-pairSkipBtn?.addEventListener('click', () => {
-  addLog('Continuando sin vincular. Las capturas no se guardaran en Laravel.', 'error');
+pairSkipBtn?.addEventListener('click', async () => {
+  sessionStorage.removeItem(DEVICE_SESSION_KEY);
+  sessionStorage.removeItem(DEVICE_TOKEN_KEY);
+  captureAuthMode = null;
+  isDevicePaired = false;
+
+  const context = captureContext();
+
+  if (context.patientId) {
+    try {
+      await startDirectSession();
+      addLog(`Continuando sin codigo. Las capturas se guardaran en el registro de ${context.patientName || `ID ${context.patientId}`}.`, 'success');
+    } catch (error) {
+      addLog(`No se pudo iniciar la sesion directa: ${error.message}`, 'error');
+    }
+  } else {
+    addLog('Continuando sin vincular. Selecciona un paciente desde Pacientes para guardar las capturas.', 'error');
+  }
+
   showCaptureLayout();
   detectDevices();
 });
@@ -832,9 +849,13 @@ async function finishStudy() {
 }
 
 finishStudyBtn?.addEventListener('click', finishStudy);
-finishStudyCloseBtn?.addEventListener('click', () => {
+
+finishStudyGalleryBtn?.addEventListener('click', () => {
   finishStudyModal?.classList.add('is-hidden');
-  window.location.href = './pages/pacientes.html';
+  if (activeStudyContext.patientId) {
+    sessionStorage.setItem('enclaii-open-gallery-patient', String(activeStudyContext.patientId));
+  }
+  window.location.href = './app.html#galeria';
 });
 
 detectDevicesBtn.addEventListener('click', detectDevices);
@@ -862,26 +883,10 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-async function bootstrap() {
+function bootstrap() {
   renderConnection();
   setStatus('Listo', 'idle');
   addLog('Atajos activos: F8 o Espacio = foto, F9 = grabar, F10 = detener. El boton fisico del endoscopio (mouse) tambien toma foto.');
-
-  const context = captureContext();
-
-  if (context.patientId && userAuthHeader()) {
-    try {
-      await startDirectSession();
-      addLog(`Estudio listo para ${activeStudyContext.patientName || `paciente ${context.patientId}`}. Detectando camara...`, 'success');
-      showCaptureLayout();
-      detectDevices();
-      return;
-    } catch (error) {
-      console.error(error);
-      addLog(`No se pudo iniciar la sesion automaticamente: ${error.message}`, 'error');
-    }
-  }
-
   addLog('Ingresa el codigo de Laravel para vincular este equipo, o detecta la camara sin vincular.');
 }
 
