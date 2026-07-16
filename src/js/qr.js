@@ -522,6 +522,14 @@ export function initQr() {
   const root = document.getElementById('qrAppRoot');
   if (!root) return;
   if (!qrTemplate) qrTemplate = root.innerHTML;
+
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a los códigos QR.');
+    return;
+  }
+
   bindQrEvents(root);
   loadQrDashboard();
 }

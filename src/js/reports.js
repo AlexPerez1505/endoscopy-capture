@@ -400,6 +400,13 @@ export async function initReports() {
   const root = document.getElementById('pageContent');
   if (!root) return;
 
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a los reportes.');
+    return;
+  }
+
   reportsTemplate = root.innerHTML;
   await loadReportsFromLaravel(root);
 }

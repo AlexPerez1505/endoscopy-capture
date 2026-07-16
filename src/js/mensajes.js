@@ -241,6 +241,16 @@ function sendMessage(event) {
 }
 
 export function initMensajes() {
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    const root = document.getElementById('pageContent');
+    if (root) {
+      renderLaravelLogin(root, 'Inicia sesión para acceder a los mensajes.');
+    }
+    return;
+  }
+
   const list = document.getElementById('messagesConversationList');
   const search = document.getElementById('messagesSearchInput');
   const composer = document.getElementById('messagesComposer');
