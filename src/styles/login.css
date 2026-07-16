@@ -184,7 +184,8 @@ body {
 
 @keyframes ec-ring-pulse { 0%, 100% { opacity: .12; } 50% { opacity: .85; } }
 
-.ec-scene { position: relative; width: min(560px, 80%); aspect-ratio: 1 / 1; }
+.ec-scene { position: relative; width: min(560px, 80%); aspect-ratio: 1 / 1; will-change: transform; }
+.ec-lottie { position: absolute; inset: 17%; width: 66%; height: 66%; pointer-events: none; filter: drop-shadow(0 30px 60px rgba(0,0,0,.4)); }
 
 .ec-card {
   position: absolute;
@@ -204,10 +205,10 @@ body {
 
 @keyframes ec-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
 
-.card-live { top: 8%; left: 2%; width: 200px; animation-delay: 0s; }
-.card-cloud { top: 10%; right: 2%; width: 180px; animation-delay: .5s; }
-.card-ai { bottom: 10%; right: 0; width: 215px; animation-delay: 1s; }
-.card-reports { bottom: 8%; left: 0; width: 195px; animation-delay: 1.5s; }
+.card-live { top: 0; left: -3%; width: 200px; animation-delay: 0s; }
+.card-cloud { top: 2%; right: -3%; width: 180px; animation-delay: .5s; }
+.card-ai { bottom: 0; right: -4%; width: 215px; animation-delay: 1s; }
+.card-reports { bottom: -2%; left: -3%; width: 195px; animation-delay: 1.5s; }
 
 .ecg-line { stroke: var(--cyan-400); stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-dasharray: 240 600; animation: ec-dash 2.6s linear infinite; filter: drop-shadow(0 0 6px rgba(56,199,244,.7)); }
 @keyframes ec-dash { to { stroke-dashoffset: -840; } }
