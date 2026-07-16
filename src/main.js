@@ -10,6 +10,13 @@ const DEVICE_SESSION_KEY = 'enclaii-device-session-id';
 const DEVICE_UID_KEY = 'enclaii-device-uid';
 const USER_TOKEN_KEY = 'enclaii-tauri-basic-auth';
 
+// El boton fisico del capturador puede generar clics repetidos/rebotados al
+// conectarse (rebote de contacto). Sin un limite, cada uno de esos clics
+// dispara una captura y bloquea el hilo principal, lo que se percibe como si
+// el mouse "se trabara" mientras el capturador esta conectado.
+const REMOTE_CAPTURE_COOLDOWN_MS = 900;
+let lastRemoteCaptureAt = 0;
+
 const preview = document.getElementById('preview');
 const emptyState = document.getElementById('emptyState');
 const deviceSelect = document.getElementById('deviceSelect');
@@ -725,10 +732,17 @@ function stopRecording() {
   addLog('Grabación detenida.');
 }
 
+function canTriggerRemoteCapture() {
+  const now = Date.now();
+  if (now - lastRemoteCaptureAt < REMOTE_CAPTURE_COOLDOWN_MS) return false;
+  lastRemoteCaptureAt = now;
+  return true;
+}
+
 function handleRemoteKey(event) {
   if (event.code === 'F8' || event.code === 'Space') {
     event.preventDefault();
-    captureImage();
+    if (canTriggerRemoteCapture()) captureImage();
   }
 
   if (event.code === 'F9') {
@@ -747,6 +761,12 @@ function handleRemoteClick(event) {
 
   const isInteractive = event.target.closest('button, a, input, select, textarea, label');
   if (isInteractive) return;
+
+  // Ignora clics disparados en rafaga (rebote del boton fisico del
+  // capturador). Deja pasar el evento sin bloquear el clic real del mouse:
+  // solo se omite la captura repetida, nunca se hace preventDefault ni
+  // stopPropagation, para que el mouse normal siga respondiendo siempre.
+  if (!canTriggerRemoteCapture()) return;
 
   captureImage();
 }
@@ -872,8 +892,18 @@ resetFiltersBtn.addEventListener('click', resetFilters);
 
 document.addEventListener('keydown', handleRemoteKey);
 document.addEventListener('click', handleRemoteClick);
+
+let deviceChangeTimer = null;
 navigator.mediaDevices?.addEventListener?.('devicechange', () => {
-  detectDevices();
+  // Al conectar el capturador, Windows puede emitir varios eventos
+  // "devicechange" mientras el dispositivo termina de enumerarse.
+  // Se agrupan en uno solo para no relanzar detectDevices() en cadena
+  // y evitar que la UI (y el mouse) se sienta trabada mientras negocia.
+  if (deviceChangeTimer) clearTimeout(deviceChangeTimer);
+  deviceChangeTimer = setTimeout(() => {
+    deviceChangeTimer = null;
+    detectDevices();
+  }, 600);
 });
 
 window.addEventListener('beforeunload', () => {
