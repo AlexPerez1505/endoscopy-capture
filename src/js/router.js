@@ -126,5 +126,40 @@ if (themeToggle) {
   });
 }
 
+// Menu de perfil y cerrar sesion
+const profileMenu = document.getElementById('profileMenu');
+const logoutBtn = document.getElementById('logoutBtn');
+
+if (profileMenu) {
+  profileMenu.addEventListener('click', (e) => {
+    if (e.target.closest('#logoutBtn')) return;
+    const isOpen = profileMenu.classList.toggle('open');
+    profileMenu.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!profileMenu.contains(e.target)) {
+      profileMenu.classList.remove('open');
+      profileMenu.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      profileMenu.classList.remove('open');
+      profileMenu.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', () => {
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem('enclaii-device-token');
+    sessionStorage.removeItem('enclaii-device-session-id');
+    window.location.href = './login.html';
+  });
+}
+
 // Arranque
 loadPage(currentRoute());
