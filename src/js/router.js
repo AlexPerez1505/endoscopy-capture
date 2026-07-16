@@ -4,9 +4,7 @@
 import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
 import { initAgenda } from './agenda/index.js';
-import { initReports, initReportEditor, initReportGenerator } from './reports.js';
-import { initNuevoPaciente } from './nuevo-paciente.js';
-import { initEditarPaciente } from './editar-paciente.js';
+import { initReports, initReportEditor } from './reports.js';
 import { initGaleria } from './galeria.js';
 import { initMensajes } from './mensajes.js';
 import { initQr } from './qr.js';
@@ -16,12 +14,9 @@ const HEAD = {
   dashboard:      { title: 'Dashboard',      sub: 'Resumen general de tu actividad clínica' },
   agenda:         { title: 'Agenda',         sub: 'Gestiona tus citas y estudios' },
   pacientes:      { title: 'Pacientes',      sub: 'Expedientes y datos clínicos' },
-  'nuevo-paciente':   { title: 'Nuevo Paciente',   sub: 'Ingresa los datos correctamente de tu paciente' },
-  'editar-paciente':  { title: 'Editar Paciente',   sub: 'Modifica los datos del paciente' },
   qr:             { title: 'Pre-registro QR', sub: 'Genera codigos seguros y recibe los datos del paciente antes de su cita' },
   'ia-reportes':  { title: 'Reportes',       sub: 'Genera, analiza y revisa reportes inteligentes impulsados por IA' },
   'ia-reportes-redactar': { title: 'Reporte', sub: 'Redacta y estructura el informe clínico' },
-  'ia-reportes-generar': { title: 'Genera reporte AI', sub: 'La AI analizará la información clínica y generará un reporte preliminar' },
   mensajes:       { title: 'Mensajes',       sub: 'Gestiona tus conversaciones con pacientes' },
   galeria:        { title: 'Galería de pacientes', sub: 'Consulta y administra imágenes y videos de estudios' },
   finanzas:       { title: 'Finanzas',       sub: 'Ingresos y facturación' },
@@ -29,7 +24,7 @@ const HEAD = {
 };
 
 // Secciones ya migradas (tienen fragmento HTML en ./pages)
-const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'qr', 'ia-reportes', 'ia-reportes-redactar', 'ia-reportes-generar', 'galeria', 'mensajes', 'configuracion', 'nuevo-paciente', 'editar-paciente']);
+const AVAILABLE = new Set(['dashboard', 'pacientes', 'agenda', 'qr', 'ia-reportes', 'ia-reportes-redactar', 'galeria', 'mensajes', 'configuracion']);
 const PAGE_FILES = {
   agenda: './pages/agenda_html/index.blade.html',
 };
@@ -40,9 +35,7 @@ const headSub     = document.getElementById('headSub');
 
 function setActiveNav(route) {
   document.querySelectorAll('.nav-item').forEach(el => {
-    const nav = el.dataset.nav;
-    const isActive = nav === route || (route && route.startsWith(nav + '-'));
-    el.classList.toggle('active', isActive);
+    el.classList.toggle('active', el.dataset.nav === route);
   });
 }
 
@@ -68,10 +61,6 @@ async function loadPage(route) {
     return;
   }
 
-  if (route === 'nuevo-paciente' || route === 'editar-paciente') {
-    setActiveNav('pacientes');
-  }
-
   if (!AVAILABLE.has(route)) {
     renderPlaceholder(route);
     return;
@@ -89,9 +78,6 @@ async function loadPage(route) {
     if (route === 'qr') initQr();
     if (route === 'ia-reportes') initReports();
     if (route === 'ia-reportes-redactar') initReportEditor();
-    if (route === 'ia-reportes-generar') initReportGenerator();
-    if (route === 'nuevo-paciente') initNuevoPaciente();
-    if (route === 'editar-paciente') initEditarPaciente();
     if (route === 'galeria') initGaleria();
     if (route === 'mensajes') initMensajes();
     if (route === 'configuracion') initConfiguracion();
