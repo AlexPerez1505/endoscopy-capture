@@ -1053,6 +1053,14 @@ export function initConfiguracion() {
   const root = document.getElementById('settingsAppRoot');
   if (!root) return;
   if (!settingsTemplate) settingsTemplate = root.innerHTML;
+
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a la configuración.');
+    return;
+  }
+
   bindSettingsEvents(root);
   loadSettings();
 }

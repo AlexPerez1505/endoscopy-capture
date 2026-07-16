@@ -796,6 +796,13 @@ export function initGaleria() {
   const root = document.getElementById('pageContent');
   if (root && !galleryTemplate) galleryTemplate = root.innerHTML;
 
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a la galería.');
+    return;
+  }
+
   const search = document.getElementById('gallerySearchInput');
   const patientList = document.getElementById('galleryPatientList');
   const filterButton = document.getElementById('galleryFilterBtn');

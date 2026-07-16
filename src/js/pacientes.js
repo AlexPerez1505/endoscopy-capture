@@ -635,6 +635,13 @@ Object.assign(window, {
 });
 
 export async function initPacientes() {
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin('Inicia sesión para ver pacientes.');
+    return;
+  }
+
   patientsData = [];
   patientsDataFiltered = [];
   currentPage = 1;

@@ -505,6 +505,13 @@ export async function initAgenda() {
   const root = document.getElementById('pageContent');
   if (!root) return;
 
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a la agenda.');
+    return;
+  }
+
   visibleDate = new Date();
   visibleDate.setDate(1);
   appointmentsData = [];

@@ -341,5 +341,13 @@ export async function initDashboard() {
   if (!root) return;
   dashboardTemplate = root.innerHTML;
   renderCalendar(root);
+  
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder al dashboard.');
+    return;
+  }
+  
   await loadDashboard(root);
 }
