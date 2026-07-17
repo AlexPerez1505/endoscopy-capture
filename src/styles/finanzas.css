@@ -192,3 +192,15 @@
   }
 }
 
+html[data-theme="light"] .finanzas-page {
+  --finanzas-card: #ffffff;
+  --finanzas-line: rgba(0, 0, 0, .08);
+  --finanzas-muted: #64748b;
+  --finanzas-text: #0f172a;
+  --finanzas-green: #15803d;
+}
+
+html[data-theme="light"] .finanzas-hero-icon {
+  background: rgba(0, 0, 0, .06);
+}
+

@@ -659,3 +659,29 @@ select.ed-ctrl {
     grid-template-columns: 1fr;
   }
 }
+
+html[data-theme="light"] .report-editor-page {
+  --ed-bg: #f4f6fb;
+  --ed-card: #ffffff;
+  --ed-card-2: #f1f5f9;
+  --ed-line: rgba(0, 0, 0, .08);
+  --ed-line-strong: rgba(0, 0, 0, .15);
+  --ed-text: #0f172a;
+  --ed-muted: #64748b;
+  --ed-muted-2: #94a3b8;
+  --ed-cyan: #0284c7;
+  --ed-blue: #2563eb;
+  --ed-orange: #d97706;
+}
+
+html[data-theme="light"] .report-editor-page .card {
+  background: linear-gradient(180deg, var(--ed-card), var(--ed-card-2));
+}
+
+html[data-theme="light"] .report-editor-page .ed-btn {
+  background: var(--ed-card-2);
+}
+
+html[data-theme="light"] .report-editor-page .ed-btn.split i {
+  background: rgba(0, 0, 0, .18);
+}

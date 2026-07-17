@@ -702,11 +702,12 @@ function renderPlanDashboard() {
 }
 
 function renderMetadata() {
-  const initials = userState.initials || initialsFromName(userState.name);
+  const displayName = userState.account_name || userState.name || 'Doctor';
+  const initials = userState.initials || initialsFromName(displayName);
   const role = userState.role || 'Medico';
 
   setBindValue('userInitials', initials);
-  setBindValue('userName', userState.name || 'Doctor');
+  setBindValue('userName', displayName);
   setBindValue('userRole', role);
   setBindValue('userEmail', userState.email || '');
   setBindValue('clinicName', userState.clinic || 'ENCLAII');
@@ -724,7 +725,7 @@ function renderMetadata() {
     const name = headerProfile.querySelector('strong');
     const sub = headerProfile.querySelector('span:not(.avatar)');
     if (avatar) avatar.textContent = initials;
-    if (name) name.textContent = userState.name || 'Doctor';
+    if (name) name.textContent = displayName;
     if (sub) sub.textContent = role;
   }
 }

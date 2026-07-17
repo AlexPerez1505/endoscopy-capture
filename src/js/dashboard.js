@@ -32,6 +32,7 @@ function apiBaseUrl() {
 
 const API_BASE_URL = apiBaseUrl();
 const DASHBOARD_ENDPOINT = `${API_BASE_URL}/api/tauri/dashboard`;
+const DASHBOARD_LAYOUT_ENDPOINT = `${API_BASE_URL}/api/tauri/dashboard/layout`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -241,6 +242,262 @@ function drawGauge(root) {
   setTimeout(() => { gauge.style.strokeDashoffset = C - (C * pct); }, 400);
 }
 
+function drawDonut(root, summary) {
+  const svg = root.querySelector('.donut svg');
+  if (!svg) return;
+
+  const total = Number(summary?.total_citas) || 0;
+  if (!total) return;
+
+  const radius = 50;
+  const C = 2 * Math.PI * radius;
+  const styles = getComputedStyle(document.documentElement);
+  const colors = {
+    blue: styles.getPropertyValue('--blue').trim() || '#2E7BF6',
+    green: styles.getPropertyValue('--green').trim() || '#22c55e',
+    red: styles.getPropertyValue('--red').trim() || '#ef4444',
+  };
+
+  svg.querySelectorAll('.donut-segment').forEach((el) => el.remove());
+
+  let offset = 0;
+  const segments = [
+    { key: 'citas_proximas', color: colors.blue },
+    { key: 'citas_completadas', color: colors.green },
+    { key: 'citas_canceladas', color: colors.red },
+  ];
+
+  segments.forEach(({ key, color }) => {
+    const value = Number(summary[key]) || 0;
+    if (value <= 0) return;
+    const length = (value / total) * C;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('class', 'donut-segment');
+    circle.setAttribute('cx', '60');
+    circle.setAttribute('cy', '60');
+    circle.setAttribute('r', String(radius));
+    circle.style.fill = 'none';
+    circle.style.stroke = color;
+    circle.style.strokeWidth = '14px';
+    circle.style.strokeLinecap = 'round';
+    circle.style.strokeDasharray = `${length} ${C}`;
+    circle.style.strokeDashoffset = String(-offset);
+    svg.appendChild(circle);
+    offset += length;
+  });
+}
+
+function updateWidgetSizeVars(widget) {
+  const rect = widget.getBoundingClientRect();
+  widget.style.setProperty('--widget-w-px', String(Math.round(rect.width)));
+  widget.style.setProperty('--widget-h-px', String(Math.round(rect.height)));
+}
+
+async function fetchDashboardLayout() {
+  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
+  if (!token) return [];
+
+  try {
+    const response = await laravelFetch(DASHBOARD_LAYOUT_ENDPOINT, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: 'include',
+    });
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !contentType.includes('application/json')) return [];
+    const payload = await response.json();
+    return payload?.layout ?? [];
+  } catch (error) {
+    console.error('Error cargando layout', error);
+    return [];
+  }
+}
+
+async function saveDashboardLayout(root) {
+  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
+  if (!token) return;
+
+  const layout = Array.from(root.querySelectorAll('#widgetGrid .widget')).map((widget) => ({
+    widget_id: widget.dataset.widgetId,
+    w: Number(widget.dataset.w) || 1,
+    h: Number(widget.dataset.h) || 1,
+  }));
+
+  try {
+    await laravelFetch(DASHBOARD_LAYOUT_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: 'include',
+      body: JSON.stringify({ layout }),
+    });
+  } catch (error) {
+    console.error('Error guardando layout', error);
+  }
+}
+
+let layoutSaveTimeout;
+function scheduleLayoutSave(root) {
+  if (layoutSaveTimeout) clearTimeout(layoutSaveTimeout);
+  layoutSaveTimeout = setTimeout(() => saveDashboardLayout(root), 800);
+}
+
+function applyDashboardLayout(root, layout) {
+  const grid = root.querySelector('#widgetGrid');
+  if (!grid || !Array.isArray(layout) || !layout.length) return;
+
+  const items = layout.filter((item) => item.widget_id);
+  const order = items.map((item) => item.widget_id);
+  const widgets = Array.from(grid.querySelectorAll('.widget'));
+
+  widgets.sort((a, b) => {
+    const ai = order.indexOf(a.dataset.widgetId);
+    const bi = order.indexOf(b.dataset.widgetId);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  widgets.forEach((widget) => {
+    const item = items.find((i) => i.widget_id === widget.dataset.widgetId);
+    if (item) {
+      const w = Math.max(1, Math.min(13, Number(item.w) || 1));
+      const h = Math.max(1, Number(item.h) || 1);
+      widget.dataset.w = String(w);
+      widget.dataset.h = String(h);
+      widget.style.gridColumn = `span ${w}`;
+      widget.style.gridRow = `span ${h}`;
+    }
+    grid.appendChild(widget);
+  });
+
+  widgets.forEach(updateWidgetSizeVars);
+}
+
+function initWidgetResize(root) {
+  root.querySelectorAll('.widget-resize-handle').forEach((handle) => {
+    handle.addEventListener('mousedown', (startEvent) => {
+      startEvent.preventDefault();
+      startEvent.stopPropagation();
+
+      const widget = handle.closest('.widget');
+      if (!widget) return;
+
+      const grid = document.getElementById('widgetGrid');
+      const gridRect = grid.getBoundingClientRect();
+      const gap = parseInt(getComputedStyle(grid).gap, 10) || 18;
+      const colWidth = (gridRect.width + gap) / 13;
+
+      const rowValue = getComputedStyle(grid).gridAutoRows || '60px';
+      const rowMatch = rowValue.match(/(\d+(?:\.\d+)?)px/);
+      const rowHeight = parseFloat(rowMatch?.[1] || '60');
+      const rowHeightWithGap = rowHeight + gap;
+
+      const startX = startEvent.clientX;
+      const startY = startEvent.clientY;
+      const startWidth = widget.getBoundingClientRect().width;
+      const startHeight = widget.getBoundingClientRect().height;
+
+      function onMove(moveEvent) {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        const rawCols = Math.round((startWidth + deltaX) / colWidth);
+        const rawRows = Math.round((startHeight + deltaY) / rowHeightWithGap);
+        const newW = Math.max(1, Math.min(13, rawCols));
+        const newH = Math.max(1, rawRows);
+        widget.dataset.w = String(newW);
+        widget.dataset.h = String(newH);
+        widget.style.gridColumn = `span ${newW}`;
+        widget.style.gridRow = `span ${newH}`;
+        updateWidgetSizeVars(widget);
+      }
+
+      function onUp() {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        scheduleLayoutSave(root);
+      }
+
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
+function initWidgetDrag(root) {
+  root.querySelectorAll('.widget-drag-handle').forEach((handle) => {
+    handle.addEventListener('mousedown', (startEvent) => {
+      startEvent.preventDefault();
+      startEvent.stopPropagation();
+
+      const widget = handle.closest('.widget');
+      const grid = document.getElementById('widgetGrid');
+      if (!widget || !grid) return;
+
+      const rect = widget.getBoundingClientRect();
+      const offsetX = startEvent.clientX - rect.left;
+      const offsetY = startEvent.clientY - rect.top;
+
+      const placeholder = widget.cloneNode(true);
+      placeholder.classList.add('drag-placeholder');
+      placeholder.style.opacity = '0.3';
+      placeholder.style.pointerEvents = 'none';
+      widget.parentNode.insertBefore(placeholder, widget);
+
+      widget.style.position = 'fixed';
+      widget.style.width = `${rect.width}px`;
+      widget.style.height = `${rect.height}px`;
+      widget.style.left = `${rect.left}px`;
+      widget.style.top = `${rect.top}px`;
+      widget.style.zIndex = '1000';
+      widget.style.pointerEvents = 'none';
+      widget.classList.add('dragging');
+
+      function onMove(moveEvent) {
+        widget.style.left = `${moveEvent.clientX - offsetX}px`;
+        widget.style.top = `${moveEvent.clientY - offsetY}px`;
+      }
+
+      function onUp(upEvent) {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+
+        const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY)?.closest('#widgetGrid .widget');
+        if (target && target !== placeholder && target !== widget) {
+          const targetRect = target.getBoundingClientRect();
+          if (upEvent.clientY < targetRect.top + targetRect.height / 2) {
+            grid.insertBefore(placeholder, target);
+          } else {
+            grid.insertBefore(placeholder, target.nextElementSibling);
+          }
+        }
+
+        widget.style.position = '';
+        widget.style.width = '';
+        widget.style.height = '';
+        widget.style.left = '';
+        widget.style.top = '';
+        widget.style.zIndex = '';
+        widget.style.pointerEvents = '';
+        widget.classList.remove('dragging');
+        placeholder.replaceWith(widget);
+
+        updateWidgetSizeVars(widget);
+        scheduleLayoutSave(root);
+      }
+
+      document.body.appendChild(widget);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 function statusClass(estado) {
   return {
     completado: 'done',
@@ -312,22 +569,41 @@ function renderDashboardData(root, dashboard) {
   setText(root, 'citas-completadas', String(summary.citas_completadas || 0));
   setText(root, 'citas-canceladas', String(summary.citas_canceladas || 0));
 
+  drawDonut(root, summary);
   renderPendientesHoy(root, dashboard.pendientes_hoy || []);
   renderProximosEstudios(root, dashboard.proximos_estudios || []);
 }
 
 async function loadDashboard(root) {
   restoreDashboardShell(root);
+  initWidgetResize(root);
+  initWidgetDrag(root);
   setDashboardLoading(root);
 
   try {
-    const dashboard = await fetchLaravelDashboard();
-    renderDashboardData(root, dashboard);
-    animateCounters(root);
-    drawGauge(root);
+    const [dashboardResult, layoutResult] = await Promise.allSettled([
+      fetchLaravelDashboard(),
+      fetchDashboardLayout(),
+    ]);
+
+    if (layoutResult.status === 'fulfilled' && Array.isArray(layoutResult.value) && layoutResult.value.length) {
+      applyDashboardLayout(root, layoutResult.value);
+    } else {
+      root.querySelectorAll('.widget').forEach(updateWidgetSizeVars);
+    }
+
+    if (dashboardResult.status === 'fulfilled') {
+      renderDashboardData(root, dashboardResult.value);
+      animateCounters(root);
+      drawGauge(root);
+    } else {
+      console.error(dashboardResult.reason);
+      if (dashboardResult.reason?.code === 'UNAUTHORIZED') {
+        renderLaravelLogin(root, dashboardResult.reason.message);
+      }
+    }
   } catch (error) {
     console.error(error);
-    // No bloquear la interfaz con la ventana de login si ya se habían cargado datos.
   }
 }
 

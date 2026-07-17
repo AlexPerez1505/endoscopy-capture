@@ -660,8 +660,71 @@
 }
 
 html[data-theme="light"] .reports-page {
+  --reports-bg: #f8fafc;
+  --reports-card: #ffffff;
+  --reports-card-2: #f1f5f9;
+  --reports-line: rgba(0, 0, 0, .08);
+  --reports-muted: #64748b;
+  --reports-text: #0f172a;
   color: var(--reports-text);
 }
+
+html[data-theme="light"] .reports-page .card {
+  background: linear-gradient(135deg, var(--reports-card) 0%, var(--reports-card-2) 100%);
+  border-color: var(--reports-line);
+}
+
+html[data-theme="light"] .reports-page .tbl th { color: var(--reports-muted); border-bottom-color: var(--reports-line); }
+html[data-theme="light"] .reports-page .tbl td { color: var(--reports-text); }
+
+html[data-theme="light"] .reports-page .mini {
+  color: #0284c7;
+  background: rgba(2, 132, 199, .1);
+  border-color: rgba(2, 132, 199, .35);
+}
+
+html[data-theme="light"] .reports-page .chip.urgent { color: #ef4444; }
+html[data-theme="light"] .reports-page .chip.done { color: var(--reports-text); }
+
+html[data-theme="light"] .reports-page .btn-gen.secondary {
+  background: var(--reports-card-2);
+  color: var(--reports-text);
+  border-color: var(--reports-line);
+}
+
+html[data-theme="light"] .reports-page .find { border-bottom-color: var(--reports-line); }
+html[data-theme="light"] .reports-page .find-empty { color: var(--reports-text); }
+html[data-theme="light"] .reports-page .bar { background: rgba(0, 0, 0, .08); }
+
+html[data-theme="light"] .reports-page .predictive-metric,
+html[data-theme="light"] .reports-page .risk-copy { border-left-color: var(--reports-line); }
+html[data-theme="light"] .reports-page .predictive-metric strong { color: #0284c7; }
+html[data-theme="light"] .reports-page .risk-copy strong { color: #d97706; }
+
+html[data-theme="light"] .reports-page .ai-bulb {
+  color: #0284c7;
+  border-color: rgba(2, 132, 199, .3);
+  background: rgba(2, 132, 199, .08);
+}
+
+html[data-theme="light"] .reports-page .gauge-ring {
+  background:
+    radial-gradient(circle at center, #e0f2fe 0 44%, transparent 45%),
+    conic-gradient(#0284c7 0 82%, rgba(0, 0, 0, .08) 82% 100%);
+}
+html[data-theme="light"] .reports-page .gauge-ring::before { background: var(--reports-card); }
+html[data-theme="light"] .reports-page .stomach-mark { color: #0369a1; background: radial-gradient(circle, rgba(2, 132, 199, .2), rgba(2, 132, 199, .05)); }
+
+html[data-theme="light"] .reports-page .reports-note {
+  background: var(--reports-card);
+  border-color: var(--reports-line);
+  color: var(--reports-muted);
+}
+html[data-theme="light"] .reports-page .reports-note svg { color: #0284c7; }
+
+html[data-theme="light"] .reports-page .row-actions a,
+html[data-theme="light"] .reports-page .row-actions button { color: var(--reports-muted); }
+html[data-theme="light"] .reports-page .row-actions a:hover { color: #0284c7; background: rgba(2, 132, 199, .08); }
 
 @media (max-width: 1500px) {
   .reports-page .stats {

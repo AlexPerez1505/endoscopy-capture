@@ -152,9 +152,25 @@ if (profileMenu) {
   });
 }
 
+function restoreHeaderProfile() {
+  const profile = document.getElementById('profileMenu');
+  if (!profile) return;
+  const accountName = sessionStorage.getItem('enclaii-account-name') || 'Doctor';
+  const nameEl = profile.querySelector('strong');
+  const avatar = profile.querySelector('.avatar');
+  if (nameEl) nameEl.textContent = accountName;
+  if (avatar) {
+    const parts = accountName.split(/\s+/).filter(Boolean);
+    avatar.textContent = parts.length > 1
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : accountName.slice(0, 2).toUpperCase();
+  }
+}
+
 if (logoutBtn) {
   logoutBtn.addEventListener('click', () => {
     sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem('enclaii-account-name');
     sessionStorage.removeItem('enclaii-device-token');
     sessionStorage.removeItem('enclaii-device-session-id');
     window.location.href = './login.html';
@@ -162,4 +178,5 @@ if (logoutBtn) {
 }
 
 // Arranque
+restoreHeaderProfile();
 loadPage(currentRoute());

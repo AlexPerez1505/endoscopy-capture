@@ -83,7 +83,7 @@ async function loginToLaravel(email, password) {
 function agendaEndpointForVisibleMonth() {
   const params = new URLSearchParams({
     year: String(visibleDate.getFullYear()),
-    month: String(visibleDate.getMonth() + 1).padStart(2, '0'),
+    month: String(visibleDate.getMonth() + 1),
   });
 
   return `${AGENDA_ENDPOINT}?${params.toString()}`;

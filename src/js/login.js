@@ -38,7 +38,10 @@ async function loginToLaravel(email, password) {
     throw new Error(payload?.message || 'No se pudo iniciar sesion. Verifica tus credenciales.');
   }
 
-  return payload.token;
+  return {
+    token: payload.token,
+    accountName: payload.user?.account_name || payload.user?.name || 'Doctor',
+  };
 }
 
 function redirectAfterLogin() {
@@ -84,8 +87,9 @@ form?.addEventListener('submit', async (event) => {
   btnLogin?.setAttribute('data-loading', 'true');
 
   try {
-    const token = await loginToLaravel(email, password);
+    const { token, accountName } = await loginToLaravel(email, password);
     sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+    if (accountName) sessionStorage.setItem('enclaii-account-name', accountName);
     redirectAfterLogin();
   } catch (error) {
     console.error(error);
