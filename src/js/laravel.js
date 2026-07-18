@@ -1,74 +1,887 @@
-const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
-const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const DEFAULT_API_BASE_URL =
+  'https://sistema.enclaii.com';
 
-export async function laravelFetch(url, options = {}) {
-  const invoke = window.__TAURI__?.core?.invoke;
+const AUTH_STORAGE_KEY =
+  'enclaii-tauri-basic-auth';
+
+const LOCAL_LARAVEL_HOSTS =
+  new Set([
+    'localhost',
+    '127.0.0.1',
+    '::1',
+  ]);
+
+/* =========================================================
+   PETICIÓN PRINCIPAL
+========================================================= */
+
+export async function laravelFetch(
+  url,
+  options = {}
+) {
+  const invoke =
+    window.__TAURI__?.core?.invoke;
+
+  /*
+   * Cuando no se ejecuta dentro de Tauri,
+   * se utiliza fetch normal.
+   */
   if (!invoke) {
     return fetch(url, options);
   }
 
-  let result;
-
   try {
-    result = await invoke('laravel_request', {
-      request: {
-        method: options.method || 'GET',
-        url,
-        headers: normalizeHeaders(options.headers),
-        body: options.body ?? null,
-      },
-    });
+    const headers =
+      normalizeHeaders(
+        options.headers
+      );
+
+    const preparedBody =
+      await prepareBody(
+        options.body,
+        headers
+      );
+
+    /*
+     * LaravelRequest es un struct de Rust.
+     * Se debe enviar como objeto JavaScript.
+     *
+     * NO usar JSON.stringify(requestPayload).
+     */
+    const requestPayload = {
+      method: String(
+        options.method || 'GET'
+      ).toUpperCase(),
+
+      url: String(url),
+
+      headers,
+
+      body:
+        preparedBody.body,
+    };
+
+    const result =
+      await invoke(
+        'laravel_request',
+        {
+          request:
+            requestPayload,
+        }
+      );
+
+    return createResponse(
+      normalizeResult(result)
+    );
   } catch (error) {
-    throw new Error(String(error?.message || error || 'No se pudo alcanzar Laravel.'));
+    console.error(
+      'Error en laravel_request:',
+      error
+    );
+
+    throw new Error(
+      String(
+        error?.message ||
+        error ||
+        'No se pudo alcanzar Laravel.'
+      )
+    );
+  }
+}
+
+/* =========================================================
+   URL BASE
+========================================================= */
+
+export function apiBaseUrl() {
+  const saved =
+    String(
+      localStorage.getItem(
+        'enclaii-api-url'
+      ) || ''
+    ).replace(/\/+$/, '');
+
+  const currentOrigin =
+    currentLaravelOrigin();
+
+  if (saved) {
+    if (
+      currentOrigin &&
+      isLocalLaravelUrl(saved)
+    ) {
+      return currentOrigin;
+    }
+
+    return saved;
+  }
+
+  return (
+    currentOrigin ||
+    DEFAULT_API_BASE_URL
+  );
+}
+
+/* =========================================================
+   AUTORIZACIÓN
+========================================================= */
+
+export function authHeader() {
+  const token =
+    String(
+      sessionStorage.getItem(
+        AUTH_STORAGE_KEY
+      ) ||
+      localStorage.getItem(
+        AUTH_STORAGE_KEY
+      ) ||
+      ''
+    )
+      .replace(/^Bearer\s+/i, '')
+      .trim();
+
+  return token
+    ? `Bearer ${token}`
+    : '';
+}
+
+/* =========================================================
+   NORMALIZAR HEADERS
+========================================================= */
+
+function normalizeHeaders(
+  headers = {}
+) {
+  const normalized = {};
+
+  if (
+    typeof Headers !== 'undefined' &&
+    headers instanceof Headers
+  ) {
+    headers.forEach(
+      (value, key) => {
+        normalized[
+          String(key)
+        ] = String(value);
+      }
+    );
+
+    return normalized;
+  }
+
+  if (Array.isArray(headers)) {
+    headers.forEach(
+      (entry) => {
+        if (
+          !Array.isArray(entry) ||
+          entry.length < 2
+        ) {
+          return;
+        }
+
+        const [key, value] =
+          entry;
+
+        if (
+          key === undefined ||
+          value === undefined ||
+          value === null
+        ) {
+          return;
+        }
+
+        normalized[
+          String(key)
+        ] = String(value);
+      }
+    );
+
+    return normalized;
+  }
+
+  Object.entries(
+    headers || {}
+  ).forEach(
+    ([key, value]) => {
+      if (
+        value === undefined ||
+        value === null
+      ) {
+        return;
+      }
+
+      normalized[
+        String(key)
+      ] = String(value);
+    }
+  );
+
+  return normalized;
+}
+
+function hasHeader(
+  headers,
+  searchedName
+) {
+  const expected =
+    String(
+      searchedName
+    ).toLowerCase();
+
+  return Object.keys(
+    headers
+  ).some(
+    (key) =>
+      key.toLowerCase() ===
+      expected
+  );
+}
+
+function removeHeader(
+  headers,
+  searchedName
+) {
+  const expected =
+    String(
+      searchedName
+    ).toLowerCase();
+
+  Object.keys(
+    headers
+  ).forEach(
+    (key) => {
+      if (
+        key.toLowerCase() ===
+        expected
+      ) {
+        delete headers[key];
+      }
+    }
+  );
+}
+
+/* =========================================================
+   PREPARAR BODY
+========================================================= */
+
+async function prepareBody(
+  body,
+  headers
+) {
+  if (
+    body === undefined ||
+    body === null
+  ) {
+    return {
+      body: null,
+    };
+  }
+
+  /*
+   * FormData.
+   *
+   * El comando Rust normalmente recibe body como String.
+   * Para no enviar un objeto no serializable, convertimos
+   * el formulario a multipart manualmente.
+   */
+  if (
+    typeof FormData !== 'undefined' &&
+    body instanceof FormData
+  ) {
+    return buildMultipartBody(
+      body,
+      headers
+    );
+  }
+
+  /*
+   * URLSearchParams.
+   */
+  if (
+    typeof URLSearchParams !== 'undefined' &&
+    body instanceof URLSearchParams
+  ) {
+    if (
+      !hasHeader(
+        headers,
+        'Content-Type'
+      )
+    ) {
+      headers[
+        'Content-Type'
+      ] =
+        'application/x-www-form-urlencoded;charset=UTF-8';
+    }
+
+    return {
+      body:
+        body.toString(),
+    };
+  }
+
+  /*
+   * Texto ya preparado, por ejemplo JSON.stringify(...).
+   */
+  if (
+    typeof body === 'string'
+  ) {
+    return {
+      body,
+    };
+  }
+
+  /*
+   * Blob o File directo.
+   */
+  if (
+    typeof Blob !== 'undefined' &&
+    body instanceof Blob
+  ) {
+    const base64 =
+      await blobToBase64(body);
+
+    if (
+      !hasHeader(
+        headers,
+        'Content-Type'
+      )
+    ) {
+      headers[
+        'Content-Type'
+      ] =
+        body.type ||
+        'application/octet-stream';
+    }
+
+    headers[
+      'X-Body-Encoding'
+    ] = 'base64';
+
+    return {
+      body: base64,
+    };
+  }
+
+  /*
+   * Objeto JavaScript.
+   */
+  if (
+    typeof body === 'object'
+  ) {
+    if (
+      !hasHeader(
+        headers,
+        'Content-Type'
+      )
+    ) {
+      headers[
+        'Content-Type'
+      ] =
+        'application/json';
+    }
+
+    return {
+      body:
+        JSON.stringify(body),
+    };
   }
 
   return {
-    ok: Boolean(result.ok),
-    status: Number(result.status) || 0,
+    body:
+      String(body),
+  };
+}
+
+/* =========================================================
+   MULTIPART FORM-DATA MANUAL
+========================================================= */
+
+async function buildMultipartBody(
+  formData,
+  headers
+) {
+  const boundary =
+    `----ENCLAIITauriBoundary${Date.now()}${Math.random()
+      .toString(16)
+      .slice(2)}`;
+
+  const chunks = [];
+
+  for (
+    const [name, value]
+    of formData.entries()
+  ) {
+    chunks.push(
+      `--${boundary}\r\n`
+    );
+
+    if (
+      typeof File !== 'undefined' &&
+      value instanceof File
+    ) {
+      chunks.push(
+        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"; filename="${escapeHeaderValue(value.name || 'archivo')}"\r\n`
+      );
+
+      chunks.push(
+        `Content-Type: ${value.type || 'application/octet-stream'}\r\n\r\n`
+      );
+
+      chunks.push(
+        new Uint8Array(
+          await value.arrayBuffer()
+        )
+      );
+
+      chunks.push(
+        '\r\n'
+      );
+    } else if (
+      typeof Blob !== 'undefined' &&
+      value instanceof Blob
+    ) {
+      chunks.push(
+        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"; filename="archivo"\r\n`
+      );
+
+      chunks.push(
+        `Content-Type: ${value.type || 'application/octet-stream'}\r\n\r\n`
+      );
+
+      chunks.push(
+        new Uint8Array(
+          await value.arrayBuffer()
+        )
+      );
+
+      chunks.push(
+        '\r\n'
+      );
+    } else {
+      chunks.push(
+        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"\r\n\r\n`
+      );
+
+      chunks.push(
+        String(value)
+      );
+
+      chunks.push(
+        '\r\n'
+      );
+    }
+  }
+
+  chunks.push(
+    `--${boundary}--\r\n`
+  );
+
+  const bytes =
+    combineMultipartChunks(
+      chunks
+    );
+
+  /*
+   * El struct LaravelRequest solo recibe body como String.
+   * El contenido multipart binario se codifica en base64.
+   *
+   * Rust deberá detectar X-Body-Encoding: base64,
+   * decodificarlo y enviarlo como bytes.
+   */
+  removeHeader(
+    headers,
+    'Content-Type'
+  );
+
+  headers[
+    'Content-Type'
+  ] =
+    `multipart/form-data; boundary=${boundary}`;
+
+  headers[
+    'X-Body-Encoding'
+  ] =
+    'base64';
+
+  return {
+    body:
+      uint8ArrayToBase64(
+        bytes
+      ),
+  };
+}
+
+function escapeHeaderValue(
+  value
+) {
+  return String(value)
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('\r', '')
+    .replaceAll('\n', '');
+}
+
+function combineMultipartChunks(
+  chunks
+) {
+  const encoder =
+    new TextEncoder();
+
+  const byteChunks =
+    chunks.map(
+      (chunk) => {
+        if (
+          chunk instanceof
+          Uint8Array
+        ) {
+          return chunk;
+        }
+
+        return encoder.encode(
+          String(chunk)
+        );
+      }
+    );
+
+  const totalLength =
+    byteChunks.reduce(
+      (
+        total,
+        current
+      ) =>
+        total +
+        current.length,
+      0
+    );
+
+  const result =
+    new Uint8Array(
+      totalLength
+    );
+
+  let offset = 0;
+
+  byteChunks.forEach(
+    (chunk) => {
+      result.set(
+        chunk,
+        offset
+      );
+
+      offset +=
+        chunk.length;
+    }
+  );
+
+  return result;
+}
+
+function uint8ArrayToBase64(
+  bytes
+) {
+  const chunkSize =
+    0x8000;
+
+  let binary = '';
+
+  for (
+    let index = 0;
+    index < bytes.length;
+    index += chunkSize
+  ) {
+    const chunk =
+      bytes.subarray(
+        index,
+        Math.min(
+          index + chunkSize,
+          bytes.length
+        )
+      );
+
+    binary +=
+      String.fromCharCode(
+        ...chunk
+      );
+  }
+
+  return btoa(binary);
+}
+
+function blobToBase64(
+  blob
+) {
+  return blob
+    .arrayBuffer()
+    .then(
+      (buffer) =>
+        uint8ArrayToBase64(
+          new Uint8Array(
+            buffer
+          )
+        )
+    );
+}
+
+/* =========================================================
+   NORMALIZAR RESPUESTA
+========================================================= */
+
+function normalizeResult(
+  result
+) {
+  /*
+   * Si Rust devuelve un objeto, se utiliza directamente.
+   * Si devuelve texto JSON, se intenta convertir.
+   */
+  if (
+    typeof result === 'string'
+  ) {
+    try {
+      return JSON.parse(
+        result
+      );
+    } catch {
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          'content-type':
+            'text/plain',
+        },
+        body: result,
+      };
+    }
+  }
+
+  return result || {};
+}
+
+function normalizeResponseHeaders(
+  headers = {}
+) {
+  const normalized = {};
+
+  if (Array.isArray(headers)) {
+    headers.forEach(
+      (entry) => {
+        if (
+          !Array.isArray(entry) ||
+          entry.length < 2
+        ) {
+          return;
+        }
+
+        normalized[
+          String(entry[0])
+            .toLowerCase()
+        ] =
+          String(entry[1]);
+      }
+    );
+
+    return normalized;
+  }
+
+  Object.entries(
+    headers || {}
+  ).forEach(
+    ([key, value]) => {
+      if (
+        value === undefined ||
+        value === null
+      ) {
+        return;
+      }
+
+      normalized[
+        String(key)
+          .toLowerCase()
+      ] =
+        Array.isArray(value)
+          ? value.join(', ')
+          : String(value);
+    }
+  );
+
+  return normalized;
+}
+
+function createResponse(
+  result
+) {
+  const status =
+    Number(
+      result.status ??
+      result.status_code ??
+      0
+    );
+
+  const responseHeaders =
+    normalizeResponseHeaders(
+      result.headers || {}
+    );
+
+  let responseBody =
+    result.body ?? '';
+
+  if (
+    typeof responseBody ===
+      'object' &&
+    responseBody !== null
+  ) {
+    responseBody =
+      JSON.stringify(
+        responseBody
+      );
+
+    if (
+      !responseHeaders[
+        'content-type'
+      ]
+    ) {
+      responseHeaders[
+        'content-type'
+      ] =
+        'application/json';
+    }
+  }
+
+  return {
+    ok:
+      typeof result.ok ===
+      'boolean'
+        ? result.ok
+        : status >= 200 &&
+          status < 300,
+
+    status,
+
+    statusText:
+      String(
+        result.status_text || ''
+      ),
+
     headers: {
       get(name) {
-        return result.headers?.[String(name).toLowerCase()] || '';
+        return (
+          responseHeaders[
+            String(name)
+              .toLowerCase()
+          ] || ''
+        );
+      },
+
+      has(name) {
+        return Boolean(
+          responseHeaders[
+            String(name)
+              .toLowerCase()
+          ]
+        );
+      },
+
+      entries() {
+        return Object.entries(
+          responseHeaders
+        );
       },
     },
+
     async json() {
-      return JSON.parse(result.body || 'null');
+      if (
+        responseBody === '' ||
+        responseBody === null ||
+        responseBody === undefined
+      ) {
+        return null;
+      }
+
+      if (
+        typeof responseBody ===
+        'object'
+      ) {
+        return responseBody;
+      }
+
+      try {
+        return JSON.parse(
+          String(
+            responseBody
+          )
+        );
+      } catch {
+        throw new Error(
+          'Laravel no devolvió una respuesta JSON válida.'
+        );
+      }
     },
+
     async text() {
-      return result.body || '';
+      if (
+        responseBody === null ||
+        responseBody === undefined
+      ) {
+        return '';
+      }
+
+      return String(
+        responseBody
+      );
     },
   };
 }
 
-export function apiBaseUrl() {
-  const saved = (localStorage.getItem('enclaii-api-url') || '').replace(/\/+$/, '');
-  const currentOrigin = currentLaravelOrigin();
-  if (saved) return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
-  return currentOrigin || DEFAULT_API_BASE_URL;
-}
-
-export function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Bearer ${token}` : '';
-}
-
-function normalizeHeaders(headers = {}) {
-  if (headers instanceof Headers) return Object.fromEntries(headers.entries());
-  return { ...headers };
-}
+/* =========================================================
+   LARAVEL LOCAL
+========================================================= */
 
 function currentLaravelOrigin() {
-  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
-  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
-  if (window.location.port && window.location.port !== '8000') return '';
+  if (
+    ![
+      'http:',
+      'https:',
+    ].includes(
+      window.location.protocol
+    )
+  ) {
+    return '';
+  }
+
+  if (
+    !LOCAL_LARAVEL_HOSTS.has(
+      window.location.hostname
+    )
+  ) {
+    return '';
+  }
+
+  if (
+    window.location.port &&
+    window.location.port !==
+      '8000'
+  ) {
+    return '';
+  }
+
   return window.location.origin;
 }
 
-function isLocalLaravelUrl(value) {
+function isLocalLaravelUrl(
+  value
+) {
   try {
-    const url = new URL(value);
-    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
-  } catch (_) {
+    const url =
+      new URL(value);
+
+    return (
+      LOCAL_LARAVEL_HOSTS.has(
+        url.hostname
+      ) &&
+      (
+        !url.port ||
+        url.port === '8000'
+      )
+    );
+  } catch {
     return false;
   }
 }
