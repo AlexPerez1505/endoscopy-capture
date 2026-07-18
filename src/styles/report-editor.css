@@ -31,6 +31,35 @@
   flex-wrap: wrap;
 }
 
+.report-editor-alert {
+  margin: -8px 0 20px;
+  padding: 12px 16px;
+  border: 1px solid rgba(73, 113, 206, .42);
+  border-radius: 12px;
+  background: rgba(19, 184, 255, .08);
+  color: var(--ed-muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.report-editor-alert[data-type="ok"] {
+  border-color: rgba(16, 215, 154, .45);
+  background: rgba(16, 215, 154, .1);
+  color: #10d79a;
+}
+
+.report-editor-alert[data-type="warn"] {
+  border-color: rgba(245, 158, 45, .5);
+  background: rgba(245, 158, 45, .1);
+  color: var(--ed-orange);
+}
+
+.report-editor-alert[data-type="error"] {
+  border-color: rgba(255, 79, 94, .52);
+  background: rgba(255, 79, 94, .1);
+  color: #ff4f5e;
+}
+
 .ed-btn {
   min-height: 56px;
   display: inline-flex;

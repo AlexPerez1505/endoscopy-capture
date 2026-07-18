@@ -39,6 +39,19 @@ body {
   font-family: 'Quicksand', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--ink);
+  /* El boton fisico del endoscopio emula clics de mouse; si el clic cae
+     sobre texto o la imagen del video, el navegador puede iniciar una
+     seleccion/arrastre nativo que hace que el cursor "se trabe" hasta que
+     se suelte. Deshabilitamos la seleccion global (excepto en campos de
+     entrada) para que el mouse siga respondiendo con normalidad. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button,
@@ -258,6 +271,8 @@ video {
   height: 100%;
   object-fit: contain;
   background: #020617;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .empty-state {

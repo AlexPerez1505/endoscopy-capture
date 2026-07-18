@@ -71,6 +71,7 @@ function normalizeGalleryPatient(patient = {}, index = 0) {
 
   return {
     id: String(patient.id ?? patient.patient_id ?? `P-${String(index + 1).padStart(3, '0')}`),
+    patientId: String(patient.patient_id ?? patient.id ?? ''),
     name: String(patient.name || patient.nombre || 'Paciente sin nombre'),
     initials: String(patient.initials || patient.ini || 'PX').slice(0, 3),
     age: String(patient.age || patient.edad || '--'),
@@ -536,7 +537,7 @@ function renderPatientMedia() {
 }
 
 function openPatientGallery(patientId) {
-  const patient = GALLERY_PATIENTS.find(item => item.id === patientId);
+  const patient = GALLERY_PATIENTS.find(item => item.id === patientId || item.patientId === patientId);
   if (!patient) return;
 
   currentDetailPatient = patient;

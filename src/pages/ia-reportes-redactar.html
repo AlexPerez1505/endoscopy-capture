@@ -4,16 +4,22 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       Salir
     </button>
+    <button class="ed-btn" id="generateAiReportBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.1 14.5a6 6 0 1 1 7.8 0c-.8.6-.9 1.5-.9 2.5H9c0-1-.1-1.9-.9-2.5Z"/></svg>
+      Generar IA
+    </button>
     <button class="ed-btn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       Vista Previa
     </button>
-    <button class="ed-btn primary split" type="button">
+    <button class="ed-btn primary split" id="saveReportBtn" type="button">
       <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar reporte</span>
       <i></i>
       <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
   </div>
+
+  <div class="report-editor-alert" id="reportEditorAlert" hidden></div>
 
   <section class="ed-meta rise d3">
     <label class="ed-field grow">
@@ -155,7 +161,7 @@
           <button class="active" type="button">Informe</button>
           <button type="button">Imágenes</button>
         </div>
-        <div class="template-list">
+        <div class="template-list" id="templateList">
           <button class="template-item" type="button">
             <span class="template-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span>
             <span><strong>Colonoscopia</strong><small>Preparación, hallazgos por segmento...</small></span>
