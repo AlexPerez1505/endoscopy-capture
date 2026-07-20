@@ -639,9 +639,65 @@ function renderImageViewer(mediaId) {
 function openImageViewer(mediaId) {
   if (!currentDetailPatient) return;
 
+  const video = document.getElementById('galleryViewerVideo');
+  if (video) {
+    video.pause();
+    video.classList.add('is-hidden');
+    video.removeAttribute('src');
+    video.load();
+  }
+  document.getElementById('galleryViewerImage')?.classList.remove('is-hidden');
+
   document.getElementById('galleryDetailView')?.classList.add('is-hidden');
   document.getElementById('galleryImageViewer')?.classList.remove('is-hidden');
   renderImageViewer(mediaId);
+}
+
+// Reproduce el video dentro de la misma vista del visor (reutilizando el
+// mismo layout que las imagenes), en vez de abrirlo con window.open, que en
+// Tauri termina lanzando el navegador del sistema por fuera de la app.
+function renderVideoViewer(media) {
+  currentViewerMedia = media;
+
+  const imageEl = document.getElementById('galleryViewerImage');
+  const video = document.getElementById('galleryViewerVideo');
+
+  imageEl?.classList.add('is-hidden');
+
+  if (video) {
+    video.src = media.src;
+    video.classList.remove('is-hidden');
+    video.load();
+  }
+
+  const counter = document.getElementById('galleryViewerCounter');
+  const frameTime = document.getElementById('galleryViewerFrameTime');
+  const infoId = document.getElementById('galleryInfoId');
+  const infoDate = document.getElementById('galleryInfoDate');
+  const infoFrame = document.getElementById('galleryInfoFrame');
+  const stripTitle = document.getElementById('galleryStudyStripTitle');
+  const thumbs = document.getElementById('galleryStudyThumbs');
+
+  if (counter) counter.textContent = 'Video';
+  if (frameTime) frameTime.textContent = media.time;
+  if (infoId) infoId.textContent = 'VID-0001';
+  if (infoDate) infoDate.textContent = `${media.date} - ${media.time}`;
+  if (infoFrame) infoFrame.textContent = media.time;
+  if (stripTitle) stripTitle.textContent = 'Video del estudio';
+  if (thumbs) thumbs.innerHTML = '';
+
+  const headSub = document.getElementById('headSub');
+  if (headSub && currentDetailPatient) {
+    headSub.textContent = `Galeria de pacientes > ${currentDetailPatient.name} > ${media.file}`;
+  }
+}
+
+function openVideoViewer(media) {
+  if (!currentDetailPatient) return;
+
+  document.getElementById('galleryDetailView')?.classList.add('is-hidden');
+  document.getElementById('galleryImageViewer')?.classList.remove('is-hidden');
+  renderVideoViewer(media);
 }
 
 function openMediaViewer(mediaId) {
@@ -649,7 +705,7 @@ function openMediaViewer(mediaId) {
   if (!media) return;
 
   if (media.type === 'video' && media.src) {
-    window.open(media.src, '_blank', 'noopener');
+    openVideoViewer(media);
     return;
   }
 
@@ -657,6 +713,15 @@ function openMediaViewer(mediaId) {
 }
 
 function closeImageViewer() {
+  const video = document.getElementById('galleryViewerVideo');
+  if (video) {
+    video.pause();
+    video.classList.add('is-hidden');
+    video.removeAttribute('src');
+    video.load();
+  }
+  document.getElementById('galleryViewerImage')?.classList.remove('is-hidden');
+
   document.getElementById('galleryImageViewer')?.classList.add('is-hidden');
   document.getElementById('galleryDetailView')?.classList.remove('is-hidden');
   document.getElementById('galleryDrawingPanel')?.classList.add('is-hidden');

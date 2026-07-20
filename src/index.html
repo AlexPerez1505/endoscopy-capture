@@ -85,6 +85,8 @@
             <button class="btn btn-ghost video-fullscreen-exit" id="exitFullScreenBtn" type="button">
               Salir de pantalla completa (Esc)
             </button>
+
+            <div class="video-toast" id="videoToast"></div>
           </div>
 
           <div class="controls">
@@ -126,54 +128,63 @@
             </div>
           </div>
 
-          <div class="panel-block">
-            <h2>Capturador</h2>
-
-            <label class="field">
-              <span>Dispositivo</span>
-              <select id="deviceSelect">
-                <option value="__default_camera__">Camara predeterminada</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="panel-block">
-            <h2>Modo enfoque</h2>
-            <p style="color:var(--txt-soft,#94a3b8);font-size:12px;margin:0 0 10px;">
-              Recorta el panel de información de la derecha del procesador para ver y guardar solo la imagen del endoscopio.
-            </p>
-
-            <button class="btn btn-outline full" id="focusModeToggleBtn" type="button">
-              Activar modo enfoque
+          <div class="panel-block config-panel" id="configPanel">
+            <button class="config-panel-header" id="configPanelToggle" type="button">
+              <h2>Configuración</h2>
+              <span class="config-panel-arrow" aria-hidden="true">▾</span>
             </button>
 
-            <label class="range-field" id="focusCropField" style="margin-top:12px;display:none;">
-              <span>Recorte lateral derecho (<span id="focusCropValue">28</span>%)</span>
-              <input id="focusCropInput" type="range" min="0" max="50" step="1" value="28" />
-            </label>
-          </div>
+            <div class="config-panel-body" id="configPanelBody">
+              <div class="config-section">
+                <h3>Capturador</h3>
 
-          <div class="panel-block">
-            <h2>Mejoras visuales</h2>
+                <label class="field">
+                  <span>Dispositivo</span>
+                  <select id="deviceSelect">
+                    <option value="__default_camera__">Camara predeterminada</option>
+                  </select>
+                </label>
+              </div>
 
-            <label class="range-field">
-              <span>Brillo</span>
-              <input id="brightnessInput" type="range" min="0.7" max="1.4" step="0.01" value="1" />
-            </label>
+              <div class="config-section">
+                <h3>Modo enfoque</h3>
+                <p style="color:var(--txt-soft,#94a3b8);font-size:12px;margin:0 0 10px;">
+                  Recorta el panel de información de la derecha del procesador para ver y guardar solo la imagen del endoscopio.
+                </p>
 
-            <label class="range-field">
-              <span>Contraste</span>
-              <input id="contrastInput" type="range" min="0.7" max="1.6" step="0.01" value="1" />
-            </label>
+                <button class="btn btn-outline full" id="focusModeToggleBtn" type="button">
+                  Activar modo enfoque
+                </button>
 
-            <label class="range-field">
-              <span>Saturación</span>
-              <input id="saturationInput" type="range" min="0.5" max="1.8" step="0.01" value="1" />
-            </label>
+                <label class="range-field" id="focusCropField" style="margin-top:12px;display:none;">
+                  <span>Recorte lateral derecho (<span id="focusCropValue">28</span>%)</span>
+                  <input id="focusCropInput" type="range" min="0" max="50" step="1" value="28" />
+                </label>
+              </div>
 
-            <button class="btn btn-ghost full" id="resetFiltersBtn" type="button">
-              Restaurar imagen
-            </button>
+              <div class="config-section">
+                <h3>Mejoras visuales</h3>
+
+                <label class="range-field">
+                  <span>Brillo</span>
+                  <input id="brightnessInput" type="range" min="0.7" max="1.4" step="0.01" value="1" />
+                </label>
+
+                <label class="range-field">
+                  <span>Contraste</span>
+                  <input id="contrastInput" type="range" min="0.7" max="1.6" step="0.01" value="1" />
+                </label>
+
+                <label class="range-field">
+                  <span>Saturación</span>
+                  <input id="saturationInput" type="range" min="0.5" max="1.8" step="0.01" value="1" />
+                </label>
+
+                <button class="btn btn-ghost full" id="resetFiltersBtn" type="button">
+                  Restaurar imagen
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="panel-block">
@@ -204,6 +215,15 @@
       </section>
 
       <canvas id="snapshotCanvas"></canvas>
+
+      <div id="captureMediaModal" class="capture-media-modal is-hidden">
+        <div class="capture-media-modal-backdrop" id="captureMediaModalBackdrop"></div>
+        <div class="capture-media-modal-content">
+          <button class="capture-media-modal-close" id="captureMediaModalClose" type="button" aria-label="Cerrar">&times;</button>
+          <img id="captureMediaModalImage" class="is-hidden" alt="Captura" />
+          <video id="captureMediaModalVideo" class="is-hidden" controls playsinline></video>
+        </div>
+      </div>
 
       <div id="finishStudyModal" class="is-hidden" style="position:fixed;inset:0;background:rgba(2,6,23,0.85);display:grid;place-items:center;z-index:50;padding:32px;">
         <div style="background:var(--panel-bg,#0f172a);border-radius:16px;padding:28px;max-width:900px;width:100%;max-height:85vh;overflow-y:auto;">

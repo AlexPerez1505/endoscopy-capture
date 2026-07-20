@@ -28,6 +28,9 @@ const focusModeToggleBtn = document.getElementById('focusModeToggleBtn');
 const focusCropField = document.getElementById('focusCropField');
 const focusCropInput = document.getElementById('focusCropInput');
 const focusCropValue = document.getElementById('focusCropValue');
+const videoToast = document.getElementById('videoToast');
+const configPanel = document.getElementById('configPanel');
+const configPanelToggle = document.getElementById('configPanelToggle');
 const emptyState = document.getElementById('emptyState');
 const deviceSelect = document.getElementById('deviceSelect');
 const detectDevicesBtn = document.getElementById('detectDevicesBtn');
@@ -63,6 +66,11 @@ const resetFiltersBtn = document.getElementById('resetFiltersBtn');
 const imageCount = document.getElementById('imageCount');
 const videoCount = document.getElementById('videoCount');
 const captureThumbnails = document.getElementById('captureThumbnails');
+const captureMediaModal = document.getElementById('captureMediaModal');
+const captureMediaModalBackdrop = document.getElementById('captureMediaModalBackdrop');
+const captureMediaModalClose = document.getElementById('captureMediaModalClose');
+const captureMediaModalImage = document.getElementById('captureMediaModalImage');
+const captureMediaModalVideo = document.getElementById('captureMediaModalVideo');
 const finishStudyBtn = document.getElementById('finishStudyBtn');
 const finishStudyModal = document.getElementById('finishStudyModal');
 const finishStudyThumbnails = document.getElementById('finishStudyThumbnails');
@@ -108,6 +116,30 @@ function addLog(message, type = 'info') {
   }
 
   logBox.prepend(line);
+}
+
+// En media pantalla o pantalla completa el panel lateral (con el log) queda
+// oculto, asi que el doctor no tiene forma de saber si una foto se tomo o si
+// la grabacion inicio/paro. Este aviso flotante se dibuja encima del video
+// (unico elemento visible en esos modos) para cubrir ese hueco.
+let videoToastTimer = null;
+
+function showVideoToast(message, type = 'info') {
+  if (!(isVideoFullscreen() || captureLayoutSection.classList.contains('is-half-screen'))) return;
+
+  clearTimeout(videoToastTimer);
+
+  videoToast.textContent = message;
+  videoToast.classList.remove('is-error', 'is-success');
+
+  if (type === 'error') videoToast.classList.add('is-error');
+  if (type === 'success') videoToast.classList.add('is-success');
+
+  videoToast.classList.add('is-visible');
+
+  videoToastTimer = setTimeout(() => {
+    videoToast.classList.remove('is-visible');
+  }, 2200);
 }
 
 function setStatus(text, mode = 'idle') {
@@ -308,24 +340,74 @@ async function startDirectSession() {
   return data;
 }
 
+// Ver una captura (foto o video) dentro de la misma app, en vez de un <a
+// target="_blank">: en Tauri eso abre el navegador del sistema por fuera de
+// la ventana de la app, sacando al doctor de la pantalla de captura.
+function openCaptureMediaModal(url, type) {
+  if (!captureMediaModal) return;
+
+  if (type === 'video') {
+    captureMediaModalImage?.classList.add('is-hidden');
+    if (captureMediaModalVideo) {
+      captureMediaModalVideo.src = url;
+      captureMediaModalVideo.classList.remove('is-hidden');
+    }
+  } else {
+    captureMediaModalVideo?.classList.add('is-hidden');
+    if (captureMediaModalVideo) {
+      captureMediaModalVideo.pause();
+      captureMediaModalVideo.removeAttribute('src');
+      captureMediaModalVideo.load();
+    }
+    if (captureMediaModalImage) {
+      captureMediaModalImage.src = url;
+      captureMediaModalImage.classList.remove('is-hidden');
+    }
+  }
+
+  captureMediaModal.classList.remove('is-hidden');
+}
+
+function closeCaptureMediaModal() {
+  if (!captureMediaModal) return;
+
+  captureMediaModal.classList.add('is-hidden');
+
+  if (captureMediaModalVideo) {
+    captureMediaModalVideo.pause();
+    captureMediaModalVideo.removeAttribute('src');
+    captureMediaModalVideo.load();
+  }
+
+  if (captureMediaModalImage) {
+    captureMediaModalImage.removeAttribute('src');
+  }
+}
+
+captureMediaModalClose?.addEventListener('click', closeCaptureMediaModal);
+captureMediaModalBackdrop?.addEventListener('click', closeCaptureMediaModal);
+
 function addCaptureThumbnail(url, label, type) {
   capturedItems.push({ url, label, type });
 
   if (!captureThumbnails || !url) return;
 
-  const link = document.createElement('a');
-  link.href = url;
-  link.target = '_blank';
-  link.rel = 'noopener';
-  link.title = label;
-  link.style.display = 'block';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.title = label;
+  button.style.display = 'block';
+  button.style.width = '100%';
+  button.style.padding = '0';
+  button.style.border = '1px solid var(--border, #ccc)';
+  button.style.borderRadius = '8px';
+  button.style.background = 'none';
+  button.style.cursor = 'pointer';
+  button.addEventListener('click', () => openCaptureMediaModal(url, type));
 
   if (type === 'video') {
-    link.textContent = `Video: ${label}`;
-    link.style.padding = '8px';
-    link.style.fontSize = '12px';
-    link.style.border = '1px solid var(--border, #ccc)';
-    link.style.borderRadius = '8px';
+    button.textContent = `Video: ${label}`;
+    button.style.padding = '8px';
+    button.style.fontSize = '12px';
   } else {
     const img = document.createElement('img');
     img.src = url;
@@ -334,10 +416,10 @@ function addCaptureThumbnail(url, label, type) {
     img.style.borderRadius = '8px';
     img.style.aspectRatio = '1 / 1';
     img.style.objectFit = 'cover';
-    link.appendChild(img);
+    button.appendChild(img);
   }
 
-  captureThumbnails.prepend(link);
+  captureThumbnails.prepend(button);
 }
 
 function showCaptureLayout() {
@@ -636,6 +718,8 @@ async function startVideo() {
     renderConnection();
     setStatus('Video activo', 'warning');
 
+    setConfigPanelCollapsed(true);
+
     addLog('Video iniciado correctamente.', 'success');
   } catch (error) {
     console.error(error);
@@ -643,6 +727,24 @@ async function startVideo() {
     addLog(`No se pudo iniciar el video: ${cameraErrorMessage(error)}`, 'error');
   }
 }
+
+// Panel "Configuración" (Capturador + Modo enfoque + Mejoras visuales):
+// colapsable para liberar espacio en el lateral una vez el video ya esta
+// corriendo (ver setConfigPanelCollapsed(true) en startVideo), dejando mas
+// espacio visible para el log de capturas y las miniaturas del estudio. El
+// doctor puede reabrirlo en cualquier momento con la flecha del encabezado.
+const CONFIG_PANEL_STORAGE_KEY = 'enclaii-config-panel-collapsed';
+
+function setConfigPanelCollapsed(collapsed) {
+  configPanel.classList.toggle('is-collapsed', collapsed);
+  localStorage.setItem(CONFIG_PANEL_STORAGE_KEY, String(collapsed));
+}
+
+configPanelToggle.addEventListener('click', () => {
+  setConfigPanelCollapsed(!configPanel.classList.contains('is-collapsed'));
+});
+
+setConfigPanelCollapsed(localStorage.getItem(CONFIG_PANEL_STORAGE_KEY) === 'true');
 
 function applyFilters() {
   const brightness = brightnessInput.value;
@@ -680,8 +782,14 @@ function focusCropRatio() {
 
 function applyFocusModeVisual() {
   if (focusModeEnabled && focusCropRatio() > 0) {
+    // Solo se escala horizontalmente (scaleX): el transform-origin del
+    // <video> esta anclado a la izquierda (ver .video-preview en
+    // styles.css), asi que agrandar el ancho empuja el excedente hacia la
+    // derecha, donde el wrapper con overflow:hidden lo recorta. Un
+    // scale() uniforme tambien agranda el alto y termina recortando
+    // arriba/abajo, que es justo lo que no queremos.
     const scale = 1 / (1 - focusCropRatio());
-    preview.style.transform = `scale(${scale})`;
+    preview.style.transform = `scaleX(${scale})`;
   } else {
     preview.style.transform = 'none';
   }
@@ -836,9 +944,11 @@ async function captureImage() {
     imageCount.textContent = totalImages;
 
     addLog('Imagen guardada en Laravel.', 'success');
+    showVideoToast(' Foto tomada', 'success');
   } catch (error) {
     console.error(error);
     addLog(`Error capturando imagen: ${error.message}`, 'error');
+    showVideoToast('No se pudo tomar la foto', 'error');
   }
 }
 
@@ -955,6 +1065,7 @@ function startRecording() {
     recordingIndicator.innerHTML = '<span></span> Grabando';
 
     addLog('Grabación iniciada.');
+    showVideoToast('● Grabación iniciada', 'success');
   } catch (error) {
     stopRecordingDrawLoop();
     console.error(error);
@@ -978,6 +1089,7 @@ function stopRecording() {
   recordingIndicator.innerHTML = '<span></span> Grabación detenida';
 
   addLog('Grabación detenida.');
+  showVideoToast('■ Grabación detenida');
 }
 
 function canTriggerRemoteCapture() {
@@ -1109,17 +1221,20 @@ async function finishStudy() {
   if (finishStudyThumbnails) {
     finishStudyThumbnails.innerHTML = '';
     capturedItems.forEach((item) => {
-      const link = document.createElement('a');
-      link.href = item.url;
-      link.target = '_blank';
-      link.rel = 'noopener';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.style.display = 'block';
+      button.style.width = '100%';
+      button.style.padding = '0';
+      button.style.border = '1px solid var(--border, #ccc)';
+      button.style.borderRadius = '8px';
+      button.style.background = 'none';
+      button.style.cursor = 'pointer';
+      button.addEventListener('click', () => openCaptureMediaModal(item.url, item.type));
 
       if (item.type === 'video') {
-        link.textContent = `Video: ${item.label}`;
-        link.style.display = 'block';
-        link.style.padding = '10px';
-        link.style.border = '1px solid var(--border, #ccc)';
-        link.style.borderRadius = '8px';
+        button.textContent = `Video: ${item.label}`;
+        button.style.padding = '10px';
       } else {
         const img = document.createElement('img');
         img.src = item.url;
@@ -1128,10 +1243,10 @@ async function finishStudy() {
         img.style.aspectRatio = '1 / 1';
         img.style.objectFit = 'cover';
         img.style.borderRadius = '8px';
-        link.appendChild(img);
+        button.appendChild(img);
       }
 
-      finishStudyThumbnails.appendChild(link);
+      finishStudyThumbnails.appendChild(button);
     });
   }
 
