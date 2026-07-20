@@ -560,6 +560,57 @@ async function detectDevices() {
   }
 }
 
+// Con el modo enfoque, recortar el frame deja menos pixeles reales
+// disponibles para ese recorte. Si el capturador soporta nativamente una
+// resolucion mayor a la que quedo activa, vale la pena subirla para tener
+// mas detalle de sobra antes de recortar. A diferencia del intento inicial
+// de conexion (que fuerza constraints ANTES de saber que soporta el
+// dispositivo y por eso causaba buffering/lag), esto se hace DESPUES de que
+// el video ya esta fluido, usando applyConstraints sobre el track activo
+// (reconfiguracion de modo, no una renegociacion completa), y solo pide una
+// resolucion que el propio dispositivo reporta soportar via getCapabilities().
+async function tryUpgradeToMaxResolution(stream) {
+  const track = stream.getVideoTracks()[0];
+  if (!track || !track.getCapabilities) {
+    return;
+  }
+
+  try {
+    const capabilities = track.getCapabilities();
+    const settings = track.getSettings();
+
+    const maxWidth = capabilities.width?.max;
+    const maxHeight = capabilities.height?.max;
+
+    if (!maxWidth || !maxHeight) {
+      return;
+    }
+
+    // Solo lo intentamos si el maximo soportado es notablemente mayor al
+    // modo que ya quedo activo; si no, no vale la pena arriesgar un cambio
+    // de modo sin beneficio real.
+    const widthGain = maxWidth / (settings.width || maxWidth);
+    const heightGain = maxHeight / (settings.height || maxHeight);
+
+    if (widthGain < 1.15 && heightGain < 1.15) {
+      return;
+    }
+
+    await track.applyConstraints({
+      width: { ideal: maxWidth },
+      height: { ideal: maxHeight },
+    });
+
+    const updated = track.getSettings();
+    addLog(
+      `Resolución aumentada a ${updated.width}x${updated.height} (máxima soportada por el capturador).`,
+      'success'
+    );
+  } catch (error) {
+    console.warn('No se pudo aumentar la resolución nativa:', error);
+  }
+}
+
 async function startVideo() {
   try {
     const selectedDeviceId = deviceSelect.value;
@@ -570,6 +621,8 @@ async function startVideo() {
     }
 
     currentStream = await openVideoStream(selectedDeviceId);
+
+    await tryUpgradeToMaxResolution(currentStream);
 
     preview.srcObject = currentStream;
 
@@ -967,6 +1020,27 @@ function isRemoteCaptureTarget(target) {
   return true;
 }
 
+// Instrumentacion temporal para medir cuanto tiempo real se mantiene
+// presionado el boton del remoto (mousedown -> mouseup de UN solo pulso),
+// que es distinto al log de "tiempo entre clics" de handleCaptureClick (ese
+// mide el intervalo ENTRE dos clics, no la duracion de un solo pulso). Sirve
+// para decidir, con datos reales, un umbral de "mantener presionado = grabar".
+let remotePressStartAt = 0;
+
+document.addEventListener('mousedown', (event) => {
+  if (!isRemoteCaptureTarget(event.target)) return;
+  remotePressStartAt = Date.now();
+});
+
+document.addEventListener('mouseup', (event) => {
+  if (!isRemoteCaptureTarget(event.target) || !remotePressStartAt) return;
+
+  const heldMs = Date.now() - remotePressStartAt;
+  remotePressStartAt = 0;
+
+  addLog(`Duración real de la pulsación: ${heldMs}ms.`);
+});
+
 pairForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
 
@@ -1087,7 +1161,42 @@ finishStudyGalleryBtn?.addEventListener('click', () => {
 // teclado emulado o click() sintetico) y nunca incrementan ese contador, asi
 // que "dblclick" jamas se disparaba. Por eso el doble clic se detecta a mano
 // comparando el timestamp entre dos "click" consecutivos.
-const DOUBLE_CLICK_WINDOW_MS = 2000;
+//
+// El switch fisico soldado al remoto no tiene un timing 100% estable: el
+// intervalo real entre los dos clics de un "doble clic" deliberado se ha
+// observado que se va corriendo con el uso (desgaste/oxidacion del contacto),
+// por lo que una ventana fija se queda corta con el tiempo. Para no tener que
+// re-ajustar esto a mano cada vez, la ventana se auto-calibra:
+//   - Si un "doble clic" cae dentro de la ventana actual, esta se ajusta para
+//     ceñirse al intervalo real observado (+ colchon), tanto para achicarse
+//     si el switch responde mas rapido como para agrandarse si responde mas
+//     lento.
+//   - Si un clic llega un poco tarde (justo fuera de la ventana pero dentro
+//     de un margen de "casi doble clic"), se interpreta como una foto normal
+//     (no se adivina la intencion retroactivamente) pero se ensancha la
+//     ventana para que el siguiente intento si sea reconocido.
+// El valor aprendido se persiste en localStorage para no perderlo al
+// reiniciar la app.
+const DOUBLE_CLICK_WINDOW_DEFAULT_MS = 2000;
+const DOUBLE_CLICK_WINDOW_MIN_MS = 1200;
+const DOUBLE_CLICK_WINDOW_MAX_MS = 6000;
+const DOUBLE_CLICK_NEAR_MISS_MARGIN_MS = 1500;
+const DOUBLE_CLICK_WINDOW_STORAGE_KEY = 'enclaii-double-click-window-ms';
+
+function clampDoubleClickWindow(value) {
+  return Math.min(DOUBLE_CLICK_WINDOW_MAX_MS, Math.max(DOUBLE_CLICK_WINDOW_MIN_MS, Math.round(value)));
+}
+
+let doubleClickWindowMs = (() => {
+  const stored = Number(localStorage.getItem(DOUBLE_CLICK_WINDOW_STORAGE_KEY));
+  return Number.isFinite(stored) && stored > 0 ? clampDoubleClickWindow(stored) : DOUBLE_CLICK_WINDOW_DEFAULT_MS;
+})();
+
+function setDoubleClickWindow(value) {
+  doubleClickWindowMs = clampDoubleClickWindow(value);
+  localStorage.setItem(DOUBLE_CLICK_WINDOW_STORAGE_KEY, String(doubleClickWindowMs));
+}
+
 let lastCaptureClickAt = 0;
 
 function handleCaptureClick(event) {
@@ -1095,6 +1204,14 @@ function handleCaptureClick(event) {
 
   const now = Date.now();
   const elapsedSinceLastClick = lastCaptureClickAt ? now - lastCaptureClickAt : null;
+
+  // Log de diagnostico: cuantos ms pasaron desde el clic anterior, para
+  // poder seguir observando el comportamiento real del remoto/mouse fisico.
+  addLog(
+    elapsedSinceLastClick !== null
+      ? `Clic recibido (+${elapsedSinceLastClick}ms desde el anterior).`
+      : 'Clic recibido (primero de la sesión).'
+  );
 
   const isRecording = mediaRecorder && mediaRecorder.state !== 'inactive';
 
@@ -1105,21 +1222,43 @@ function handleCaptureClick(event) {
     return;
   }
 
-  const isDoubleClick = elapsedSinceLastClick !== null && elapsedSinceLastClick <= DOUBLE_CLICK_WINDOW_MS;
-  lastCaptureClickAt = isDoubleClick ? 0 : now;
+  const isDoubleClick = elapsedSinceLastClick !== null && elapsedSinceLastClick <= doubleClickWindowMs;
 
   if (isDoubleClick) {
-    addLog('Doble clic detectado: iniciando grabación...');
+    lastCaptureClickAt = 0;
+    const previousWindow = doubleClickWindowMs;
+    setDoubleClickWindow(elapsedSinceLastClick + 300);
+    addLog(
+      `Doble clic detectado (${elapsedSinceLastClick}ms, ventana ${previousWindow}ms → ${doubleClickWindowMs}ms): iniciando grabación...`
+    );
     startRecording();
     return;
   }
+
+  const isNearMissDoubleClick =
+    elapsedSinceLastClick !== null && elapsedSinceLastClick <= doubleClickWindowMs + DOUBLE_CLICK_NEAR_MISS_MARGIN_MS;
+
+  if (isNearMissDoubleClick) {
+    const previousWindow = doubleClickWindowMs;
+    setDoubleClickWindow(elapsedSinceLastClick + 300);
+    addLog(
+      `Clic un poco lento para doble clic (${elapsedSinceLastClick}ms): ventana ampliada de ${previousWindow}ms a ${doubleClickWindowMs}ms para el próximo intento.`
+    );
+  }
+
+  lastCaptureClickAt = now;
+
+  const elapsedSinceLastCapture = lastRemoteCaptureAt ? now - lastRemoteCaptureAt : null;
 
   if (canTriggerRemoteCapture()) {
     captureImage();
   } else {
     // Aviso para que quede claro que el clic no se ignoro en silencio:
     // llego demasiado rapido despues de la captura anterior (rebote).
-    addLog('Clic ignorado: muy pronto despues de la captura anterior.', 'error');
+    addLog(
+      `Clic ignorado: ${elapsedSinceLastCapture}ms desde la última captura (cooldown ${REMOTE_CAPTURE_COOLDOWN_MS}ms).`,
+      'error'
+    );
   }
 }
 

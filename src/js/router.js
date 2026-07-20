@@ -89,11 +89,6 @@ const HEAD = {
     sub: 'Consulta y administra imágenes y videos de estudios',
   },
 
-  finanzas: {
-    title: 'Finanzas',
-    sub: 'Ingresos y facturación',
-  },
-
   configuracion: {
     title: 'Configuración',
     sub: 'Personaliza tu experiencia y gestiona los ajustes de tu cuenta y sistema',

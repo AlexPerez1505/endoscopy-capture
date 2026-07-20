@@ -129,19 +129,6 @@ function restoreDashboardShell(root) {
   }
 }
 
-function renderDashboardError(root, error) {
-  if (error.code === 'UNAUTHORIZED') {
-    renderLaravelLogin(root, error.message);
-    return;
-  }
-
-  root.innerHTML = `
-    <div style="padding:42px 20px;text-align:center;color:var(--txt-soft);">
-      <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con Laravel</strong>
-      <span>${escapeHtml(error.message || 'No se pudieron cargar los datos del dashboard.')}</span>
-    </div>`;
-}
-
 async function fetchLaravelDashboard() {
   const headers = {
     Accept: 'application/json',
