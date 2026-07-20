@@ -1,0 +1,9 @@
+<WixLocalization Culture="es-es" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="TauriLanguage">3082</String>
+  <String Id="TauriCodepage">1252</String>
+  <String Id="LaunchApp">Iniciar ENCLAII Desktop</String>
+  <String Id="DowngradeErrorMessage">Ya hay instalada una version mas reciente de ENCLAII Desktop.</String>
+  <String Id="PathEnvVarFeature">Agrega la ubicacion de instalacion del ejecutable de ENCLAII Desktop a la variable de entorno PATH del sistema.</String>
+  <String Id="InstallAppFeature">Instala ENCLAII Desktop.</String>
+  <String Id="InstallDirDlgDescription">Usa esta carpeta o haz clic en Cambiar para elegir otra.</String>
+</WixLocalization>

@@ -489,7 +489,7 @@ async function captureImage() {
     }
 
     const blob = await captureFrameBlob(0.95, 1920);
-    const filename = makeFileName('endoscopy-capture', 'jpg');
+    const filename = makeFileName('enclaii-captura', 'jpg');
 
     await uploadCaptureToLaravel(blob, filename, 'image');
 
