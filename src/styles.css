@@ -312,6 +312,26 @@ h3 {
   top: 16px;
   right: 16px;
   z-index: 5;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.video-fullscreen-finish {
+  display: none;
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  background: var(--danger) !important;
+  color: #ffffff !important;
+  border: none;
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.35);
+}
+
+.video-frame:fullscreen .video-fullscreen-finish {
+  display: inline-flex;
 }
 
 .capture-media-modal {
@@ -400,6 +420,19 @@ h3 {
 
 .video-toast.is-success {
   background: rgba(15, 118, 60, 0.92);
+}
+
+.video-toast.is-photo {
+  background: rgba(37, 99, 235, 0.55);
+}
+
+.layout.is-half-screen .video-toast,
+.video-frame:fullscreen .video-toast {
+  top: 28px;
+  padding: 18px 32px;
+  font-size: 24px;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 .video-frame:fullscreen .video-fullscreen-exit {

@@ -72,6 +72,7 @@ const captureMediaModalClose = document.getElementById('captureMediaModalClose')
 const captureMediaModalImage = document.getElementById('captureMediaModalImage');
 const captureMediaModalVideo = document.getElementById('captureMediaModalVideo');
 const finishStudyBtn = document.getElementById('finishStudyBtn');
+const fullscreenFinishStudyBtn = document.getElementById('fullscreenFinishStudyBtn');
 const finishStudyModal = document.getElementById('finishStudyModal');
 const finishStudyThumbnails = document.getElementById('finishStudyThumbnails');
 const finishStudySummary = document.getElementById('finishStudySummary');
@@ -130,10 +131,11 @@ function showVideoToast(message, type = 'info') {
   clearTimeout(videoToastTimer);
 
   videoToast.textContent = message;
-  videoToast.classList.remove('is-error', 'is-success');
+  videoToast.classList.remove('is-error', 'is-success', 'is-photo');
 
   if (type === 'error') videoToast.classList.add('is-error');
   if (type === 'success') videoToast.classList.add('is-success');
+  if (type === 'photo') videoToast.classList.add('is-photo');
 
   videoToast.classList.add('is-visible');
 
@@ -944,7 +946,7 @@ async function captureImage() {
     imageCount.textContent = totalImages;
 
     addLog('Imagen guardada en Laravel.', 'success');
-    showVideoToast(' Foto tomada', 'success');
+    showVideoToast(' Foto tomada', 'photo');
   } catch (error) {
     console.error(error);
     addLog(`Error capturando imagen: ${error.message}`, 'error');
@@ -1089,7 +1091,7 @@ function stopRecording() {
   recordingIndicator.innerHTML = '<span></span> Grabación detenida';
 
   addLog('Grabación detenida.');
-  showVideoToast('■ Grabación detenida');
+  showVideoToast('■ Grabación detenida', 'error');
 }
 
 function canTriggerRemoteCapture() {
@@ -1254,6 +1256,15 @@ async function finishStudy() {
 }
 
 finishStudyBtn?.addEventListener('click', finishStudy);
+
+// El modal de "Estudio finalizado" vive fuera de videoFrame, asi que en
+// pantalla completa nativa no se veria (el navegador solo muestra el
+// elemento en fullscreen y sus hijos). Por eso primero se sale de
+// fullscreen y despues se dispara finishStudy().
+fullscreenFinishStudyBtn?.addEventListener('click', async () => {
+  await setVideoFullscreen(false);
+  finishStudy();
+});
 
 finishStudyGalleryBtn?.addEventListener('click', () => {
   finishStudyModal?.classList.add('is-hidden');

@@ -724,6 +724,10 @@
   display:none;
 }
 
+.gallery-viewer-image.is-hidden{
+  display:none;
+}
+
 .gallery-viewer-counter,
 .gallery-viewer-mini-icon,
 .gallery-resolution-badge,
