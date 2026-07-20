@@ -19,6 +19,7 @@ let patientsSyncTimer = null;
 let patientsSyncRunning = false;
 let patientsFingerprint = '';
 let patientsModuleActive = false;
+let openMenuPatientId = null;
 
 function apiBaseUrl() {
   return String(
@@ -290,6 +291,16 @@ function normalizePayload(payload) {
   return list.map(normalizePatient);
 }
 
+// Algunas fotos de Laravel llegan con URLs firmadas (token/expiración que
+// cambia en cada respuesta) aunque la imagen sea la misma. Si se incluyera
+// esa URL completa en el fingerprint, cada polling de 3s detectaria un
+// "cambio" falso y forzaria un re-render completo de la tabla, recargando
+// los avatares y cerrando cualquier menu de opciones abierto. Por eso aqui
+// se ignoran query string/hash antes de comparar.
+function stableUrl(value) {
+  return String(value || '').split(/[?#]/)[0];
+}
+
 function createFingerprint(list = []) {
   return JSON.stringify(
     list.map((patient) => ({
@@ -302,7 +313,7 @@ function createFingerprint(list = []) {
       email: patient.email,
       medico: patient.medico,
       procedimiento: patient.procedimiento,
-      foto_url: patient.foto_url,
+      foto_url: stableUrl(patient.foto_url),
       estudios_count: patient.estudios_count,
       study_date: patient.study_date,
       study_type: patient.study_type,
@@ -531,6 +542,7 @@ function rowHtml(patient, index) {
     <div
       class="patient-row"
       data-index="${index}"
+      data-patient-id="${escapeHtml(patient.id)}"
       onclick="openPanel(${index})"
     >
       <div class="patient-info">
@@ -716,6 +728,7 @@ function renderPage(page = 1) {
   }
 
   renderPagination(totalPages);
+  restoreOpenMenu();
 }
 
 function renderPagination(totalPages) {
@@ -968,6 +981,26 @@ function toggleMenu(button) {
     });
 
   menu.classList.toggle('active');
+
+  const patientId = button
+    .closest('.patient-row')
+    ?.dataset.patientId;
+
+  openMenuPatientId = menu.classList.contains('active')
+    ? patientId || null
+    : null;
+}
+
+function restoreOpenMenu() {
+  if (!openMenuPatientId) {
+    return;
+  }
+
+  const row = document.querySelector(
+    `.patient-row[data-patient-id="${openMenuPatientId}"]`
+  );
+
+  row?.querySelector('.actions-dropdown')?.classList.add('active');
 }
 
 function deletePatient(index) {
@@ -1385,6 +1418,8 @@ function bindPageEvents() {
         .forEach((menu) => {
           menu.classList.remove('active');
         });
+
+      openMenuPatientId = null;
     }
   });
 }

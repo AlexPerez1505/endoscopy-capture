@@ -53,20 +53,38 @@
               <p id="deviceLabel">Selecciona un capturador para iniciar.</p>
             </div>
 
-            <div class="recording-indicator" id="recordingIndicator">
-              <span></span>
-              Grabación detenida
+            <div class="video-header-right">
+              <div class="video-view-controls">
+                <button class="btn btn-ghost" id="halfScreenBtn" type="button">
+                  Media pantalla
+                </button>
+
+                <button class="btn btn-ghost" id="fullScreenBtn" type="button">
+                  Pantalla completa
+                </button>
+              </div>
+
+              <div class="recording-indicator" id="recordingIndicator">
+                <span></span>
+                Grabación detenida
+              </div>
             </div>
           </div>
 
-          <div class="video-frame">
-            <video id="preview" autoplay playsinline muted></video>
+          <div class="video-frame" id="videoFrame">
+            <div class="video-crop-wrapper" id="videoCropWrapper">
+              <video id="preview" autoplay playsinline muted></video>
+            </div>
 
             <div class="empty-state" id="emptyState">
               <div class="empty-icon">●</div>
               <h3>Capturador no iniciado</h3>
               <p>Conecta el capturador USB y presiona “Detectar dispositivos”.</p>
             </div>
+
+            <button class="btn btn-ghost video-fullscreen-exit" id="exitFullScreenBtn" type="button">
+              Salir de pantalla completa (Esc)
+            </button>
           </div>
 
           <div class="controls">
@@ -116,6 +134,22 @@
               <select id="deviceSelect">
                 <option value="__default_camera__">Camara predeterminada</option>
               </select>
+            </label>
+          </div>
+
+          <div class="panel-block">
+            <h2>Modo enfoque</h2>
+            <p style="color:var(--txt-soft,#94a3b8);font-size:12px;margin:0 0 10px;">
+              Recorta el panel de información de la derecha del procesador para ver y guardar solo la imagen del endoscopio.
+            </p>
+
+            <button class="btn btn-outline full" id="focusModeToggleBtn" type="button">
+              Activar modo enfoque
+            </button>
+
+            <label class="range-field" id="focusCropField" style="margin-top:12px;display:none;">
+              <span>Recorte lateral derecho (<span id="focusCropValue">28</span>%)</span>
+              <input id="focusCropInput" type="range" min="0" max="50" step="1" value="28" />
             </label>
           </div>
 

@@ -18,6 +18,16 @@ const REMOTE_CAPTURE_COOLDOWN_MS = 900;
 let lastRemoteCaptureAt = 0;
 
 const preview = document.getElementById('preview');
+const videoFrame = document.getElementById('videoFrame');
+const captureLayoutSection = document.getElementById('captureLayout');
+const halfScreenBtn = document.getElementById('halfScreenBtn');
+const fullScreenBtn = document.getElementById('fullScreenBtn');
+const exitFullScreenBtn = document.getElementById('exitFullScreenBtn');
+const videoCropWrapper = document.getElementById('videoCropWrapper');
+const focusModeToggleBtn = document.getElementById('focusModeToggleBtn');
+const focusCropField = document.getElementById('focusCropField');
+const focusCropInput = document.getElementById('focusCropInput');
+const focusCropValue = document.getElementById('focusCropValue');
 const emptyState = document.getElementById('emptyState');
 const deviceSelect = document.getElementById('deviceSelect');
 const detectDevicesBtn = document.getElementById('detectDevicesBtn');
@@ -404,6 +414,23 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
   return payload;
 }
 
+// Pedir una resolucion/frameRate "ideal" explicito puede obligar a Chromium
+// a convertir/reescalar internamente si no coincide con el modo nativo del
+// sensor, lo que agrega buffering y desfasa el video (la app Camara de
+// Windows no fuerza esto, por eso se ve fluida). Por eso el primer intento
+// va SIN constraints de resolucion/framerate, dejando que el driver use su
+// modo nativo/por defecto; solo si eso falla se intenta forzar 1920x1080.
+function nativeVideoConstraints(deviceId) {
+  if (!deviceId || deviceId === DEFAULT_CAMERA_VALUE) {
+    return { video: true, audio: false };
+  }
+
+  return {
+    video: { deviceId: { exact: deviceId } },
+    audio: false,
+  };
+}
+
 function defaultVideoConstraints() {
   return {
     video: {
@@ -433,6 +460,7 @@ function videoConstraintsForDevice(deviceId) {
 
 async function openVideoStream(deviceId = '') {
   const attempts = [
+    nativeVideoConstraints(deviceId),
     videoConstraintsForDevice(deviceId),
     defaultVideoConstraints(),
     { video: true, audio: false },
@@ -580,6 +608,111 @@ function resetFilters() {
   addLog('Filtros visuales restaurados.');
 }
 
+// Modo enfoque: recorta el panel de informacion de la derecha que muestra el
+// procesador del endoscopio (ajustes, miniaturas, datos del scope), dejando
+// solo la imagen circular del endoscopio. El recorte se aplica en vivo con
+// un transform CSS (barato, sin afectar el rendimiento del video), y ademas
+// se usa el mismo porcentaje al tomar fotos (recortando el canvas de origen)
+// y al grabar video (ver startRecording, que en este modo dibuja en un
+// canvas intermedio en vez de grabar el stream crudo).
+const FOCUS_MODE_STORAGE_KEY = 'enclaii-focus-mode-enabled';
+const FOCUS_CROP_STORAGE_KEY = 'enclaii-focus-mode-crop-percent';
+
+let focusModeEnabled = localStorage.getItem(FOCUS_MODE_STORAGE_KEY) === 'true';
+let focusCropPercent = Number(localStorage.getItem(FOCUS_CROP_STORAGE_KEY)) || 28;
+
+function focusCropRatio() {
+  return Math.min(Math.max(focusCropPercent, 0), 50) / 100;
+}
+
+function applyFocusModeVisual() {
+  if (focusModeEnabled && focusCropRatio() > 0) {
+    const scale = 1 / (1 - focusCropRatio());
+    preview.style.transform = `scale(${scale})`;
+  } else {
+    preview.style.transform = 'none';
+  }
+}
+
+function updateFocusModeUI(enabled) {
+  focusModeToggleBtn.textContent = enabled ? 'Desactivar modo enfoque' : 'Activar modo enfoque';
+  focusModeToggleBtn.classList.toggle('btn-primary', enabled);
+  focusModeToggleBtn.classList.toggle('btn-outline', !enabled);
+  focusCropField.style.display = enabled ? '' : 'none';
+
+  applyFocusModeVisual();
+}
+
+function setFocusModeEnabled(enabled) {
+  focusModeEnabled = enabled;
+  localStorage.setItem(FOCUS_MODE_STORAGE_KEY, String(enabled));
+  updateFocusModeUI(enabled);
+  addLog(enabled ? 'Modo enfoque activado: se ocultará el panel derecho.' : 'Modo enfoque desactivado.');
+}
+
+function setFocusCropPercent(percent) {
+  focusCropPercent = Math.min(Math.max(Number(percent) || 0, 0), 50);
+  localStorage.setItem(FOCUS_CROP_STORAGE_KEY, String(focusCropPercent));
+  focusCropValue.textContent = String(focusCropPercent);
+  applyFocusModeVisual();
+}
+
+focusModeToggleBtn.addEventListener('click', () => setFocusModeEnabled(!focusModeEnabled));
+focusCropInput.addEventListener('input', (event) => setFocusCropPercent(event.target.value));
+
+focusCropInput.value = String(focusCropPercent);
+focusCropValue.textContent = String(focusCropPercent);
+updateFocusModeUI(focusModeEnabled);
+
+// Vista del video: "Media pantalla" agranda el panel de video dentro de la
+// misma ventana (oculta el lateral), y "Pantalla completa" usa la
+// Fullscreen API nativa del navegador para ocupar todo el monitor. Son
+// mutuamente excluyentes: activar una desactiva la otra.
+function isVideoFullscreen() {
+  return document.fullscreenElement === videoFrame;
+}
+
+function setHalfScreenMode(enabled) {
+  if (enabled && isVideoFullscreen()) {
+    document.exitFullscreen?.();
+  }
+
+  captureLayoutSection.classList.toggle('is-half-screen', enabled);
+  halfScreenBtn.textContent = enabled ? 'Salir de media pantalla' : 'Media pantalla';
+  halfScreenBtn.classList.toggle('btn-primary', enabled);
+  halfScreenBtn.classList.toggle('btn-ghost', !enabled);
+}
+
+async function setVideoFullscreen(enabled) {
+  try {
+    if (enabled) {
+      setHalfScreenMode(false);
+      await videoFrame.requestFullscreen?.();
+    } else if (isVideoFullscreen()) {
+      await document.exitFullscreen?.();
+    }
+  } catch (error) {
+    console.error(error);
+    addLog(`No se pudo cambiar a pantalla completa: ${error.message}`, 'error');
+  }
+}
+
+function updateFullscreenButtonState() {
+  const active = isVideoFullscreen();
+  fullScreenBtn.textContent = active ? 'Salir de pantalla completa' : 'Pantalla completa';
+  fullScreenBtn.classList.toggle('btn-primary', active);
+  fullScreenBtn.classList.toggle('btn-ghost', !active);
+}
+
+halfScreenBtn.addEventListener('click', () => {
+  setHalfScreenMode(!captureLayoutSection.classList.contains('is-half-screen'));
+});
+
+fullScreenBtn.addEventListener('click', () => setVideoFullscreen(!isVideoFullscreen()));
+exitFullScreenBtn.addEventListener('click', () => setVideoFullscreen(false));
+
+document.addEventListener('fullscreenchange', updateFullscreenButtonState);
+
 function makeFileName(prefix, extension) {
   const now = new Date();
   const stamp = now.toISOString().replaceAll(':', '-').replaceAll('.', '-');
@@ -587,17 +720,31 @@ function makeFileName(prefix, extension) {
   return `${prefix}-${stamp}.${extension}`;
 }
 
+// Dibuja el frame que YA esta renderizado en el elemento <video> en el
+// instante exacto del clic, sin esperas adicionales. Se probo usar
+// ImageCapture.grabFrame() para leer directo de la pista, pero esa API es
+// asincrona y en la practica espera a que llegue un frame "nuevo" desde el
+// pipeline de captura, lo que añade latencia en vez de reducirla. drawImage
+// sobre el <video> es sincrono: toma de inmediato lo que ya se esta viendo
+// en pantalla, que es lo mas cercano posible al instante del pulso del boton.
 async function captureFrameBlob(quality = 0.8, maxWidth = 1280) {
   if (!currentStream) {
     throw new Error('Primero inicia el video.');
   }
 
-  const sourceWidth = preview.videoWidth;
+  const fullSourceWidth = preview.videoWidth;
   const sourceHeight = preview.videoHeight;
 
-  if (!sourceWidth || !sourceHeight) {
+  if (!fullSourceWidth || !sourceHeight) {
     throw new Error('El video todavía no está listo.');
   }
+
+  // Modo enfoque activo: solo se dibuja la porcion izquierda del frame de
+  // origen (se descarta el panel de informacion de la derecha del
+  // procesador), igual que el recorte visual en vivo.
+  const sourceWidth = focusModeEnabled
+    ? Math.round(fullSourceWidth * (1 - focusCropRatio()))
+    : fullSourceWidth;
 
   const scale = sourceWidth > maxWidth ? maxWidth / sourceWidth : 1;
   const width = Math.round(sourceWidth * scale);
@@ -607,9 +754,8 @@ async function captureFrameBlob(quality = 0.8, maxWidth = 1280) {
   snapshotCanvas.height = height;
 
   const ctx = snapshotCanvas.getContext('2d');
-
   ctx.filter = preview.style.filter || 'none';
-  ctx.drawImage(preview, 0, 0, width, height);
+  ctx.drawImage(preview, 0, 0, sourceWidth, sourceHeight, 0, 0, width, height);
 
   const blob = await new Promise((resolve) => {
     snapshotCanvas.toBlob(resolve, 'image/jpeg', quality);
@@ -653,6 +799,48 @@ function getSupportedMimeType() {
   return types.find((type) => MediaRecorder.isTypeSupported(type)) || '';
 }
 
+// Con modo enfoque activo, el video no se grava directo del stream crudo de
+// la camara (que incluiria el panel derecho), sino de un canvas intermedio
+// donde se dibuja, frame por frame, solo la porcion recortada. Sin modo
+// enfoque se sigue grabando el stream crudo como antes (sin este overhead).
+let recordingCanvas = null;
+let recordingCanvasStream = null;
+let recordingDrawLoopId = null;
+
+function startRecordingDrawLoop() {
+  const fullSourceWidth = preview.videoWidth;
+  const sourceHeight = preview.videoHeight;
+  const sourceWidth = Math.round(fullSourceWidth * (1 - focusCropRatio()));
+
+  recordingCanvas = document.createElement('canvas');
+  recordingCanvas.width = sourceWidth;
+  recordingCanvas.height = sourceHeight;
+
+  const ctx = recordingCanvas.getContext('2d');
+
+  const drawFrame = () => {
+    if (!recordingCanvas) return;
+    ctx.drawImage(preview, 0, 0, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+    recordingDrawLoopId = requestAnimationFrame(drawFrame);
+  };
+
+  drawFrame();
+
+  recordingCanvasStream = recordingCanvas.captureStream();
+  return recordingCanvasStream;
+}
+
+function stopRecordingDrawLoop() {
+  if (recordingDrawLoopId) {
+    cancelAnimationFrame(recordingDrawLoopId);
+    recordingDrawLoopId = null;
+  }
+
+  recordingCanvasStream?.getTracks().forEach((track) => track.stop());
+  recordingCanvasStream = null;
+  recordingCanvas = null;
+}
+
 function startRecording() {
   try {
     if (!currentStream) {
@@ -663,8 +851,12 @@ function startRecording() {
 
     const mimeType = getSupportedMimeType();
 
+    const recordingStream = focusModeEnabled
+      ? startRecordingDrawLoop()
+      : currentStream;
+
     mediaRecorder = new MediaRecorder(
-      currentStream,
+      recordingStream,
       mimeType ? { mimeType } : undefined
     );
 
@@ -675,6 +867,8 @@ function startRecording() {
     };
 
     mediaRecorder.onstop = () => {
+      stopRecordingDrawLoop();
+
       try {
         const blob = new Blob(recordedChunks, {
           type: mediaRecorder.mimeType || 'video/webm',
@@ -709,6 +903,7 @@ function startRecording() {
 
     addLog('Grabación iniciada.');
   } catch (error) {
+    stopRecordingDrawLoop();
     console.error(error);
     addLog(`No se pudo iniciar grabación: ${error.message}`, 'error');
   }
@@ -756,19 +951,20 @@ function handleRemoteKey(event) {
   }
 }
 
-function handleRemoteClick(event) {
-  if (!isDevicePaired || !currentStream || captureLayout?.classList.contains('is-hidden')) return;
+// El boton fisico del capturador (remoto) no siempre despacha el clic sobre
+// el elemento #captureBtn; a veces cae en cualquier parte de la pagina segun
+// donde este el cursor. Por eso la deteccion de pulsacion mantenida vive a
+// nivel de document/window y no solo en el boton en pantalla: asi funciona
+// igual con el mouse, con el boton en pantalla y con el remoto.
+function isRemoteCaptureTarget(target) {
+  if (!isDevicePaired || !currentStream || captureLayout?.classList.contains('is-hidden')) return false;
 
-  const isInteractive = event.target.closest('button, a, input, select, textarea, label');
-  if (isInteractive) return;
+  const interactive = target.closest?.('button, a, input, select, textarea, label');
+  // Si el clic cae sobre otro control interactivo que no sea el propio boton
+  // de captura, se deja que ese control maneje su propio comportamiento.
+  if (interactive && interactive !== captureBtn) return false;
 
-  // Ignora clics disparados en rafaga (rebote del boton fisico del
-  // capturador). Deja pasar el evento sin bloquear el clic real del mouse:
-  // solo se omite la captura repetida, nunca se hace preventDefault ni
-  // stopPropagation, para que el mouse normal siga respondiendo siempre.
-  if (!canTriggerRemoteCapture()) return;
-
-  captureImage();
+  return true;
 }
 
 pairForm?.addEventListener('submit', async (event) => {
@@ -878,9 +1074,59 @@ finishStudyGalleryBtn?.addEventListener('click', () => {
   window.location.href = './app.html#galeria';
 });
 
+// Flujo de captura (funciona igual con el mouse, el boton en pantalla y el
+// remoto del capturador):
+//   - Un clic    -> toma una foto al instante (sin retraso).
+//   - Doble clic -> inicia la grabacion (mismo procedimiento que el boton
+//     "Iniciar grabación": llama directamente a startRecording()).
+//   - Un clic mientras se esta grabando -> detiene la grabacion al instante.
+//
+// El evento nativo "dblclick" del navegador NO sirve aqui: solo se dispara
+// cuando ambos clics vienen de un mismo puntero de mouse real (cuenta
+// event.detail). Los clics del remoto llegan como "click" sueltos (via
+// teclado emulado o click() sintetico) y nunca incrementan ese contador, asi
+// que "dblclick" jamas se disparaba. Por eso el doble clic se detecta a mano
+// comparando el timestamp entre dos "click" consecutivos.
+const DOUBLE_CLICK_WINDOW_MS = 2000;
+let lastCaptureClickAt = 0;
+
+function handleCaptureClick(event) {
+  if (!isRemoteCaptureTarget(event.target)) return;
+
+  const now = Date.now();
+  const elapsedSinceLastClick = lastCaptureClickAt ? now - lastCaptureClickAt : null;
+
+  const isRecording = mediaRecorder && mediaRecorder.state !== 'inactive';
+
+  if (isRecording) {
+    lastCaptureClickAt = 0;
+    addLog('Clic detectado: deteniendo grabación...');
+    stopRecording();
+    return;
+  }
+
+  const isDoubleClick = elapsedSinceLastClick !== null && elapsedSinceLastClick <= DOUBLE_CLICK_WINDOW_MS;
+  lastCaptureClickAt = isDoubleClick ? 0 : now;
+
+  if (isDoubleClick) {
+    addLog('Doble clic detectado: iniciando grabación...');
+    startRecording();
+    return;
+  }
+
+  if (canTriggerRemoteCapture()) {
+    captureImage();
+  } else {
+    // Aviso para que quede claro que el clic no se ignoro en silencio:
+    // llego demasiado rapido despues de la captura anterior (rebote).
+    addLog('Clic ignorado: muy pronto despues de la captura anterior.', 'error');
+  }
+}
+
+document.addEventListener('click', handleCaptureClick);
+
 detectDevicesBtn.addEventListener('click', detectDevices);
 startBtn.addEventListener('click', startVideo);
-captureBtn.addEventListener('click', captureImage);
 recordBtn.addEventListener('click', startRecording);
 stopRecordBtn.addEventListener('click', stopRecording);
 backToAppBtn?.addEventListener('click', goBackToApp);
@@ -891,7 +1137,6 @@ saturationInput.addEventListener('input', applyFilters);
 resetFiltersBtn.addEventListener('click', resetFilters);
 
 document.addEventListener('keydown', handleRemoteKey);
-document.addEventListener('click', handleRemoteClick);
 
 let deviceChangeTimer = null;
 navigator.mediaDevices?.addEventListener?.('devicechange', () => {
