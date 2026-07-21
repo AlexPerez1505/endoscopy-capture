@@ -699,6 +699,14 @@ async function startVideo() {
   try {
     const selectedDeviceId = deviceSelect.value;
 
+    // Si se cambia de camara (o se reinicia el video) a mitad de una
+    // grabacion, hay que cerrarla primero: de lo contrario el MediaRecorder
+    // y, en modo enfoque, el loop de canvas quedan grabando de un stream que
+    // ya se detuvo, huerfanos en segundo plano.
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      stopRecording();
+    }
+
     if (currentStream) {
       currentStream.getTracks().forEach((track) => track.stop());
       currentStream = null;
@@ -968,45 +976,46 @@ function getSupportedMimeType() {
 // la camara (que incluiria el panel derecho), sino de un canvas intermedio
 // donde se dibuja, frame por frame, solo la porcion recortada. Sin modo
 // enfoque se sigue grabando el stream crudo como antes (sin este overhead).
-let recordingCanvas = null;
-let recordingCanvasStream = null;
-let recordingDrawLoopId = null;
+//
+// La condicion de parada del loop de dibujo es UNICAMENTE signal.aborted,
+// nunca un evento externo (como 'onstop' del MediaRecorder, que no esta
+// garantizado si el dispositivo se desconecta a medio grabar). Cualquier
+// camino que necesite terminar la grabacion (stopRecording, un cambio de
+// camara, el track que muere solo) aborta el mismo AbortController, asi que
+// es imposible que este loop quede corriendo huerfano en segundo plano.
+let activeRecordingController = null;
 
-function startRecordingDrawLoop() {
+function createFocusModeRecordingStream(signal) {
   const fullSourceWidth = preview.videoWidth;
   const sourceHeight = preview.videoHeight;
   const sourceWidth = Math.round(fullSourceWidth * (1 - focusCropRatio()));
 
-  recordingCanvas = document.createElement('canvas');
-  recordingCanvas.width = sourceWidth;
-  recordingCanvas.height = sourceHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = sourceWidth;
+  canvas.height = sourceHeight;
 
-  const ctx = recordingCanvas.getContext('2d');
+  const ctx = canvas.getContext('2d');
 
   const drawFrame = () => {
-    if (!recordingCanvas) return;
+    if (signal.aborted) return;
     ctx.drawImage(preview, 0, 0, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
-    recordingDrawLoopId = requestAnimationFrame(drawFrame);
+    requestAnimationFrame(drawFrame);
   };
 
-  drawFrame();
+  requestAnimationFrame(drawFrame);
 
-  recordingCanvasStream = recordingCanvas.captureStream();
-  return recordingCanvasStream;
-}
+  const canvasStream = canvas.captureStream();
 
-function stopRecordingDrawLoop() {
-  if (recordingDrawLoopId) {
-    cancelAnimationFrame(recordingDrawLoopId);
-    recordingDrawLoopId = null;
-  }
+  signal.addEventListener('abort', () => {
+    canvasStream.getTracks().forEach((track) => track.stop());
+  });
 
-  recordingCanvasStream?.getTracks().forEach((track) => track.stop());
-  recordingCanvasStream = null;
-  recordingCanvas = null;
+  return canvasStream;
 }
 
 function startRecording() {
+  let controller;
+
   try {
     if (!currentStream) {
       throw new Error('Primero inicia el video.');
@@ -1016,8 +1025,11 @@ function startRecording() {
 
     const mimeType = getSupportedMimeType();
 
+    controller = new AbortController();
+    const { signal } = controller;
+
     const recordingStream = focusModeEnabled
-      ? startRecordingDrawLoop()
+      ? createFocusModeRecordingStream(signal)
       : currentStream;
 
     mediaRecorder = new MediaRecorder(
@@ -1032,7 +1044,12 @@ function startRecording() {
     };
 
     mediaRecorder.onstop = () => {
-      stopRecordingDrawLoop();
+      // Respaldo: si esta es la unica senal de que la grabacion termino
+      // (por ejemplo el dispositivo se desconecto), esto igual garantiza el
+      // cierre del loop de canvas. abort() en un controller ya abortado no
+      // hace nada, asi que es seguro llamarlo aunque stopRecording() ya lo
+      // haya hecho.
+      controller.abort();
 
       try {
         const blob = new Blob(recordedChunks, {
@@ -1057,6 +1074,18 @@ function startRecording() {
       }
     };
 
+    // Si el capturador se desconecta o el track muere sin avisarle al
+    // MediaRecorder, este listener es la garantia de que la grabacion (y el
+    // loop de canvas, via signal) se cierran igual, en vez de quedar
+    // huerfanos en segundo plano.
+    currentStream.getVideoTracks()[0]?.addEventListener(
+      'ended',
+      () => stopRecording(),
+      { signal }
+    );
+
+    activeRecordingController = controller;
+
     mediaRecorder.start(1000);
 
     recordBtn.disabled = true;
@@ -1069,7 +1098,8 @@ function startRecording() {
     addLog('Grabación iniciada.');
     showVideoToast('● Grabación iniciada', 'success');
   } catch (error) {
-    stopRecordingDrawLoop();
+    controller?.abort();
+    activeRecordingController = null;
     console.error(error);
     addLog(`No se pudo iniciar grabación: ${error.message}`, 'error');
   }
@@ -1079,6 +1109,12 @@ function stopRecording() {
   if (!mediaRecorder) {
     return;
   }
+
+  // Se aborta primero: detiene el loop de canvas (si lo hay) de forma
+  // inmediata y garantizada, sin depender de que el MediaRecorder llegue a
+  // disparar 'onstop'.
+  activeRecordingController?.abort();
+  activeRecordingController = null;
 
   if (mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
