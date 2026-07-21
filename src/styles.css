@@ -39,6 +39,19 @@ body {
   font-family: 'Quicksand', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--ink);
+  /* El boton fisico del endoscopio emula clics de mouse; si el clic cae
+     sobre texto o la imagen del video, el navegador puede iniciar una
+     seleccion/arrastre nativo que hace que el cursor "se trabe" hasta que
+     se suelte. Deshabilitamos la seleccion global (excepto en campos de
+     entrada) para que el mouse siga respondiendo con normalidad. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button,
@@ -243,6 +256,19 @@ h3 {
   box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.12);
 }
 
+.video-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.video-view-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .video-frame {
   position: relative;
   width: 100%;
@@ -253,11 +279,180 @@ h3 {
   border: 1px solid var(--line);
 }
 
+/* Modo "media pantalla": agranda el panel de video dentro de la app (sin
+   usar la Fullscreen API nativa), ocultando el panel lateral para dejarle
+   mas espacio al video. Se activa/desactiva con el boton "Media pantalla". */
+.layout.is-half-screen {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.layout.is-half-screen .side-card {
+  display: none;
+}
+
+.layout.is-half-screen .video-frame {
+  aspect-ratio: auto;
+  height: 70vh;
+}
+
+/* Pantalla completa nativa: solo se ve el video-frame ocupando todo el
+   monitor. El boton de salir solo aparece mientras el elemento esta en modo
+   fullscreen (pseudo-clase :fullscreen). */
+.video-frame:fullscreen {
+  aspect-ratio: auto;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+  border: none;
+}
+
+.video-fullscreen-exit {
+  display: none;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.video-fullscreen-finish {
+  display: none;
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  background: var(--danger) !important;
+  color: #ffffff !important;
+  border: none;
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.35);
+}
+
+.video-frame:fullscreen .video-fullscreen-finish {
+  display: inline-flex;
+}
+
+.capture-media-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+
+.capture-media-modal.is-hidden {
+  display: none;
+}
+
+.capture-media-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.85);
+}
+
+.capture-media-modal-content {
+  position: relative;
+  z-index: 1;
+  max-width: min(90vw, 1100px);
+  max-height: 85vh;
+  display: grid;
+  place-items: center;
+}
+
+.capture-media-modal-content img,
+.capture-media-modal-content video {
+  max-width: min(90vw, 1100px);
+  max-height: 85vh;
+  border-radius: 12px;
+  display: block;
+}
+
+.capture-media-modal-content img.is-hidden,
+.capture-media-modal-content video.is-hidden {
+  display: none;
+}
+
+.capture-media-modal-close {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.video-toast {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translate(-50%, -12px);
+  z-index: 6;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.video-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.video-toast.is-error {
+  background: rgba(190, 24, 24, 0.92);
+}
+
+.video-toast.is-success {
+  background: rgba(15, 118, 60, 0.92);
+}
+
+.video-toast.is-photo {
+  background: rgba(37, 99, 235, 0.55);
+}
+
+.layout.is-half-screen .video-toast,
+.video-frame:fullscreen .video-toast {
+  top: 28px;
+  padding: 18px 32px;
+  font-size: 24px;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.video-frame:fullscreen .video-fullscreen-exit {
+  display: inline-flex;
+}
+
+.video-crop-wrapper {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 video {
   width: 100%;
   height: 100%;
   object-fit: contain;
   background: #020617;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  transform-origin: 0% 50%;
 }
 
 .empty-state {
@@ -271,8 +466,8 @@ video {
   text-align: center;
 }
 
-.empty-state.is-hidden {
-  display: none;
+.is-hidden {
+  display: none !important;
 }
 
 .empty-state h3 {
@@ -370,6 +565,61 @@ video {
   padding-bottom: 20px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--line);
+}
+
+.config-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.config-panel-header h2 {
+  margin-bottom: 0;
+}
+
+.config-panel-arrow {
+  color: var(--txt-soft, #94a3b8);
+  font-size: 16px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.config-panel-body {
+  margin-top: 16px;
+}
+
+.config-panel.is-collapsed .config-panel-arrow {
+  transform: rotate(-90deg);
+}
+
+.config-panel.is-collapsed .config-panel-body {
+  display: none;
+}
+
+.config-section {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.config-section:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+
+.config-section h3 {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--ink-dark);
 }
 
 .panel-block:last-child {

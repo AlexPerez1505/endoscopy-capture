@@ -1,6 +1,6 @@
 import { laravelFetch } from './laravel.js';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
 const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 function currentLaravelOrigin() {
@@ -60,8 +60,8 @@ function escapeHtml(value) {
 }
 
 function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  return token ? `Bearer ${token}` : '';
 }
 
 function normalizePatientsPayload(payload) {
@@ -241,6 +241,16 @@ function sendMessage(event) {
 }
 
 export function initMensajes() {
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    const root = document.getElementById('pageContent');
+    if (root) {
+      renderLaravelLogin(root, 'Inicia sesión para acceder a los mensajes.');
+    }
+    return;
+  }
+
   const list = document.getElementById('messagesConversationList');
   const search = document.getElementById('messagesSearchInput');
   const composer = document.getElementById('messagesComposer');

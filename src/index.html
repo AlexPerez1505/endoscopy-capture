@@ -28,7 +28,24 @@
         <div class="status-pill" id="connectionStatus">Listo</div>
       </section>
 
-      <section class="layout">
+      <section class="video-card" id="pairCard">
+        <div class="video-header">
+          <div>
+            <h2>Vincular dispositivo de captura</h2>
+            <p>Ingresa el código de 6 dígitos generado en Laravel (Nuevo estudio &rarr; Generar código Tauri) para guardar las capturas con el paciente correcto.</p>
+          </div>
+        </div>
+
+        <form id="pairForm" class="controls" style="flex-wrap:wrap;gap:12px;">
+          <input id="pairCodeInput" type="text" inputmode="numeric" maxlength="6" placeholder="000000" style="font-size:20px;letter-spacing:4px;text-align:center;width:140px;padding:10px;border-radius:8px;border:1px solid var(--border,#ccc);" />
+          <button class="btn btn-primary" id="pairSubmitBtn" type="submit">Vincular dispositivo</button>
+          <button class="btn btn-ghost" id="pairSkipBtn" type="button">Detectar cámara sin vincular</button>
+        </form>
+
+        <p id="pairStatusMsg" style="margin-top:10px;color:var(--txt-soft);"></p>
+      </section>
+
+      <section class="layout is-hidden" id="captureLayout">
         <section class="video-card">
           <div class="video-header">
             <div>
@@ -36,20 +53,44 @@
               <p id="deviceLabel">Selecciona un capturador para iniciar.</p>
             </div>
 
-            <div class="recording-indicator" id="recordingIndicator">
-              <span></span>
-              Grabación detenida
+            <div class="video-header-right">
+              <div class="video-view-controls">
+                <button class="btn btn-ghost" id="halfScreenBtn" type="button">
+                  Media pantalla
+                </button>
+
+                <button class="btn btn-ghost" id="fullScreenBtn" type="button">
+                  Pantalla completa
+                </button>
+              </div>
+
+              <div class="recording-indicator" id="recordingIndicator">
+                <span></span>
+                Grabación detenida
+              </div>
             </div>
           </div>
 
-          <div class="video-frame">
-            <video id="preview" autoplay playsinline muted></video>
+          <div class="video-frame" id="videoFrame">
+            <div class="video-crop-wrapper" id="videoCropWrapper">
+              <video id="preview" autoplay playsinline muted></video>
+            </div>
 
             <div class="empty-state" id="emptyState">
               <div class="empty-icon">●</div>
               <h3>Capturador no iniciado</h3>
               <p>Conecta el capturador USB y presiona “Detectar dispositivos”.</p>
             </div>
+
+            <button class="btn btn-ghost video-fullscreen-exit" id="exitFullScreenBtn" type="button">
+              Salir de pantalla completa (Esc)
+            </button>
+
+            <button class="btn video-fullscreen-finish" id="fullscreenFinishStudyBtn" type="button">
+              Finalizar estudio
+            </button>
+
+            <div class="video-toast" id="videoToast"></div>
           </div>
 
           <div class="controls">
@@ -72,6 +113,10 @@
             <button class="btn btn-danger" id="stopRecordBtn" type="button" disabled>
               Detener grabación
             </button>
+
+            <button class="btn btn-primary" id="finishStudyBtn" type="button">
+              Finalizar estudio
+            </button>
           </div>
         </section>
 
@@ -87,38 +132,63 @@
             </div>
           </div>
 
-          <div class="panel-block">
-            <h2>Capturador</h2>
-
-            <label class="field">
-              <span>Dispositivo</span>
-              <select id="deviceSelect">
-                <option value="__default_camera__">Camara predeterminada</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="panel-block">
-            <h2>Mejoras visuales</h2>
-
-            <label class="range-field">
-              <span>Brillo</span>
-              <input id="brightnessInput" type="range" min="0.7" max="1.4" step="0.01" value="1" />
-            </label>
-
-            <label class="range-field">
-              <span>Contraste</span>
-              <input id="contrastInput" type="range" min="0.7" max="1.6" step="0.01" value="1" />
-            </label>
-
-            <label class="range-field">
-              <span>Saturación</span>
-              <input id="saturationInput" type="range" min="0.5" max="1.8" step="0.01" value="1" />
-            </label>
-
-            <button class="btn btn-ghost full" id="resetFiltersBtn" type="button">
-              Restaurar imagen
+          <div class="panel-block config-panel" id="configPanel">
+            <button class="config-panel-header" id="configPanelToggle" type="button">
+              <h2>Configuración</h2>
+              <span class="config-panel-arrow" aria-hidden="true">▾</span>
             </button>
+
+            <div class="config-panel-body" id="configPanelBody">
+              <div class="config-section">
+                <h3>Capturador</h3>
+
+                <label class="field">
+                  <span>Dispositivo</span>
+                  <select id="deviceSelect">
+                    <option value="__default_camera__">Camara predeterminada</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="config-section">
+                <h3>Modo enfoque</h3>
+                <p style="color:var(--txt-soft,#94a3b8);font-size:12px;margin:0 0 10px;">
+                  Recorta el panel de información de la derecha del procesador para ver y guardar solo la imagen del endoscopio.
+                </p>
+
+                <button class="btn btn-outline full" id="focusModeToggleBtn" type="button">
+                  Activar modo enfoque
+                </button>
+
+                <label class="range-field" id="focusCropField" style="margin-top:12px;display:none;">
+                  <span>Recorte lateral derecho (<span id="focusCropValue">28</span>%)</span>
+                  <input id="focusCropInput" type="range" min="0" max="50" step="1" value="28" />
+                </label>
+              </div>
+
+              <div class="config-section">
+                <h3>Mejoras visuales</h3>
+
+                <label class="range-field">
+                  <span>Brillo</span>
+                  <input id="brightnessInput" type="range" min="0.7" max="1.4" step="0.01" value="1" />
+                </label>
+
+                <label class="range-field">
+                  <span>Contraste</span>
+                  <input id="contrastInput" type="range" min="0.7" max="1.6" step="0.01" value="1" />
+                </label>
+
+                <label class="range-field">
+                  <span>Saturación</span>
+                  <input id="saturationInput" type="range" min="0.5" max="1.8" step="0.01" value="1" />
+                </label>
+
+                <button class="btn btn-ghost full" id="resetFiltersBtn" type="button">
+                  Restaurar imagen
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="panel-block">
@@ -140,10 +210,35 @@
               <p>Sistema listo.</p>
             </div>
           </div>
+
+          <div class="panel-block">
+            <h2>Imágenes de este estudio</h2>
+            <div id="captureThumbnails" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+          </div>
         </aside>
       </section>
 
       <canvas id="snapshotCanvas"></canvas>
+
+      <div id="captureMediaModal" class="capture-media-modal is-hidden">
+        <div class="capture-media-modal-backdrop" id="captureMediaModalBackdrop"></div>
+        <div class="capture-media-modal-content">
+          <button class="capture-media-modal-close" id="captureMediaModalClose" type="button" aria-label="Cerrar">&times;</button>
+          <img id="captureMediaModalImage" class="is-hidden" alt="Captura" />
+          <video id="captureMediaModalVideo" class="is-hidden" controls playsinline></video>
+        </div>
+      </div>
+
+      <div id="finishStudyModal" class="is-hidden" style="position:fixed;inset:0;background:rgba(2,6,23,0.85);display:grid;place-items:center;z-index:50;padding:32px;">
+        <div style="background:var(--panel-bg,#0f172a);border-radius:16px;padding:28px;max-width:900px;width:100%;max-height:85vh;overflow-y:auto;">
+          <h2 style="margin-bottom:4px;">Estudio finalizado</h2>
+          <p id="finishStudySummary" style="color:var(--txt-soft,#94a3b8);margin-bottom:18px;">Imágenes y videos guardados en Laravel para este paciente.</p>
+          <div id="finishStudyThumbnails" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;"></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="finishStudyGalleryBtn" type="button">Ver galería</button>
+          </div>
+        </div>
+      </div>
     </main>
 
     <script type="module" src="./main.js"></script>

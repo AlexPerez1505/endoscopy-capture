@@ -3,7 +3,7 @@
     <h2>Agenda</h2>
     <p>Gestiona tus citas y procedimientos</p>
   </div>
-  <button class="btn-primary" data-nav="nuevo-estudio">
+  <button class="btn-primary" data-nav="pacientes">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Agendar cita
   </button>
@@ -11,27 +11,111 @@
 
 <div class="agenda-body rise d3">
   <div class="agenda-left">
-    <!-- Toolbar: navegación mes -->
+    <!-- Tarjetas resumen -->
+    <div class="summary-cards">
+      <div class="sum-card sum-done">
+        <div class="sum-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="sum-text">
+          <div class="sum-title">Completado</div>
+          <div class="sum-num" id="cntDone">0</div>
+          <div class="sum-lbl">Citas completadas</div>
+        </div>
+      </div>
+      <div class="sum-card sum-wait">
+        <div class="sum-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="sum-text">
+          <div class="sum-title">En espera</div>
+          <div class="sum-num" id="cntWait">0</div>
+          <div class="sum-lbl">Citas programadas</div>
+        </div>
+      </div>
+      <div class="sum-card sum-cancel">
+        <div class="sum-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+        <div class="sum-text">
+          <div class="sum-title">Cancelado</div>
+          <div class="sum-num" id="cntCancel">0</div>
+          <div class="sum-lbl">Citas canceladas</div>
+        </div>
+      </div>
+      <div class="sum-card sum-soon">
+        <div class="sum-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="sum-text">
+          <div class="sum-title">Próximos</div>
+          <div class="sum-num" id="cntSoon">0</div>
+          <div class="sum-lbl">Próximos pacientes</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toolbar: pestañas de vista + navegación mes -->
     <div class="cal-toolbar">
       <div class="view-tabs">
-        <button class="view-tab active">Mes</button>
-        <button class="view-tab" disabled title="Próximamente">Semana</button>
-        <button class="view-tab" disabled title="Próximamente">Día</button>
+        <button class="view-tab active" data-view="mes">Mes</button>
+        <button class="view-tab" data-view="semana">Semana</button>
       </div>
       <div class="toolbar-right">
         <div class="month-nav">
-          <button id="prevMonth" aria-label="Mes anterior">
+          <button id="prevMonth" aria-label="Anterior">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div class="month-label">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span id="mesActual">Mes</span>
-            <span id="anioActual">2024</span>
+            <div class="picker-wrap">
+              <span id="mesActual">Mes</span>
+              <div class="picker-dropdown" id="mesPicker"><div class="picker-title">Mes</div></div>
+            </div>
+            <div class="picker-wrap">
+              <span class="year" id="anioActual">2024</span>
+              <div class="picker-dropdown" id="anioPicker"><div class="picker-title">Año</div></div>
+            </div>
           </div>
-          <button id="nextMonth" aria-label="Mes siguiente">
+          <button id="nextMonth" aria-label="Siguiente">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
+        <button class="toolbar-filter-btn" id="toolbarFilterBtn" title="Mostrar filtros" aria-label="Filtros">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+          </svg>
+        </button>
+        <div class="filter-dropdown" id="toolbarFilterDropdown">
+          <h4>Filtrar citas</h4>
+          <div class="filter-list">
+            <label class="filter-row" data-filter="ev-done">
+              <input type="checkbox" checked>
+              <span class="filter-indicator done"></span>
+              <span class="filter-text">Completado</span>
+            </label>
+            <label class="filter-row" data-filter="ev-wait">
+              <input type="checkbox" checked>
+              <span class="filter-indicator wait"></span>
+              <span class="filter-text">En espera</span>
+            </label>
+            <label class="filter-row" data-filter="ev-cancel">
+              <input type="checkbox" checked>
+              <span class="filter-indicator cancel"></span>
+              <span class="filter-text">Cancelado</span>
+            </label>
+            <label class="filter-row" data-filter="ev-soon">
+              <input type="checkbox" checked>
+              <span class="filter-indicator soon"></span>
+              <span class="filter-text">Próximo</span>
+            </label>
+          </div>
+        </div>
+        <button class="agenda-expand-btn" id="agendaExpandBtn" title="Expandir/Colapsar" aria-label="Expandir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -44,34 +128,40 @@
         <tbody id="calBody"></tbody>
       </table>
     </div>
+
+    <!-- Vista Semana -->
+    <div class="week-grid" id="weekGrid" style="position:relative">
+      <table class="week-table">
+        <thead id="weekHead"></thead>
+        <tbody id="weekBody"></tbody>
+      </table>
+    </div>
   </div>
 
   <div class="agenda-right">
-    <!-- Filtros -->
+    <!-- Filtros rápidos -->
     <section class="filter-card">
-      <h4>Filtrar citas</h4>
-      <div class="filter-list">
-        <label class="filter-row">
-          <input type="checkbox" checked data-filter="ev-done">
-          <span class="filter-indicator done"></span>
-          <span class="filter-text">Completado</span>
-        </label>
-        <label class="filter-row">
-          <input type="checkbox" checked data-filter="ev-wait">
-          <span class="filter-indicator wait"></span>
-          <span class="filter-text">En espera</span>
-        </label>
-        <label class="filter-row">
-          <input type="checkbox" checked data-filter="ev-cancel">
-          <span class="filter-indicator cancel"></span>
-          <span class="filter-text">Cancelado</span>
-        </label>
-        <label class="filter-row">
-          <input type="checkbox" checked data-filter="ev-soon">
-          <span class="filter-indicator soon"></span>
-          <span class="filter-text">Próxima</span>
-        </label>
-      </div>
+      <h4>Filtros rápidos</h4>
+      <label class="filter-item" data-filter="ev-done">
+        <input type="checkbox" checked>
+        <span class="filter-dot" style="background:linear-gradient(to bottom,#042226 20%,#4C9242 80%);border:1.38px solid #284D23"></span>
+        Completado
+      </label>
+      <label class="filter-item" data-filter="ev-wait">
+        <input type="checkbox" checked>
+        <span class="filter-dot" style="background:linear-gradient(to bottom,#351909 29%,#9B491A 100%);border:1.24px solid #E75D01"></span>
+        En espera
+      </label>
+      <label class="filter-item" data-filter="ev-cancel">
+        <input type="checkbox" checked>
+        <span class="filter-dot" style="background:linear-gradient(to bottom,#251117 38%,#D90000 100%);border:1.27px solid #D90000"></span>
+        Cancelado
+      </label>
+      <label class="filter-item" data-filter="ev-soon">
+        <input type="checkbox" checked>
+        <span class="filter-dot" style="background:linear-gradient(to bottom,#0B1331 43%,#B263FF 100%);border:1.27px solid #B263FF"></span>
+        Próximamente
+      </label>
     </section>
 
     <!-- Próximas citas -->
@@ -82,4 +172,29 @@
       </div>
     </section>
   </div>
+</div>
+
+<!-- Modal de citas (vista semana / "+X más") -->
+<div class="wk-modal-overlay" id="wkModalOverlay">
+  <div class="wk-modal">
+    <div class="wk-modal-header">
+      <div class="wk-modal-title" id="wkModalTitle"></div>
+      <button class="wk-modal-close" id="wkModalClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="wk-modal-body" id="wkModalBody"></div>
+  </div>
+</div>
+
+<!-- Popup hover/click de eventos -->
+<div id="evPopup">
+  <div class="ev-pop-head">
+    <div class="ev-pop-avatar" id="evPopAvatar">HP</div>
+    <div>
+      <div class="ev-pop-name" id="evPopName"></div>
+    </div>
+  </div>
+  <div class="ev-pop-date" id="evPopDate"></div>
+  <div class="ev-pop-info" id="evPopInfo"></div>
+  <div id="evPopBadge" class="ev-pop-badge"></div>
+  <div id="evPopBtns"></div>
 </div>

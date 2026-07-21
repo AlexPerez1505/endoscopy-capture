@@ -315,154 +315,269 @@
       </div>
     </div>
 
+
     <div class="settings-panel" data-settings-panel="plan">
-      <div class="settings-plan-layout">
-        <div class="settings-plan-main">
-          <article class="settings-card settings-plan-card rise d2">
-            <header class="settings-card-head">
+      <div class="pl-grid">
+        <div class="cfg-col">
+          <article class="card rise d2">
+            <div class="cfg-card-head">
               <h2>Plan y almacenamiento</h2>
-              <p>Administra tu plan actual, uso de almacenamiento y opciones disponibles.</p>
-            </header>
+              <p>Administra tu plan actual, uso de almacenamiento y opciones disponibles</p>
+            </div>
 
-            <div class="settings-plan-section-label">Tu plan actual</div>
-            <section class="settings-current-plan">
-              <span class="settings-plan-icon purple">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m2 8 4 10h12l4-10-6 4-4-7-4 7-6-4z"></path><path d="M6 21h12"></path></svg>
+            <div class="pl-sub">Tu plan actual</div>
+            <div class="pl-plan">
+              <span class="pl-ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l4 3 5-7 5 7 4-3-2 12H5L3 8z"/></svg>
               </span>
-              <div class="settings-current-plan-copy">
-                <strong data-config-bind="planLabel">--</strong>
-                <span class="settings-pill" data-config-bind="planStatus">--</span>
-                <small>Renovacion <b data-plan-bind="renewalDate">--</b></small>
+              <div class="pl-info">
+                <b data-config-bind="planLabel">Plan --</b>
+                <span class="badge" data-config-bind="planStatus">--</span>
+                <p>Renovación <span data-plan-bind="renewalDate">--</span></p>
+                <p><span data-plan-bind="storagePerPerson">--</span> por persona · <span data-plan-bind="personCount">--</span> persona(s) activa(s)</p>
               </div>
-              <button class="settings-outline-btn" type="button" data-plan-action="manage">Gestionar plan</button>
-            </section>
+              <button type="button" class="pl-btn" data-plan-action="manage">Gestionar plan</button>
+            </div>
 
-            <section class="settings-storage-panel">
-              <header class="settings-storage-head">
-                <span class="settings-mini-icon cyan">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H8a6 6 0 1 1 5.7-7.9A4.5 4.5 0 1 1 17.5 19z"></path></svg>
-                </span>
-                <div>
-                  <h3>Almacenamiento en la nube</h3>
-                  <p><b data-plan-bind="storageUsedText">--</b> de <b data-plan-bind="storageTotalText">--</b> utilizados</p>
-                </div>
-              </header>
-              <div class="settings-storage-progress" aria-label="Uso de almacenamiento">
-                <span data-plan-progress="storage"></span>
+            <div class="pl-detail" style="margin-top:18px">
+              <div class="store-top">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+                Almacenamiento en la nube
               </div>
-              <div class="settings-storage-legend">
-                <span><i class="used"></i> Usado: <b data-plan-bind="storageUsedText">--</b></span>
-                <span><i></i> Disponible: <b data-plan-bind="storageAvailableText">--</b></span>
+              <div class="store-meta" style="margin-top:11px"><span><b data-plan-bind="storageUsedText">--</b> de <b data-plan-bind="storageTotalText">--</b> utilizados</span></div>
+              <div class="store-bar"><i data-plan-progress="storage"></i></div>
+              <div class="store-legend">
+                <span><i class="used"></i>Usado: <b data-plan-bind="storageUsedText">--</b></span>
+                <span><i class="free"></i>Disponible: <b data-plan-bind="storageAvailableText">--</b></span>
               </div>
-              <div class="settings-storage-types" data-storage-categories>
-                <div class="settings-storage-type" data-storage-category="images">
-                  <span class="settings-mini-icon purple">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
-                  </span>
-                  <small>Imagenes</small>
-                  <strong data-storage-bind="images.value">--</strong>
-                  <em data-storage-bind="images.percent">--</em>
-                </div>
-                <div class="settings-storage-type" data-storage-category="videos">
-                  <span class="settings-mini-icon green">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-3v10L15 14v-4z"></path><rect x="3" y="6" width="12" height="12" rx="2"></rect></svg>
-                  </span>
-                  <small>Videos</small>
-                  <strong data-storage-bind="videos.value">--</strong>
-                  <em data-storage-bind="videos.percent">--</em>
-                </div>
-                <div class="settings-storage-type" data-storage-category="other">
-                  <span class="settings-mini-icon amber">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
-                  </span>
-                  <small>Otros archivos</small>
-                  <strong data-storage-bind="other.value">--</strong>
-                  <em data-storage-bind="other.percent">--</em>
-                </div>
+
+              <div class="pl-files">
+                <div class="pl-file"><span class="fi c2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span><div class="ft">Imágenes</div><div class="fv" data-storage-bind="images.value">--</div><div class="fp" data-storage-bind="images.percent">--</div></div>
+                <div class="pl-file"><span class="fi c3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span><div class="ft">Videos</div><div class="fv" data-storage-bind="videos.value">--</div><div class="fp" data-storage-bind="videos.percent">--</div></div>
+                <div class="pl-file"><span class="fi c4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><div class="ft">Otros archivos</div><div class="fv" data-storage-bind="other.value">--</div><div class="fp" data-storage-bind="other.percent">--</div></div>
               </div>
-              <button class="settings-storage-detail" type="button" data-plan-action="storage-detail">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path></svg>
-                <span>Ver detalle de almacenamiento</span>
-              </button>
-            </section>
+
+              <div class="pl-detail">
+                <div class="t">¿Qué ocupa espacio?</div>
+                <div class="d">Consulta el detalle de los archivos que más almacenamiento consumen</div>
+                <button type="button" class="tbl-link" data-plan-action="storage-detail"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg> Ver detalle de almacenamiento</button>
+              </div>
+            </div>
           </article>
 
-          <article class="settings-card settings-plan-card settings-upgrade-card rise d3">
-            <header class="settings-card-head">
-              <h2>Necesitas mas espacio?</h2>
-              <p>Actualiza tu plan y obten mas almacenamiento y beneficios adicionales.</p>
-            </header>
-            <div class="settings-plan-options" data-plan-options></div>
+          <article class="card rise d4">
+            <div class="cfg-card-head"><h2>¿Necesitas más espacio?</h2><p>Actualiza tu plan y obtén más almacenamiento y beneficios adicionales</p></div>
+            <div class="pl-plans" data-plan-options></div>
           </article>
         </div>
 
-        <aside class="settings-plan-side">
-          <article class="settings-card settings-side-plan-card rise d2">
-            <header class="settings-card-head">
-              <h2>Resumen de tu plan</h2>
-            </header>
-            <div class="settings-summary-list">
-              <div><span>Plan actual</span><strong data-config-bind="planLabel">--</strong></div>
-              <div><span>Estado</span><strong class="success" data-config-bind="planStatus">--</strong></div>
-              <div><span>Renovacion</span><strong data-plan-bind="renewalDate">--</strong></div>
-              <div><span>Miembros incluidos</span><strong data-config-bind="memberLimit">--</strong></div>
-            </div>
+        <div class="cfg-col">
+          <article class="card rise d3">
+            <div class="cfg-card-head"><h2>Resumen de tu plan</h2></div>
+            <div class="pl-summary-row"><span class="k">Plan actual</span><span class="v" data-config-bind="planLabel">--</span></div>
+            <div class="pl-summary-row"><span class="k">Personas activas</span><span class="v" data-plan-bind="personCount">--</span></div>
+            <div class="pl-summary-row"><span class="k">Almacenamiento/persona</span><span class="v" data-plan-bind="storagePerPerson">--</span></div>
+            <div class="pl-summary-row"><span class="k">Almacenamiento total</span><span class="v" data-plan-bind="storageTotalText">--</span></div>
+            <div class="pl-summary-row"><span class="k">Estado</span><span class="v success" data-config-bind="planStatus">--</span></div>
+            <div class="pl-summary-row"><span class="k">Renovación</span><span class="v" data-plan-bind="renewalDate">--</span></div>
+            <div class="pl-summary-row"><span class="k">Método de pago</span><span class="v pl-pay" data-plan-bind="paymentMethod">--</span></div>
           </article>
 
-          <article class="settings-card settings-side-plan-card rise d3">
-            <header class="settings-card-head">
-              <h2>Facturacion y pago</h2>
-            </header>
-            <div class="settings-summary-list">
-              <div><span>Proxima fecha de cobro</span><strong data-plan-bind="nextChargeDate">--</strong></div>
-              <div><span>Historial de facturas</span><button type="button" data-plan-action="invoices">Ver</button></div>
-            </div>
-            <button class="settings-action-wide" type="button" data-plan-action="payment-method">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path></svg>
-              <span>Agregar metodo de pago</span>
-            </button>
+          <article class="card rise d4">
+            <div class="cfg-card-head"><h2>Facturación y pago</h2></div>
+            <button type="button" class="pl-link" data-plan-action="payment-method"><span>Próxima fecha de cobro</span><span class="v" data-plan-bind="nextChargeDate">--</span></button>
+            <button type="button" class="pl-link" data-plan-action="invoices"><span>Historial de facturas</span><span class="v">Ver</span></button>
+            <button type="button" class="pl-wide-btn" data-plan-action="payment-method"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg><span data-plan-bind="paymentButtonText">Agregar método de pago</span></button>
           </article>
 
-          <article class="settings-card settings-side-plan-card rise d4">
-            <header class="settings-card-head">
-              <h2>Historial de uso</h2>
-              <p>Tu consumo de almacenamiento en los ultimos 6 meses.</p>
-            </header>
-            <div class="settings-usage-chart" data-usage-chart></div>
+          <article class="card rise d5">
+            <div class="cfg-card-head"><h2>Historial de uso</h2><p>Tu consumo de almacenamiento en los últimos 6 meses</p></div>
+            <div class="pl-chart-wrap"><div class="settings-usage-chart" data-usage-chart></div></div>
           </article>
 
-          <article class="settings-card settings-side-plan-card settings-recommendation-card rise d5">
-            <header class="settings-recommendation-head">
-              <span class="settings-mini-icon amber">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"></path></svg>
-              </span>
-              <h2>Recomendaciones</h2>
-            </header>
-            <p data-plan-bind="recommendationText">Conecta Laravel para ver recomendaciones del uso actual.</p>
-            <button class="settings-action-wide" type="button" data-plan-action="recommendations">
-              <span>Ver recomendaciones</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-            </button>
+          <article class="card rise d5">
+            <div class="pl-reco"><span class="ri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg></span><h2>Recomendaciones</h2></div>
+            <p data-plan-bind="recommendationText">--</p>
+            <button type="button" class="pl-wide-btn" data-plan-action="recommendations">Ver recomendaciones <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg></button>
           </article>
-        </aside>
+        </div>
       </div>
     </div>
 
     <div class="settings-panel" data-settings-panel="integraciones">
-      <article class="settings-card rise d2">
-        <header class="settings-card-head">
-          <h2>Integraciones</h2>
-          <p>Conexiones locales usadas por la app de escritorio.</p>
+      <div class="settings-grid-2">
+        <article class="settings-card rise d2">
+          <header class="settings-card-head">
+            <h2>Información del sistema</h2>
+            <p>Estado actual de la aplicación de escritorio y del backend.</p>
+          </header>
+
+          <div class="cfg-info-row">
+            <span>Versión actual</span>
+            <strong>2.41</strong>
+          </div>
+          <div class="cfg-info-row">
+            <span>Estado de la conexión</span>
+            <strong class="cfg-online" id="cfgConnectionStatus">Comprobando...</strong>
+          </div>
+          <div class="cfg-info-row">
+            <span>Endpoint Laravel</span>
+            <strong id="cfgApiEndpoint">--</strong>
+          </div>
+
+          <label class="settings-field cfg-endpoint-field">
+            <span>Endpoint Laravel</span>
+            <input data-local-setting="api_url" type="url" placeholder="https://sistema.enclaii.com">
+          </label>
+        </article>
+
+        <article class="settings-card rise d2">
+          <header class="settings-card-head">
+            <h2>Firma médica</h2>
+            <p>Estado de la firma digital guardada en Laravel.</p>
+          </header>
+
+          <div class="settings-row compact">
+            <span class="settings-copy">
+              <strong data-config-bind="signatureStatus">Sin información</strong>
+              <small>La firma se administra y almacena en el backend.</small>
+            </span>
+            <span class="settings-pill" data-config-bind="signatureUpdated">--</span>
+          </div>
+        </article>
+      </div>
+
+      <article class="settings-card rise d3">
+        <header class="settings-card-head settings-card-head-inline">
+          <div>
+            <h2>Usuarios de la clínica</h2>
+            <p>Miembros activos e invitaciones pendientes.</p>
+          </div>
         </header>
-        <label class="settings-field">
-          <span>Endpoint Laravel</span>
-          <input data-local-setting="api_url" type="url" placeholder="http://localhost:8000">
-        </label>
-        <div class="settings-row compact">
-          <span class="settings-copy"><strong>Firma medica</strong><small data-config-bind="signatureStatus">Sin informacion</small></span>
-          <span class="settings-pill" data-config-bind="signatureUpdated">--</span>
+
+        <div class="gp-table-wrap">
+          <table class="gp-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Último acceso</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="clinicMembersBody">
+              <tr>
+                <td colspan="5" class="gp-empty">Cargando usuarios...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </article>
+
+      <article class="settings-card rise d4">
+        <div class="int-backup-head">
+          <div>
+            <h2>Copias de configuración</h2>
+            <p>Protege preferencias y datos profesionales sin incluir información clínica ni credenciales.</p>
+          </div>
+
+          <button type="button" class="settings-outline-btn" id="intBackupOpen">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Crear copia
+          </button>
+        </div>
+
+        <div class="int-backup-summary">
+          <div>
+            <strong id="intBackupLatestTitle">Todavía no hay copias</strong>
+            <span id="intBackupLatestDate">Crea la primera para proteger tu configuración actual.</span>
+          </div>
+          <span class="settings-pill" id="intBackupCount">0 copias</span>
+        </div>
+
+        <div class="int-backup-list-head">
+          <strong>Historial reciente</strong>
+          <span>Hasta 10 registros visibles</span>
+        </div>
+
+        <div class="int-backup-list" id="intBackupList">
+          <div class="int-backup-empty">Cargando copias...</div>
+        </div>
+      </article>
+
+      <div class="int-bk-overlay" id="intBackupModal" aria-hidden="true">
+        <form class="int-bk-modal" id="intBackupForm">
+          <div class="int-bk-hdr">
+            <div>
+              <div class="int-bk-title">Crear copia de configuración</div>
+              <div class="int-bk-sub">Podrás restaurarla más adelante o descargarla como archivo JSON.</div>
+            </div>
+
+            <button type="button" class="int-bk-close" id="intBackupClose" aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="int-bk-body">
+            <label class="settings-field">
+              <span>Nombre de la copia</span>
+              <input id="intBackupName" name="name" type="text" maxlength="100" required>
+            </label>
+
+            <div class="int-bk-modes">
+              <label class="int-bk-mode">
+                <input type="radio" name="mode" value="complete" checked>
+                <span>
+                  <strong>Copia completa</strong>
+                  <small>Preferencias y perfil profesional.</small>
+                </span>
+              </label>
+
+              <label class="int-bk-mode">
+                <input type="radio" name="mode" value="custom">
+                <span>
+                  <strong>Personalizada</strong>
+                  <small>Elige las secciones que se guardarán.</small>
+                </span>
+              </label>
+            </div>
+
+            <div class="int-bk-scopes" id="intBackupScopes">
+              <label class="int-bk-scope">
+                <input type="checkbox" name="scope[]" value="general" checked>
+                <span>
+                  <strong>Preferencias generales</strong>
+                  <small>Formato, vista, accesibilidad y notificaciones.</small>
+                </span>
+              </label>
+
+              <label class="int-bk-scope">
+                <input type="checkbox" name="scope[]" value="profile" checked>
+                <span>
+                  <strong>Perfil profesional</strong>
+                  <small>Teléfono, especialidad, cédula, área médica y puesto.</small>
+                </span>
+              </label>
+            </div>
+
+            <div class="int-bk-safe">
+              La copia se cifra en la base de datos. Nunca incluye contraseñas, pacientes, estudios, archivos ni tokens secretos.
+            </div>
+          </div>
+
+          <div class="int-bk-footer">
+            <button type="button" class="int-bk-btn cancel" id="intBackupCancel">Cancelar</button>
+            <button type="submit" class="int-bk-btn submit" id="intBackupSubmit">Crear copia</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <div class="settings-panel" data-settings-panel="seguridad">
@@ -489,26 +604,76 @@
       </article>
     </div>
 
+
+
     <div class="settings-panel" data-settings-panel="perfil">
-      <article class="settings-card rise d2">
-        <header class="settings-card-head">
-          <h2>Perfil</h2>
-          <p>Informacion principal de tu cuenta Laravel.</p>
-        </header>
-        <div class="settings-profile-card">
-          <span data-config-bind="userInitials">DR</span>
-          <div>
-            <strong data-config-bind="userName">Doctor</strong>
-            <small data-config-bind="userRole">Medico</small>
+      <div class="pf-head"><h2>Perfil</h2><p>Gestiona tu cuenta del sistema</p></div>
+
+      <div class="pf-top">
+        <article class="card rise d2">
+          <div class="pf-title">Foto de perfil</div>
+          <div class="pf-photo">
+            <div class="pf-ava-wrap">
+              <img class="pf-ava" id="pfAva" alt="Foto de perfil" style="display:none">
+              <div class="pf-ava pf-ava-empty" id="pfEmpty" style="display:grid;place-items:center;color:var(--txt-soft)"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+            </div>
+            <div class="pf-photo-btns">
+              <button type="button" class="pf-edit-btn" id="pfEdit">Editar foto <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button type="button" class="pf-del" id="pfDel">Eliminar foto <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+            <input type="file" id="pfPhoto" accept="image/*" hidden>
           </div>
-        </div>
-        <div class="settings-profile-grid">
-          <label class="settings-field"><span>Correo</span><input data-config-bind="userEmail" readonly></label>
-          <label class="settings-field"><span>Clinica</span><input data-config-bind="clinicName" readonly></label>
-          <label class="settings-field"><span>Especialidad</span><input data-config-bind="specialty" readonly></label>
-          <label class="settings-field"><span>Cedula profesional</span><input data-config-bind="professionalLicense" readonly></label>
-        </div>
-      </article>
+        </article>
+
+        <article class="card rise d3">
+          <div class="pf-title">1.- Información de la cuenta</div>
+          <div class="pf-2">
+            <div class="pf-field"><label>Nombre(s)</label><input class="pf-input" type="text" name="name" data-profile-field="name"></div>
+            <div class="pf-field"><label>Apellido paterno</label><input class="pf-input" type="text" name="apellido_paterno" data-profile-field="apellido_paterno"></div>
+            <div class="pf-field"><label>Apellido materno</label><input class="pf-input" type="text" name="apellido_materno" data-profile-field="apellido_materno"></div>
+            <div class="pf-field"><label>Correo electrónico</label><input class="pf-input" type="email" name="email" data-profile-field="email"></div>
+            <div class="pf-field"><label>Teléfono</label><input class="pf-input" type="tel" name="phone" data-profile-field="phone"></div>
+            <div class="pf-field"><label>Fecha de nacimiento</label><div class="pf-ico-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><input class="pf-input" type="date" name="fecha_nacimiento" data-profile-field="fecha_nacimiento"></div></div>
+          </div>
+          <div class="pf-field" style="margin-top:14px;max-width:calc(50% - 7px)"><label>Sexo</label><div class="pf-select"><select name="sexo" data-profile-field="sexo"><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option><option value="Otro">Otro</option></select><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></div></div>
+        </article>
+
+        <article class="card rise d4">
+          <div class="pf-title">2.- Información profesional</div>
+          <div class="pf-field"><label>Especialidad</label><input class="pf-input" type="text" name="specialty" data-profile-field="specialty"></div>
+          <div class="pf-field"><label>Subespecialidad (opcional)</label><input class="pf-input" type="text" name="subespecialidad" data-profile-field="subespecialidad"></div>
+          <div class="pf-field"><label>Cédula profesional</label><input class="pf-input" type="text" name="professional_license" data-profile-field="professional_license"></div>
+          <div class="pf-field"><label>Universidad</label><input class="pf-input" type="text" name="universidad" data-profile-field="universidad"></div>
+        </article>
+      </div>
+
+      <div class="pf-bottom">
+        <article class="card rise d4">
+          <div class="pf-title">3.- Información de la clínica</div>
+          <div class="pf-2">
+            <div class="pf-field"><label>Nombre de la clínica</label><input class="pf-input" type="text" name="clinica_nombre" data-profile-field="clinica_nombre"></div>
+            <div class="pf-field"><label>Ciudad</label><input class="pf-input" type="text" name="clinica_ciudad" data-profile-field="clinica_ciudad"></div>
+            <div class="pf-field"><label>Dirección</label><input class="pf-input" type="text" name="clinica_direccion" data-profile-field="clinica_direccion"></div>
+            <div class="pf-field"><label>Código postal</label><input class="pf-input" type="text" name="clinica_codigo_postal" data-profile-field="clinica_codigo_postal"></div>
+            <div class="pf-field"><label>Teléfono de la clínica u hospital</label><input class="pf-input" type="tel" name="clinica_telefono" data-profile-field="clinica_telefono"></div>
+            <div class="pf-field"><label>Estado</label><input class="pf-input" type="text" name="clinica_estado" data-profile-field="clinica_estado"></div>
+          </div>
+        </article>
+
+        <article class="card rise d5">
+          <div class="pf-title">4.- Información fiscal <small>(opcional)</small></div>
+          <div class="pf-2">
+            <div class="pf-field"><label>RFC</label><input class="pf-input" type="text" name="rfc" data-profile-field="rfc"></div>
+            <div class="pf-field"><label>Razón social</label><input class="pf-input" type="text" name="razon_social" data-profile-field="razon_social"></div>
+          </div>
+          <div class="pf-field" style="margin-top:14px"><label>Régimen fiscal</label><div class="pf-select"><select name="regimen_fiscal" data-profile-field="regimen_fiscal"><option value="">-- Selecciona tu régimen --</option><option value="601 - General de Ley Personas Morales">601 - General de Ley Personas Morales</option><option value="605 - Sueldos y Salarios e Ingresos Asimilados">605 - Sueldos y Salarios e Ingresos Asimilados</option><option value="606 - Arrendamiento">606 - Arrendamiento</option><option value="608 - Demás Ingresos">608 - Demás Ingresos</option><option value="612 - Personas Físicas con Actividades Empresariales y Profesionales">612 - Personas Físicas con Actividades Empresariales y Profesionales</option><option value="616 - Sin Obligaciones Fiscales">616 - Sin Obligaciones Fiscales</option><option value="621 - Incorporación Fiscal">621 - Incorporación Fiscal</option><option value="626 - Régimen Simplificado de Confianza (RESICO)">626 - Régimen Simplificado de Confianza (RESICO)</option></select><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg></div></div>
+          <div class="pf-field"><label>Correo de facturación</label><input class="pf-input" type="email" name="correo_facturacion" data-profile-field="correo_facturacion"></div>
+          <div class="pf-field" style="margin-top:18px"><label>Constancia de situación fiscal</label><div class="csf-wrap" id="csfWrap"><div id="csfPreview" style="display:none"></div><div id="csfUploadArea" class="csf-upload-area"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><p>Arrastra aquí o <button type="button" id="csfPickBtn" class="csf-link-btn">selecciona el archivo</button></p><span>PDF, JPG o PNG · máx. 8 MB</span></div><div id="csfActions" class="csf-actions" style="display:none"><button type="button" id="csfChangeBtn" class="csf-action-btn">Cambiar</button><button type="button" id="csfDeleteBtn" class="csf-action-btn csf-action-del">Eliminar</button></div><input type="file" id="csfInput" accept=".pdf,.jpg,.jpeg,.png" hidden><div id="csfStatus" class="csf-status" style="display:none"></div></div></div>
+        </article>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;margin-top:18px"><button type="button" id="pfSaveBtn" class="pf-save-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span id="pfSaveTxt">Guardar cambios</span></button></div>
     </div>
+
   </div>
 </section>

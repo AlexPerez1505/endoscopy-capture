@@ -711,6 +711,23 @@
   background-color:#879087;
 }
 
+.gallery-viewer-video{
+  display:block;
+  width:100%;
+  min-height:min(72vh, 790px);
+  max-height:min(72vh, 790px);
+  border-radius:13px;
+  background-color:#000;
+}
+
+.gallery-viewer-video.is-hidden{
+  display:none;
+}
+
+.gallery-viewer-image.is-hidden{
+  display:none;
+}
+
 .gallery-viewer-counter,
 .gallery-viewer-mini-icon,
 .gallery-resolution-badge,

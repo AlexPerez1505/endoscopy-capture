@@ -1,7 +1,15 @@
-import { apiBaseUrl, authHeader, laravelFetch } from './laravel.js';
+import { apiBaseUrl, laravelFetch } from './laravel.js';
+
+const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
+const OPEN_PATIENT_STORAGE_KEY = 'enclaii-open-gallery-patient';
+const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
+const GALLERY_ENDPOINT = `${apiBaseUrl()}/api/tauri/galeria`;
+
+const GALLERY_PAGE_SIZE = 15;
 
 let GALLERY_PATIENTS = [];
 let galleryLoadPromise = null;
+let galleryCurrentPage = 1;
 
 const DEFAULT_FILTERS = {
   patient: '',
@@ -21,6 +29,7 @@ let currentViewerMedia = null;
 let defaultGallerySub = '';
 let pendingImageFilter = 'none';
 let appliedImageFilter = 'none';
+let galleryTemplate = '';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -62,6 +71,7 @@ function normalizeGalleryPatient(patient = {}, index = 0) {
 
   return {
     id: String(patient.id ?? patient.patient_id ?? `P-${String(index + 1).padStart(3, '0')}`),
+    patientId: String(patient.patient_id ?? patient.id ?? ''),
     name: String(patient.name || patient.nombre || 'Paciente sin nombre'),
     initials: String(patient.initials || patient.ini || 'PX').slice(0, 3),
     age: String(patient.age || patient.edad || '--'),
@@ -87,6 +97,65 @@ function setGalleryEmptyText(message) {
   if (empty) empty.textContent = message;
 }
 
+function authHeader() {
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  return token ? `Bearer ${token}` : '';
+}
+
+async function loginToLaravel(email, password) {
+  const response = await laravelFetch(LOGIN_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || 'No se pudo iniciar sesion con Laravel.');
+  }
+
+  return payload.token;
+}
+
+function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Laravel.') {
+  root.innerHTML = `
+    <form id="laravelGaleriaLoginForm" style="max-width:420px;margin:42px auto;padding:24px;border:1px solid var(--stroke,#26314a);border-radius:14px;background:var(--card,#101a33);">
+      <strong style="display:block;color:var(--txt,#fff);font-size:16px;margin-bottom:8px;">Conectar Galeria con Laravel</strong>
+      <p style="color:var(--txt-soft,#94a3b8);font-size:13px;line-height:1.5;margin:0 0 18px;">${escapeHtml(message)}</p>
+      <label style="display:block;margin-bottom:12px;">
+        <span style="display:block;font-size:12px;color:var(--txt-soft,#94a3b8);margin-bottom:4px;">Correo</span>
+        <input id="laravelGaleriaEmail" type="email" required style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--stroke,#26314a);background:transparent;color:inherit;" />
+      </label>
+      <label style="display:block;margin-bottom:18px;">
+        <span style="display:block;font-size:12px;color:var(--txt-soft,#94a3b8);margin-bottom:4px;">Contrasena</span>
+        <input id="laravelGaleriaPassword" type="password" required style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--stroke,#26314a);background:transparent;color:inherit;" />
+      </label>
+      <button type="submit" class="btn-primary" style="width:100%;padding:10px;border-radius:8px;">Iniciar sesion</button>
+    </form>`;
+
+  document.getElementById('laravelGaleriaLoginForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById('laravelGaleriaEmail')?.value.trim();
+    const password = document.getElementById('laravelGaleriaPassword')?.value || '';
+    if (!email || !password) return;
+
+    try {
+      const token = await loginToLaravel(email, password);
+      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      if (galleryTemplate) root.innerHTML = galleryTemplate;
+      initGaleria();
+    } catch (error) {
+      console.error(error);
+      renderLaravelLogin(root, error.message || 'No se pudo iniciar sesion.');
+    }
+  });
+}
+
 async function loadGalleryData() {
   if (galleryLoadPromise) return galleryLoadPromise;
 
@@ -95,7 +164,14 @@ async function loadGalleryData() {
     const authorization = authHeader();
     if (authorization) headers.Authorization = authorization;
 
-    const response = await laravelFetch(`${apiBaseUrl()}/tauri/galeria`, { headers });
+    const response = await laravelFetch(GALLERY_ENDPOINT, { headers });
+
+    if (response.status === 401 || response.status === 419) {
+      const error = new Error('Ingresa tus credenciales de Laravel para cargar la galeria.');
+      error.code = 'UNAUTHORIZED';
+      throw error;
+    }
+
     if (!response.ok) {
       throw new Error(`Laravel respondio HTTP ${response.status}`);
     }
@@ -109,6 +185,13 @@ async function loadGalleryData() {
   })().catch(error => {
     console.error('No se pudo cargar la galeria desde Laravel:', error);
     GALLERY_PATIENTS = [];
+
+    if (error.code === 'UNAUTHORIZED') {
+      const root = document.getElementById('pageContent');
+      if (root) renderLaravelLogin(root, error.message);
+      return 'unauthorized';
+    }
+
     setGalleryEmptyText('No se pudo cargar la galeria desde Laravel.');
     return false;
   }).finally(() => {
@@ -275,10 +358,39 @@ function patientRow(patient) {
   `;
 }
 
-function renderGalleryPatients() {
+function renderGalleryPaginationControls(page, totalPages) {
+  const container = document.getElementById('galleryPaginationControls');
+  if (!container) return;
+
+  if (totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = `<button class="page-btn" data-gallery-page="${page - 1}" ${page === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+  const delta = 2;
+  const pages = [];
+
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= delta) pages.push(i);
+    else if (pages[pages.length - 1] !== '...') pages.push('...');
+  }
+
+  pages.forEach(p => {
+    html += p === '...'
+      ? '<button class="page-btn" disabled>&hellip;</button>'
+      : `<button class="page-btn${p === page ? ' active' : ''}" data-gallery-page="${p}">${p}</button>`;
+  });
+
+  html += `<button class="page-btn" data-gallery-page="${page + 1}" ${page === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
+  container.innerHTML = html;
+}
+
+function renderGalleryPatients(page = galleryCurrentPage) {
   const list = document.getElementById('galleryPatientList');
   const empty = document.getElementById('galleryEmptyState');
   const search = document.getElementById('gallerySearchInput');
+  const info = document.getElementById('galleryPaginationInfo');
 
   if (!list || !empty) return;
 
@@ -287,8 +399,24 @@ function renderGalleryPatients() {
     matchesSearch(patient, term) && matchesAppliedFilters(patient)
   );
 
-  list.innerHTML = patients.map(patientRow).join('');
-  empty.classList.toggle('is-visible', patients.length === 0);
+  const total = patients.length;
+  const totalPages = Math.max(Math.ceil(total / GALLERY_PAGE_SIZE), 1);
+  galleryCurrentPage = Math.min(Math.max(page, 1), totalPages);
+
+  const start = (galleryCurrentPage - 1) * GALLERY_PAGE_SIZE;
+  const end = Math.min(start + GALLERY_PAGE_SIZE, total);
+  const pageItems = patients.slice(start, end);
+
+  list.innerHTML = pageItems.map(patientRow).join('');
+  empty.classList.toggle('is-visible', total === 0);
+
+  if (info) {
+    info.textContent = total === 0
+      ? 'Mostrando 0 pacientes'
+      : `Mostrando ${start + 1} a ${end} de ${total} pacientes`;
+  }
+
+  renderGalleryPaginationControls(galleryCurrentPage, totalPages);
 }
 
 function countText(count) {
@@ -409,7 +537,7 @@ function renderPatientMedia() {
 }
 
 function openPatientGallery(patientId) {
-  const patient = GALLERY_PATIENTS.find(item => item.id === patientId);
+  const patient = GALLERY_PATIENTS.find(item => item.id === patientId || item.patientId === patientId);
   if (!patient) return;
 
   currentDetailPatient = patient;
@@ -511,9 +639,65 @@ function renderImageViewer(mediaId) {
 function openImageViewer(mediaId) {
   if (!currentDetailPatient) return;
 
+  const video = document.getElementById('galleryViewerVideo');
+  if (video) {
+    video.pause();
+    video.classList.add('is-hidden');
+    video.removeAttribute('src');
+    video.load();
+  }
+  document.getElementById('galleryViewerImage')?.classList.remove('is-hidden');
+
   document.getElementById('galleryDetailView')?.classList.add('is-hidden');
   document.getElementById('galleryImageViewer')?.classList.remove('is-hidden');
   renderImageViewer(mediaId);
+}
+
+// Reproduce el video dentro de la misma vista del visor (reutilizando el
+// mismo layout que las imagenes), en vez de abrirlo con window.open, que en
+// Tauri termina lanzando el navegador del sistema por fuera de la app.
+function renderVideoViewer(media) {
+  currentViewerMedia = media;
+
+  const imageEl = document.getElementById('galleryViewerImage');
+  const video = document.getElementById('galleryViewerVideo');
+
+  imageEl?.classList.add('is-hidden');
+
+  if (video) {
+    video.src = media.src;
+    video.classList.remove('is-hidden');
+    video.load();
+  }
+
+  const counter = document.getElementById('galleryViewerCounter');
+  const frameTime = document.getElementById('galleryViewerFrameTime');
+  const infoId = document.getElementById('galleryInfoId');
+  const infoDate = document.getElementById('galleryInfoDate');
+  const infoFrame = document.getElementById('galleryInfoFrame');
+  const stripTitle = document.getElementById('galleryStudyStripTitle');
+  const thumbs = document.getElementById('galleryStudyThumbs');
+
+  if (counter) counter.textContent = 'Video';
+  if (frameTime) frameTime.textContent = media.time;
+  if (infoId) infoId.textContent = 'VID-0001';
+  if (infoDate) infoDate.textContent = `${media.date} - ${media.time}`;
+  if (infoFrame) infoFrame.textContent = media.time;
+  if (stripTitle) stripTitle.textContent = 'Video del estudio';
+  if (thumbs) thumbs.innerHTML = '';
+
+  const headSub = document.getElementById('headSub');
+  if (headSub && currentDetailPatient) {
+    headSub.textContent = `Galeria de pacientes > ${currentDetailPatient.name} > ${media.file}`;
+  }
+}
+
+function openVideoViewer(media) {
+  if (!currentDetailPatient) return;
+
+  document.getElementById('galleryDetailView')?.classList.add('is-hidden');
+  document.getElementById('galleryImageViewer')?.classList.remove('is-hidden');
+  renderVideoViewer(media);
 }
 
 function openMediaViewer(mediaId) {
@@ -521,7 +705,7 @@ function openMediaViewer(mediaId) {
   if (!media) return;
 
   if (media.type === 'video' && media.src) {
-    window.open(media.src, '_blank', 'noopener');
+    openVideoViewer(media);
     return;
   }
 
@@ -529,6 +713,15 @@ function openMediaViewer(mediaId) {
 }
 
 function closeImageViewer() {
+  const video = document.getElementById('galleryViewerVideo');
+  if (video) {
+    video.pause();
+    video.classList.add('is-hidden');
+    video.removeAttribute('src');
+    video.load();
+  }
+  document.getElementById('galleryViewerImage')?.classList.remove('is-hidden');
+
   document.getElementById('galleryImageViewer')?.classList.add('is-hidden');
   document.getElementById('galleryDetailView')?.classList.remove('is-hidden');
   document.getElementById('galleryDrawingPanel')?.classList.add('is-hidden');
@@ -638,12 +831,12 @@ function clearFilterForm() {
   setDatePreset('custom');
 
   appliedFilters = { ...DEFAULT_FILTERS };
-  renderGalleryPatients();
+  renderGalleryPatients(1);
 }
 
 function applyFilterForm() {
   appliedFilters = readFilterForm();
-  renderGalleryPatients();
+  renderGalleryPatients(1);
 
   if (window.matchMedia('(max-width: 1100px)').matches) {
     setFilterPanelOpen(false);
@@ -666,6 +859,16 @@ function fillPatientSelect() {
 }
 
 export function initGaleria() {
+  const root = document.getElementById('pageContent');
+  if (root && !galleryTemplate) galleryTemplate = root.innerHTML;
+
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a la galería.');
+    return;
+  }
+
   const search = document.getElementById('gallerySearchInput');
   const patientList = document.getElementById('galleryPatientList');
   const filterButton = document.getElementById('galleryFilterBtn');
@@ -688,6 +891,7 @@ export function initGaleria() {
   appliedFilters = { ...DEFAULT_FILTERS };
   activeDatePreset = 'month';
   dateFilterEnabled = false;
+  galleryCurrentPage = 1;
   currentDetailPatient = null;
   currentViewerMedia = null;
   pendingImageFilter = 'none';
@@ -700,10 +904,16 @@ export function initGaleria() {
   setDatePreset('month');
   dateFilterEnabled = false;
 
-  search?.addEventListener('input', renderGalleryPatients);
+  search?.addEventListener('input', () => renderGalleryPatients(1));
   patientList?.addEventListener('click', event => {
     const button = event.target.closest('[data-open-gallery]');
     if (button) openPatientGallery(button.dataset.openGallery);
+  });
+
+  document.getElementById('galleryPaginationControls')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-gallery-page]');
+    if (!button || button.disabled) return;
+    renderGalleryPatients(Number(button.dataset.galleryPage));
   });
   filterButton?.addEventListener('click', toggleGalleryFilters);
   filterClose?.addEventListener('click', () => setFilterPanelOpen(false));
@@ -771,6 +981,8 @@ export function initGaleria() {
   setGalleryEmptyText('Cargando galeria desde Laravel...');
   renderGalleryPatients();
   loadGalleryData().then(ok => {
+    if (ok === 'unauthorized') return;
+
     if (!ok) {
       renderGalleryPatients();
       return;
@@ -781,5 +993,11 @@ export function initGaleria() {
     fillSelect('filterDoctor', uniqueValues('doctor'));
     fillSelect('filterProcedure', uniqueValues('procedure'));
     renderGalleryPatients();
+
+    const pendingPatientId = sessionStorage.getItem(OPEN_PATIENT_STORAGE_KEY);
+    if (pendingPatientId) {
+      sessionStorage.removeItem(OPEN_PATIENT_STORAGE_KEY);
+      openPatientGallery(pendingPatientId);
+    }
   });
 }

@@ -3,7 +3,7 @@
 
 import { laravelFetch } from './laravel.js';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
 const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 function currentLaravelOrigin() {
@@ -56,8 +56,8 @@ function encodeBasicCredentials(email, password) {
 }
 
 function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  return token ? `Bearer ${token}` : '';
 }
 
 async function qrRequest(path = '', options = {}) {
@@ -522,6 +522,14 @@ export function initQr() {
   const root = document.getElementById('qrAppRoot');
   if (!root) return;
   if (!qrTemplate) qrTemplate = root.innerHTML;
+
+  // Check if user is already logged in
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a los códigos QR.');
+    return;
+  }
+
   bindQrEvents(root);
   loadQrDashboard();
 }

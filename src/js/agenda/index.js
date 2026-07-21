@@ -1,22 +1,15 @@
 const MONTHS = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
+  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
 ];
+const DIAS_CORTO = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+const DIAS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const HOURS = [8,9,10,11,12,13,14,15,16,17,18,19,20,21];
 
 // Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
 import { laravelFetch } from '../laravel.js';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
 const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 function currentLaravelOrigin() {
@@ -43,12 +36,16 @@ function apiBaseUrl() {
 }
 
 const API_BASE_URL = apiBaseUrl();
-const AGENDA_ENDPOINT = `${API_BASE_URL}/tauri/agenda`;
+const AGENDA_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda`;
+const LOGIN_ENDPOINT = `${API_BASE_URL}/api/tauri/login`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
-let appointmentsData = [];
+let EVENTS = {};
 let visibleDate = new Date();
+let curView = 'mes';
 let agendaTemplate = '';
+let popupAnchoredEl = null;
+let popupCloseTimer = null;
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -59,206 +56,697 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function encodeBasicCredentials(email, password) {
-  const bytes = new TextEncoder().encode(`${email}:${password}`);
-  let binary = '';
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary);
+function authHeader() {
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  return token ? `Bearer ${token}` : '';
 }
 
-function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+async function loginToLaravel(email, password) {
+  const response = await laravelFetch(LOGIN_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || 'No se pudo iniciar sesion.');
+  }
+
+  return payload.token;
 }
 
 function agendaEndpointForVisibleMonth() {
   const params = new URLSearchParams({
     year: String(visibleDate.getFullYear()),
-    month: String(visibleDate.getMonth() + 1).padStart(2, '0'),
+    month: String(visibleDate.getMonth() + 1),
   });
 
   return `${AGENDA_ENDPOINT}?${params.toString()}`;
 }
 
-function normalizeDate(value) {
-  if (!value) return '';
-
-  const raw = String(value).trim();
-  const dateOnly = raw.slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return dateOnly;
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return '';
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function displayName(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).join(' ') || 'Paciente';
 }
 
-function normalizeTime(value, dateValue) {
-  const raw = String(value || dateValue || '').trim();
-  const match = raw.match(/(\d{1,2}):(\d{2})/);
-  if (!match) return '--:--';
-
-  return `${match[1].padStart(2, '0')}:${match[2]}`;
+function initials(name) {
+  return displayName(name).split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
-function isFutureAppointment(date, time) {
-  if (!date) return false;
+/* ---- Construye window.__AGENDA_EVENTS-like map desde la respuesta de Laravel ---- */
+function buildEventsFromCitas(citas) {
+  const map = {};
 
-  const safeTime = time && time !== '--:--' ? time : '23:59';
-  const parsed = new Date(`${date}T${safeTime}:00`);
-  return !Number.isNaN(parsed.getTime()) && parsed >= new Date();
+  (citas || []).forEach((cita) => {
+    if (!cita.fecha_key) return;
+    map[cita.fecha_key] = map[cita.fecha_key] || [];
+
+    const paciente = cita.paciente || 'Paciente sin nombre';
+    const procedimiento = cita.procedimiento || 'Procedimiento';
+
+    map[cita.fecha_key].push({
+      id: cita.id,
+      paciente_id: cita.paciente_id || null,
+      name: paciente,
+      proc: procedimiento,
+      cls: cita.cls || 'ev-soon',
+      h: parseInt(cita.hora_h ?? String(cita.hora_label || cita.hora || '0').substring(0, 2), 10) || 0,
+      duracion: cita.duracion_minutos ?? 60,
+      hora: cita.hora_label || cita.hora,
+      estado: cita.estado,
+      estado_texto: cita.estado_texto,
+      sala: cita.sala || 'Sala 3',
+      notas: cita.notas || '',
+      delete_url: cita.delete_url,
+      update_url: cita.update_url,
+      estado_url: cita.estado_url,
+      reprogramar_url: cita.reprogramar_url,
+      inits: initials(paciente),
+    });
+  });
+
+  Object.keys(map).forEach((key) => {
+    map[key].sort((a, b) => (a.h - b.h) || String(a.hora || '').localeCompare(String(b.hora || '')));
+  });
+
+  return map;
 }
 
-function normalizeStatus(value, date, time) {
-  const direct = String(value || '').trim().toLowerCase();
-  if (['ev-done', 'ev-wait', 'ev-cancel', 'ev-soon'].includes(direct)) return direct;
-  if (['ev-done', 'ev-wait', 'ev-cancel', 'ev-soon'].includes(direct.replaceAll('_', '-'))) {
-    return direct.replaceAll('_', '-');
-  }
+function recomputeClass(ev, dateKey) {
+  const now = new Date();
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const timeStr = ev.hora || (ev.h ? String(ev.h).padStart(2, '0') + ':00' : '00:00');
+  const [h, min] = timeStr.split(':').map(Number);
+  const start = new Date(y, m - 1, d, h || 0, min || 0);
+  const waitStart = new Date(start.getTime() - 15 * 60000);
+  const cancelStart = new Date(start.getTime() + 5 * 60000);
 
-  const key = direct
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\s-]+/g, '_');
+  if (ev.cls === 'ev-done' || ev.cls === 'ev-cancel') return ev.cls;
+  if (now >= cancelStart) return 'ev-cancel';
+  if (ev.cls === 'ev-wait') return 'ev-wait';
+  if (now >= waitStart) return 'ev-wait';
+  return 'ev-soon';
+}
 
-  const statusMap = {
-    completado: 'ev-done',
-    completed: 'ev-done',
-    done: 'ev-done',
-    finalizado: 'ev-done',
-    terminado: 'ev-done',
-    atendido: 'ev-done',
-    cancelado: 'ev-cancel',
-    cancelled: 'ev-cancel',
-    canceled: 'ev-cancel',
-    anulado: 'ev-cancel',
-    en_espera: 'ev-wait',
-    espera: 'ev-wait',
-    waiting: 'ev-wait',
-    wait: 'ev-wait',
-    pendiente: 'ev-wait',
-    en_proceso: 'ev-wait',
-    programado: 'ev-soon',
-    programada: 'ev-soon',
-    agendado: 'ev-soon',
-    agendada: 'ev-soon',
-    proximo: 'ev-soon',
-    proxima: 'ev-soon',
-    upcoming: 'ev-soon',
-    scheduled: 'ev-soon',
-    soon: 'ev-soon',
+function countEvents(keys) {
+  const counts = { 'ev-done': 0, 'ev-wait': 0, 'ev-cancel': 0, 'ev-soon': 0 };
+  keys.forEach((k) => {
+    (EVENTS[k] || []).forEach((ev) => {
+      const cls = recomputeClass(ev, k);
+      if (counts[cls] !== undefined) counts[cls] += 1;
+    });
+  });
+  return counts;
+}
+
+function updateSumCards(counts) {
+  const map = {
+    'ev-done': document.getElementById('cntDone'),
+    'ev-wait': document.getElementById('cntWait'),
+    'ev-cancel': document.getElementById('cntCancel'),
+    'ev-soon': document.getElementById('cntSoon'),
   };
-
-  return statusMap[key] || (isFutureAppointment(date, time) ? 'ev-soon' : 'ev-wait');
-}
-
-function normalizeAppointment(item, index) {
-  const dateValue =
-    item?.date ??
-    item?.fecha ??
-    item?.start_date ??
-    item?.fecha_cita ??
-    item?.dia ??
-    item?.inicio;
-  const date = normalizeDate(dateValue);
-  if (!date) return null;
-
-  const time = normalizeTime(
-    item?.time ?? item?.hora ?? item?.start_time ?? item?.hora_inicio,
-    dateValue
-  );
-
-  return {
-    id: item?.id ?? item?.cita_id ?? index,
-    date,
-    time,
-    patient:
-      item?.patient ??
-      item?.paciente ??
-      item?.patient_name ??
-      item?.nombre_paciente ??
-      item?.nombre ??
-      'Paciente sin nombre',
-    type:
-      item?.type ??
-      item?.procedimiento ??
-      item?.estudio ??
-      item?.tipo_estudio ??
-      item?.tipo ??
-      'Procedimiento',
-    status: normalizeStatus(item?.status ?? item?.estado ?? item?.class ?? item?.css_class, date, time),
-  };
-}
-
-function flattenAppointmentsSource(source) {
-  if (Array.isArray(source)) return source;
-  if (!source || typeof source !== 'object') return [];
-
-  return Object.entries(source).flatMap(([date, items]) => {
-    const normalizedDate = normalizeDate(date);
-    if (!normalizedDate) return [];
-    if (!Array.isArray(items)) return [];
-    return items.map((item) => (
-      item && typeof item === 'object'
-        ? { fecha: normalizedDate, ...item }
-        : { fecha: normalizedDate, paciente: item }
-    ));
+  Object.entries(map).forEach(([cls, el]) => {
+    if (el) el.textContent = counts[cls] || 0;
   });
 }
 
-function normalizeAppointmentsPayload(payload) {
-  const candidates = [
-    payload,
-    payload?.appointments,
-    payload?.citas,
-    payload?.agenda?.appointments,
-    payload?.agenda?.citas,
-    payload?.data?.appointments,
-    payload?.data?.citas,
-    payload?.data?.data,
-    payload?.agenda,
-    payload?.data,
-  ];
+/* ---- Vista Mes ---- */
+function buildCal(date) {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const monthLabel = document.getElementById('mesActual');
+  const yearLabel = document.getElementById('anioActual');
+  if (monthLabel) monthLabel.textContent = MONTHS[m];
+  if (yearLabel) yearLabel.textContent = y;
 
-  let source = [];
-  for (const candidate of candidates) {
-    const items = flattenAppointmentsSource(candidate);
-    if (Array.isArray(candidate) || items.length) {
-      source = items;
+  const today = new Date();
+  let startDow = new Date(y, m, 1).getDay();
+  startDow = startDow === 0 ? 6 : startDow - 1;
+
+  const tbody = document.getElementById('calBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  let day = 1 - startDow;
+  for (let row = 0; row < 6; row += 1) {
+    let hasContent = false;
+    const tr = document.createElement('tr');
+
+    for (let col = 0; col < 7; col += 1) {
+      const td = document.createElement('td');
+      const cellDate = new Date(y, m, day);
+      const isCurMonth = cellDate.getMonth() === m;
+      const isToday = cellDate.toDateString() === today.toDateString();
+      if (!isCurMonth) td.classList.add('off-month');
+      if (isToday) td.classList.add('today-cell');
+
+      const key = `${cellDate.getFullYear()}-${cellDate.getMonth() + 1}-${cellDate.getDate()}`;
+      const evs = EVENTS[key] || [];
+      const MAX_VISIBLE = 2;
+
+      const dnRow = document.createElement('div');
+      dnRow.className = 'day-num-row';
+      const dn = document.createElement('div');
+      dn.className = 'day-num';
+      dn.textContent = cellDate.getDate();
+      dnRow.appendChild(dn);
+      td.appendChild(dnRow);
+
+      evs.slice(0, MAX_VISIBLE).forEach((ev) => {
+        const liveCls = recomputeClass(ev, key);
+        const div = document.createElement('div');
+        div.className = `cal-event ${liveCls}`;
+        const name = ev.name || 'Paciente';
+        const proc = ev.proc || 'Procedimiento';
+        const dispName = displayName(name);
+        div.dataset.name = name;
+        div.dataset.proc = proc;
+        div.dataset.citaId = ev.id || '';
+        div.dataset.pacienteId = ev.paciente_id || '';
+        div.dataset.deleteUrl = ev.delete_url || '';
+        div.dataset.estado = ev.estado || '';
+        div.dataset.estadoUrl = ev.estado_url || '';
+        div.dataset.reprogramarUrl = ev.reprogramar_url || '';
+        div.dataset.cls = liveCls;
+        div.dataset.time = ev.hora || (ev.h ? String(ev.h).padStart(2, '0') + ':00' : '');
+        div.dataset.duration = ev.duracion || '60';
+        div.innerHTML = `<div class="ce-line1">${escapeHtml(dispName)}</div><div class="ce-line2">${escapeHtml(proc)}</div>`;
+        td.appendChild(div);
+      });
+
+      if (evs.length > MAX_VISIBLE) {
+        const dayName = DIAS_ES[cellDate.getDay()];
+        const moreBtn = document.createElement('button');
+        moreBtn.className = 'cal-more-btn';
+        moreBtn.textContent = `+${evs.length - MAX_VISIBLE} más`;
+        moreBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openWeekModal(evs, cellDate, '', dayName);
+        });
+        td.appendChild(moreBtn);
+      }
+
+      if (isCurMonth || evs.length) hasContent = true;
+      tr.appendChild(td);
+      day += 1;
+    }
+
+    tbody.appendChild(tr);
+    if (row >= 4 && !hasContent) {
+      tbody.removeChild(tr);
       break;
     }
   }
 
-  return source
-    .map((item, index) => normalizeAppointment(item, index))
-    .filter(Boolean)
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const keys = [];
+  for (let d = 1; d <= daysInMonth; d += 1) keys.push(`${y}-${m + 1}-${d}`);
+  updateSumCards(countEvents(keys));
+}
+
+/* ---- Vista Semana ---- */
+function getMondayOf(date) {
+  const d = new Date(date);
+  const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
+  d.setDate(d.getDate() - dow);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function buildWeek(date) {
+  const monday = getMondayOf(date);
+  const today = new Date();
+
+  const thead = document.getElementById('weekHead');
+  const tbody = document.getElementById('weekBody');
+  if (!thead || !tbody) return;
+  thead.innerHTML = '';
+
+  const headTr = document.createElement('tr');
+  const thHora = document.createElement('th');
+  thHora.textContent = 'Hora';
+  headTr.appendChild(thHora);
+
+  const weekDays = [];
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    weekDays.push(d);
+    const th = document.createElement('th');
+    if (d.toDateString() === today.toDateString()) th.classList.add('wk-today');
+    th.textContent = `${DIAS_CORTO[i]} ${d.getDate()}`;
+    headTr.appendChild(th);
+  }
+  thead.appendChild(headTr);
+
+  const monthLabel = document.getElementById('mesActual');
+  const yearLabel = document.getElementById('anioActual');
+  if (monthLabel) monthLabel.textContent = MONTHS[monday.getMonth()];
+  if (yearLabel) yearLabel.textContent = monday.getFullYear();
+
+  const weekKeys = weekDays.map((d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+  updateSumCards(countEvents(weekKeys));
+
+  tbody.innerHTML = '';
+  HOURS.forEach((hr) => {
+    const tr = document.createElement('tr');
+    const tdHr = document.createElement('td');
+    tdHr.className = 'hr-label';
+    tdHr.textContent = `${hr}:00`;
+    tr.appendChild(tdHr);
+
+    weekDays.forEach((d, i) => {
+      const td = document.createElement('td');
+      td.className = 'wk-cell';
+      if (d.toDateString() === today.toDateString()) td.classList.add('wk-today-col');
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+      const cellEvents = (EVENTS[key] || []).filter((ev) => ev.h === hr);
+      const MAX_VISIBLE = 2;
+
+      cellEvents.slice(0, MAX_VISIBLE).forEach((ev) => {
+        const liveCls = recomputeClass(ev, key);
+        const div = document.createElement('div');
+        div.className = `wk-event ${liveCls}`;
+        const name = ev.name || 'Paciente';
+        const proc = ev.proc || 'Procedimiento';
+        const dispName = displayName(name);
+        div.innerHTML = `<div class="wk-line1">${escapeHtml(dispName)}</div><div class="wk-line2">${escapeHtml(proc)}</div>`;
+        div.dataset.name = name;
+        div.dataset.proc = proc;
+        div.dataset.citaId = ev.id || '';
+        div.dataset.pacienteId = ev.paciente_id || '';
+        div.dataset.deleteUrl = ev.delete_url || '';
+        div.dataset.estado = ev.estado || '';
+        div.dataset.estadoUrl = ev.estado_url || '';
+        div.dataset.reprogramarUrl = ev.reprogramar_url || '';
+        div.dataset.cls = liveCls;
+        div.dataset.time = ev.hora || (ev.h ? String(ev.h).padStart(2, '0') + ':00' : '');
+        div.dataset.duration = ev.duracion || '60';
+        td.appendChild(div);
+      });
+
+      if (cellEvents.length > MAX_VISIBLE) {
+        const moreBtn = document.createElement('button');
+        moreBtn.className = 'wk-more-btn';
+        moreBtn.textContent = `+${cellEvents.length - MAX_VISIBLE} más`;
+        moreBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openWeekModal(cellEvents, d, hr, DIAS_CORTO[i]);
+        });
+        td.appendChild(moreBtn);
+      }
+
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---- Modal semana ("+X más") ---- */
+const STATUS_LABELS = { 'ev-done': 'Completado', 'ev-wait': 'En espera', 'ev-cancel': 'Cancelado', 'ev-soon': 'Próximos' };
+const STATUS_BADGE_CLS = { 'ev-done': 'done', 'ev-wait': 'wait', 'ev-cancel': 'cancel', 'ev-soon': 'soon' };
+
+function minutesTo12h(min) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function time24To12h(time24) {
+  const [h, m] = String(time24 || '00:00').split(':').map(Number);
+  return minutesTo12h((h || 0) * 60 + (m || 0));
+}
+
+function openWeekModal(events, date, hour, dayName) {
+  const overlay = document.getElementById('wkModalOverlay');
+  const title = document.getElementById('wkModalTitle');
+  const body = document.getElementById('wkModalBody');
+  if (!overlay || !title || !body) return;
+
+  const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  const hourLabel = hour !== '' ? time24To12h(`${String(hour).padStart(2, '0')}:00`) : '';
+  title.textContent = hourLabel ? `${dayName} ${date.getDate()} – ${hourLabel}` : `${dayName} ${date.getDate()} – Citas del día`;
+  body.innerHTML = '';
+
+  events.forEach((ev) => {
+    const liveCls = recomputeClass(ev, key);
+    const dispName = displayName(ev.name);
+    const inits = dispName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+    const statusKey = liveCls.replace('ev-', '');
+
+    const item = document.createElement('div');
+    item.className = 'wk-modal-item';
+    item.dataset.name = ev.name || '';
+    item.dataset.proc = ev.proc || '';
+    item.dataset.cls = liveCls;
+    item.dataset.pacienteId = ev.paciente_id || '';
+    item.dataset.citaId = ev.id || '';
+    item.dataset.deleteUrl = ev.delete_url || '';
+    item.dataset.estado = ev.estado || '';
+    item.dataset.estadoUrl = ev.estado_url || '';
+    item.innerHTML = `
+      <div class="wk-modal-avatar">${inits}</div>
+      <div class="wk-modal-info">
+        <div class="wk-modal-name">${escapeHtml(dispName)}</div>
+        <div class="wk-modal-proc">${escapeHtml(ev.proc || '')}</div>
+      </div>
+      <div class="wk-modal-badge ${statusKey}">${STATUS_LABELS[liveCls] || statusKey}</div>`;
+    item.addEventListener('click', () => {
+      closeWeekModal();
+      setTimeout(() => showPopupForData(parseEventData(item), { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 }, key), 150);
+    });
+    body.appendChild(item);
+  });
+
+  overlay.classList.add('open');
+}
+
+function closeWeekModal() {
+  document.getElementById('wkModalOverlay')?.classList.remove('open');
+}
+
+/* ---- Popup hover/click ---- */
+function parseEventData(el) {
+  const name = el.dataset.name || 'Paciente';
+  const dispName = displayName(name);
+  return {
+    id: el.dataset.citaId || '',
+    pacienteId: el.dataset.pacienteId || '',
+    deleteUrl: el.dataset.deleteUrl || '',
+    estado: el.dataset.estado || '',
+    estadoUrl: el.dataset.estadoUrl || '',
+    reprogramarUrl: el.dataset.reprogramarUrl || '',
+    fullName: name,
+    displayName: dispName,
+    initials: dispName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
+    proc: el.dataset.proc || 'Procedimiento',
+    time: el.dataset.time || '00:00',
+    duration: el.dataset.duration || '60',
+    cls: el.dataset.cls || 'ev-soon',
+  };
+}
+
+function positionPopup(e) {
+  const evPopup = document.getElementById('evPopup');
+  if (!evPopup) return;
+  const pw = evPopup.offsetWidth || 230;
+  const ph = evPopup.offsetHeight || 200;
+  const isPhone = window.innerWidth < 600;
+  if (isPhone) {
+    evPopup.style.left = '50%';
+    evPopup.style.top = '50%';
+    evPopup.style.transform = 'translate(-50%,-50%)';
+    evPopup.style.width = `${Math.min(300, window.innerWidth - 32)}px`;
+  } else {
+    evPopup.style.transform = '';
+    evPopup.style.width = '';
+    let x = e.clientX + 14;
+    let y = e.clientY + 14;
+    if (x + pw > window.innerWidth - 10) x = e.clientX - pw - 14;
+    if (y + ph > window.innerHeight - 10) y = e.clientY - ph - 14;
+    evPopup.style.left = `${x}px`;
+    evPopup.style.top = `${y}px`;
+  }
+}
+
+const STATUS_BUTTONS = {
+  'ev-done': [{ label: 'Datos del paciente', cls: 'primary' }, { label: 'Ver Informe', cls: 'secondary' }],
+  'ev-wait': [{ label: 'Iniciar Estudio', cls: 'primary' }, { label: 'Datos del paciente', cls: 'secondary' }],
+  'ev-cancel': [{ label: 'Datos del paciente', cls: 'primary' }],
+  'ev-soon': [{ label: 'Datos del paciente', cls: 'primary' }],
+};
+
+function navigateHash(route) {
+  window.location.hash = route;
+}
+
+function showPopupForData(d, e, dateKey) {
+  const evPopup = document.getElementById('evPopup');
+  const evPopAvatar = document.getElementById('evPopAvatar');
+  const evPopName = document.getElementById('evPopName');
+  const evPopDate = document.getElementById('evPopDate');
+  const evPopInfo = document.getElementById('evPopInfo');
+  const evPopBadge = document.getElementById('evPopBadge');
+  const evPopBtns = document.getElementById('evPopBtns');
+  if (!evPopup) return;
+
+  let liveCls = d.cls;
+  if (dateKey) {
+    const [h] = String(d.time || '00:00').split(':').map(Number);
+    liveCls = recomputeClass({ cls: d.cls, estado: d.estado, hora: d.time, h: h || 0 }, dateKey);
+  }
+
+  const [h, m] = String(d.time || '00:00').split(':').map(Number);
+  const startMin = (h || 0) * 60 + (m || 0);
+  const duration = parseInt(d.duration || '60', 10) || 60;
+  const timeRange = `${time24To12h(d.time)} – ${minutesTo12h(startMin + duration)}`;
+
+  let fechaTxt = '';
+  if (dateKey) {
+    const [yy, mm, dd] = dateKey.split('-').map(Number);
+    const dObj = new Date(yy, mm - 1, dd);
+    fechaTxt = `${DIAS_ES[dObj.getDay()]} ${dd} de ${MONTHS[mm - 1]}`;
+  }
+
+  evPopAvatar.textContent = d.initials;
+  evPopName.textContent = d.displayName || d.fullName;
+  evPopDate.innerHTML = fechaTxt ? `<b>Fecha:</b> ${escapeHtml(fechaTxt)}` : '';
+  evPopInfo.innerHTML = `<b>Motivo:</b> ${escapeHtml(d.proc)}<br><b>Tiempo:</b> ${timeRange}<br><b>Habitación:</b> Sala 3`;
+  const badgeCls = STATUS_BADGE_CLS[liveCls] || 'done';
+  evPopBadge.className = `ev-pop-badge ${badgeCls}`;
+  evPopBadge.textContent = STATUS_LABELS[liveCls] || '';
+  evPopBadge.style.display = 'inline-flex';
+  evPopBtns.innerHTML = '';
+
+  (STATUS_BUTTONS[liveCls] || STATUS_BUTTONS['ev-soon']).forEach((b) => {
+    const btn = document.createElement('button');
+    btn.className = `ev-pop-btn ${b.cls}`;
+    btn.textContent = b.label;
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      hidePopup();
+      if (b.label === 'Datos del paciente') {
+        sessionStorage.setItem('enclaii-open-patient-id', d.pacienteId || '');
+        navigateHash('pacientes');
+      } else if (b.label === 'Iniciar Estudio') {
+        sessionStorage.setItem('enclaii-open-patient-id', d.pacienteId || '');
+        navigateHash('pacientes');
+      } else if (b.label === 'Ver Informe') {
+        navigateHash('ia-reportes');
+      }
+    });
+    evPopBtns.appendChild(btn);
+  });
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'ev-pop-btn danger';
+  const puedeEliminar = ['cancelado', 'completado'].includes(d.estado);
+  delBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>${puedeEliminar ? 'Eliminar cita' : 'Cancelar cita'}`;
+  delBtn.addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    hidePopup();
+    const url = puedeEliminar ? d.deleteUrl : d.estadoUrl;
+    if (!url) return;
+    try {
+      const headers = { Accept: 'application/json' };
+      const authorization = authHeader();
+      if (authorization) headers.Authorization = authorization;
+      const response = await laravelFetch(url, {
+        method: puedeEliminar ? 'DELETE' : 'PATCH',
+        headers: puedeEliminar ? headers : { ...headers, 'Content-Type': 'application/json' },
+        body: puedeEliminar ? undefined : JSON.stringify({ estado: 'cancelado' }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await loadAgendaFromLaravel(document.getElementById('pageContent'));
+    } catch (error) {
+      console.error(error);
+      window.alert('No se pudo actualizar la cita. Verifica tu conexión con Laravel.');
+    }
+  });
+  evPopBtns.appendChild(delBtn);
+
+  positionPopup(e);
+  evPopup.classList.add('visible');
+}
+
+function hidePopup() {
+  popupAnchoredEl = null;
+  document.getElementById('evPopup')?.classList.remove('visible');
+}
+
+function scheduleHidePopup() {
+  if (popupCloseTimer) clearTimeout(popupCloseTimer);
+  popupCloseTimer = setTimeout(() => {
+    const evPopup = document.getElementById('evPopup');
+    if (!evPopup?.matches(':hover') && !popupAnchoredEl?.matches(':hover')) hidePopup();
+  }, 200);
+}
+
+function cancelHidePopup() {
+  if (popupCloseTimer) { clearTimeout(popupCloseTimer); popupCloseTimer = null; }
+}
+
+function showPopupFromElement(el, e) {
+  const d = parseEventData(el);
+  const td = el.closest('td');
+  let dateKey = null;
+  const dn = td?.querySelector('.day-num');
+  if (dn && curView === 'mes') {
+    const day = parseInt(dn.textContent, 10);
+    dateKey = `${visibleDate.getFullYear()}-${visibleDate.getMonth() + 1}-${day}`;
+  } else if (curView === 'semana' && td) {
+    const tr = td.closest('tr');
+    const colIdx = Array.from(tr.children).indexOf(td) - 1;
+    const monday = getMondayOf(visibleDate);
+    const d2 = new Date(monday);
+    d2.setDate(monday.getDate() + colIdx);
+    dateKey = `${d2.getFullYear()}-${d2.getMonth() + 1}-${d2.getDate()}`;
+  }
+  showPopupForData(d, e, dateKey);
+}
+
+function initPopupEvents() {
+  document.addEventListener('mouseover', (e) => {
+    if (window.innerWidth < 600) return;
+    const ev = e.target.closest('.cal-event, .wk-event');
+    if (ev) {
+      cancelHidePopup();
+      if (popupAnchoredEl !== ev) { popupAnchoredEl = ev; showPopupFromElement(ev, e); }
+      return;
+    }
+    if (e.target.closest('#evPopup')) { cancelHidePopup(); return; }
+    scheduleHidePopup();
+  });
+
+  document.getElementById('evPopup')?.addEventListener('mouseenter', cancelHidePopup);
+  document.getElementById('evPopup')?.addEventListener('mouseleave', scheduleHidePopup);
+
+  document.addEventListener('click', (e) => {
+    const ev = e.target.closest('.cal-event, .wk-event');
+    if (ev) {
+      e.stopPropagation();
+      if (popupAnchoredEl === ev) { hidePopup(); return; }
+      popupAnchoredEl = ev;
+      showPopupFromElement(ev, e);
+      return;
+    }
+    if (e.target.closest('#evPopup')) return;
+    hidePopup();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hidePopup();
+  });
+}
+
+/* ---- Sidebar: próximas citas ---- */
+function buildProximas() {
+  const list = document.getElementById('proxList');
+  if (!list) return;
+
+  const now = new Date();
+  const hoy = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const items = [];
+
+  Object.entries(EVENTS).forEach(([key, evs]) => {
+    const [y, m, d] = key.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    if (dateObj < hoy) return;
+
+    evs.forEach((ev) => {
+      const liveCls = recomputeClass(ev, key);
+      if (liveCls !== 'ev-wait' && liveCls !== 'ev-soon') return;
+      items.push({ dateObj, ev, liveCls, name: ev.name, proc: ev.proc, h: ev.hora || `${ev.h}:00` });
+    });
+  });
+
+  items.sort((a, b) => (a.dateObj - b.dateObj) || String(a.h).localeCompare(String(b.h)));
+
+  if (!items.length) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--txt-soft);font-size:12px">No hay citas próximas agendadas</div>';
+    return;
+  }
+
+  list.innerHTML = items.slice(0, 6).map((item) => {
+    const dispName = displayName(item.name);
+    return `
+      <div class="prox-item">
+        <div class="prox-time">
+          <span class="h">${escapeHtml(String(item.h).slice(0, 5))}</span>
+          <span class="m">${String(item.dateObj.getDate()).padStart(2, '0')}</span>
+        </div>
+        <div class="prox-info">
+          <div class="prox-name">${escapeHtml(dispName)}</div>
+          <div class="prox-study">${escapeHtml(item.proc)}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ---- Filtros ---- */
+function applyAgendaFilters() {
+  const states = {};
+  document.querySelectorAll('[data-filter]').forEach((input) => {
+    const row = input.closest('[data-filter]');
+    const cls = row?.dataset.filter;
+    if (!cls) return;
+    const checkbox = row.querySelector('input[type=checkbox]');
+    if (checkbox) states[cls] = checkbox.checked;
+  });
+  Object.entries(states).forEach(([cls, checked]) => {
+    document.querySelectorAll(`.${cls}`).forEach((el) => {
+      el.style.display = checked ? '' : 'none';
+    });
+    document.querySelectorAll(`[data-filter="${cls}"] input[type=checkbox]`).forEach((cb) => {
+      cb.checked = checked;
+    });
+  });
+}
+
+function syncFilterCheckboxes(e) {
+  const target = e.target;
+  if (target.tagName !== 'INPUT') return;
+  const row = target.closest('[data-filter]');
+  const cls = row?.dataset.filter;
+  if (!cls) return;
+  document.querySelectorAll(`[data-filter="${cls}"] input[type=checkbox]`).forEach((cb) => {
+    cb.checked = target.checked;
+  });
+  applyAgendaFilters();
+}
+
+/* ---- Render orquestador ---- */
+function rebuildCurrentView() {
+  if (curView === 'mes') buildCal(visibleDate);
+  else buildWeek(visibleDate);
+  buildProximas();
+  applyAgendaFilters();
 }
 
 function setAgendaLoading() {
   const calendarBody = document.getElementById('calBody');
   if (calendarBody) {
-    calendarBody.innerHTML =
-      '<tr><td colspan="7" style="text-align:center;padding:32px 20px;color:var(--txt-soft)">Cargando agenda desde Laravel...</td></tr>';
+    calendarBody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px 20px;color:var(--txt-soft)">Cargando agenda desde Laravel...</td></tr>';
   }
-
   const list = document.getElementById('proxList');
   if (list) {
-    list.innerHTML =
-      '<div style="text-align:center;padding:20px;color:var(--txt-soft);font-size:12px">Conectando con Laravel</div>';
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--txt-soft);font-size:12px">Conectando con Laravel</div>';
   }
 }
 
 function restoreAgendaShell(root) {
   if (!root.querySelector('#calBody') && agendaTemplate) {
     root.innerHTML = agendaTemplate;
-    bindMonthNavigation(root);
+    bindAgendaEvents(root);
   }
 }
 
@@ -276,15 +764,18 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
 
   document.getElementById('laravelAgendaLoginForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-
     const email = document.getElementById('laravelAgendaEmail')?.value.trim();
     const password = document.getElementById('laravelAgendaPassword')?.value || '';
-
     if (!email || !password) return;
-
-    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
-    restoreAgendaShell(root);
-    await loadAgendaFromLaravel(root);
+    try {
+      const token = await loginToLaravel(email, password);
+      sessionStorage.setItem('enclaii-tauri-basic-auth', token);
+      restoreAgendaShell(root);
+      await loadAgendaFromLaravel(root);
+    } catch (error) {
+      console.error(error);
+      renderLaravelLogin(root, error.message || 'No se pudo iniciar sesion.');
+    }
   });
 }
 
@@ -293,7 +784,6 @@ function renderAgendaError(root, error) {
     renderLaravelLogin(root, error.message);
     return;
   }
-
   root.innerHTML = `
     <div style="padding:42px 20px;text-align:center;color:var(--txt-soft);">
       <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con Laravel</strong>
@@ -302,20 +792,11 @@ function renderAgendaError(root, error) {
 }
 
 async function fetchLaravelAgenda() {
-  const headers = {
-    Accept: 'application/json',
-  };
+  const headers = { Accept: 'application/json' };
   const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
 
-  if (authorization) {
-    headers.Authorization = authorization;
-  }
-
-  const response = await laravelFetch(agendaEndpointForVisibleMonth(), {
-    headers,
-    credentials: 'include',
-  });
-
+  const response = await laravelFetch(agendaEndpointForVisibleMonth(), { headers, credentials: 'include' });
   const contentType = response.headers.get('content-type') || '';
 
   if (response.status === 401 || response.status === 419) {
@@ -323,132 +804,16 @@ async function fetchLaravelAgenda() {
     error.code = 'UNAUTHORIZED';
     throw error;
   }
-
   if (!contentType.includes('application/json')) {
     throw new Error(`Laravel no devolvio JSON. Revisa sesion y ruta: ${AGENDA_ENDPOINT}`);
   }
 
   const payload = await response.json();
-
   if (!response.ok || payload?.ok === false) {
     throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
   }
 
-  return normalizeAppointmentsPayload(payload);
-}
-
-function getMonthAppointments(year, month) {
-  return appointmentsData.filter((appointment) => {
-    const date = new Date(`${appointment.date}T00:00:00`);
-    return date.getFullYear() === year && date.getMonth() === month;
-  }).map((appointment) => ({
-    ...appointment,
-    day: new Date(`${appointment.date}T00:00:00`).getDate(),
-  }));
-}
-
-function renderUpcoming(appointments) {
-  const list = document.getElementById('proxList');
-  if (!list) return;
-
-  if (!appointments.length) {
-    list.innerHTML =
-      '<div style="text-align:center;padding:20px;color:var(--txt-soft);font-size:12px">No hay citas proximas agendadas</div>';
-    return;
-  }
-
-  list.innerHTML = appointments
-    .slice(0, 4)
-    .map(
-      (appointment) => `
-        <div class="prox-item">
-          <div class="prox-time">
-            <span class="h">${escapeHtml(appointment.time)}</span>
-            <span class="m">${String(appointment.day).padStart(2, '0')}</span>
-          </div>
-          <div class="prox-info">
-            <div class="prox-name">${escapeHtml(appointment.patient)}</div>
-            <div class="prox-study">${escapeHtml(appointment.type)}</div>
-          </div>
-        </div>
-      `
-    )
-    .join('');
-}
-
-function renderMonth() {
-  const monthLabel = document.getElementById('mesActual');
-  const yearLabel = document.getElementById('anioActual');
-  const calendarBody = document.getElementById('calBody');
-  if (!calendarBody) return;
-
-  const year = visibleDate.getFullYear();
-  const month = visibleDate.getMonth();
-  const today = new Date();
-  const appointments = getMonthAppointments(year, month);
-  const appointmentsByDay = new Map();
-
-  appointments.forEach((appointment) => {
-    const items = appointmentsByDay.get(appointment.day) || [];
-    items.push(appointment);
-    appointmentsByDay.set(appointment.day, items);
-  });
-
-  if (monthLabel) monthLabel.textContent = MONTHS[month];
-  if (yearLabel) yearLabel.textContent = year;
-
-  const firstDay = new Date(year, month, 1);
-  const startDow = (firstDay.getDay() + 6) % 7;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const previousMonthDays = new Date(year, month, 0).getDate();
-  const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
-
-  let html = '';
-  for (let cell = 0; cell < totalCells; cell += 1) {
-    if (cell % 7 === 0) html += '<tr>';
-
-    const day = cell - startDow + 1;
-    const isCurrentMonth = day >= 1 && day <= daysInMonth;
-    const displayDay = isCurrentMonth
-      ? day
-      : day < 1
-        ? previousMonthDays + day
-        : day - daysInMonth;
-    const isToday =
-      isCurrentMonth &&
-      today.getFullYear() === year &&
-      today.getMonth() === month &&
-      today.getDate() === day;
-    const dayAppointments = isCurrentMonth ? appointmentsByDay.get(day) || [] : [];
-
-    html += `<td class="${isCurrentMonth ? '' : 'off-month'} ${isToday ? 'today-cell' : ''}">
-      <span class="day-num">${displayDay}</span>
-      ${dayAppointments
-        .map(
-          (appointment) => `
-            <div class="cal-event ${appointment.status}">
-              <div class="ce-line1">${escapeHtml(appointment.time)} ${escapeHtml(appointment.patient)}</div>
-              <div class="ce-line2">${escapeHtml(appointment.type)}</div>
-            </div>
-          `
-        )
-        .join('')}
-    </td>`;
-
-    if (cell % 7 === 6) html += '</tr>';
-  }
-
-  calendarBody.innerHTML = html;
-  renderUpcoming(appointments);
-  applyAgendaFilters();
-}
-
-function applyAgendaFilters() {
-  document.querySelectorAll('[data-filter]').forEach((checkbox) => {
-    document.querySelectorAll(`.${checkbox.dataset.filter}`).forEach((event) => {
-      event.style.display = checkbox.checked ? '' : 'none';
-    });
-  });
+  return payload.citas || [];
 }
 
 async function loadAgendaFromLaravel(root) {
@@ -456,32 +821,126 @@ async function loadAgendaFromLaravel(root) {
   setAgendaLoading();
 
   try {
-    appointmentsData = await fetchLaravelAgenda();
-    renderMonth();
+    const citas = await fetchLaravelAgenda();
+    EVENTS = buildEventsFromCitas(citas);
+    rebuildCurrentView();
   } catch (error) {
     console.error(error);
-
     if (error.code === 'UNAUTHORIZED') {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+      sessionStorage.removeItem('enclaii-tauri-basic-auth');
     }
-
     renderAgendaError(root, error);
   }
 }
 
-function bindMonthNavigation(root) {
+function setView(view, root) {
+  curView = view;
+  document.getElementById('calWrap')?.classList.toggle('active', view === 'mes');
+  document.getElementById('weekGrid')?.classList.toggle('active', view === 'semana');
+  document.querySelectorAll('.view-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.view === view);
+  });
+  rebuildCurrentView();
+}
+
+function bindAgendaEvents(root) {
   document.getElementById('prevMonth')?.addEventListener('click', async () => {
-    visibleDate = new Date(visibleDate.getFullYear(), visibleDate.getMonth() - 1, 1);
+    if (curView === 'mes') {
+      visibleDate = new Date(visibleDate.getFullYear(), visibleDate.getMonth() - 1, 1);
+    } else {
+      visibleDate = new Date(visibleDate.getFullYear(), visibleDate.getMonth(), visibleDate.getDate() - 7);
+    }
     await loadAgendaFromLaravel(root);
   });
 
   document.getElementById('nextMonth')?.addEventListener('click', async () => {
-    visibleDate = new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 1);
+    if (curView === 'mes') {
+      visibleDate = new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 1);
+    } else {
+      visibleDate = new Date(visibleDate.getFullYear(), visibleDate.getMonth(), visibleDate.getDate() + 7);
+    }
     await loadAgendaFromLaravel(root);
   });
 
-  document.querySelectorAll('[data-filter]').forEach((checkbox) => {
-    checkbox.addEventListener('change', applyAgendaFilters);
+  document.querySelectorAll('.view-tab').forEach((tab) => {
+    tab.addEventListener('click', () => setView(tab.dataset.view, root));
+  });
+
+  document.querySelectorAll('[data-filter] input[type=checkbox]').forEach((cb) => {
+    cb.addEventListener('change', syncFilterCheckboxes);
+  });
+
+  document.getElementById('wkModalClose')?.addEventListener('click', closeWeekModal);
+  document.getElementById('wkModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'wkModalOverlay') closeWeekModal();
+  });
+
+  const toolbarFilterBtn = document.getElementById('toolbarFilterBtn');
+  const toolbarFilterDropdown = document.getElementById('toolbarFilterDropdown');
+  if (toolbarFilterBtn && toolbarFilterDropdown) {
+    toolbarFilterBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toolbarFilterDropdown.classList.toggle('open');
+    });
+    document.addEventListener('click', () => toolbarFilterDropdown.classList.remove('open'));
+    toolbarFilterDropdown.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  const mesPicker = document.getElementById('mesPicker');
+  const anioPicker = document.getElementById('anioPicker');
+  const mesSpan = document.getElementById('mesActual');
+  const anioSpan = document.getElementById('anioActual');
+  function closePickers() { mesPicker?.classList.remove('open'); anioPicker?.classList.remove('open'); }
+  function buildMesPicker() {
+    if (!mesPicker) return;
+    mesPicker.querySelectorAll('.picker-item').forEach((el) => el.remove());
+    MONTHS.forEach((nombre, idx) => {
+      const btn = document.createElement('button');
+      btn.className = `picker-item${visibleDate.getMonth() === idx ? ' active' : ''}`;
+      btn.textContent = nombre;
+      btn.addEventListener('click', async () => {
+        visibleDate = new Date(visibleDate.getFullYear(), idx, 1);
+        closePickers();
+        await loadAgendaFromLaravel(root);
+      });
+      mesPicker.appendChild(btn);
+    });
+  }
+  function buildAnioPicker() {
+    if (!anioPicker) return;
+    anioPicker.querySelectorAll('.picker-item').forEach((el) => el.remove());
+    const currentY = visibleDate.getFullYear();
+    for (let y = currentY + 5; y >= currentY - 5; y -= 1) {
+      const btn = document.createElement('button');
+      btn.className = `picker-item${y === currentY ? ' active' : ''}`;
+      btn.textContent = y;
+      btn.addEventListener('click', async () => {
+        visibleDate = new Date(y, visibleDate.getMonth(), 1);
+        closePickers();
+        await loadAgendaFromLaravel(root);
+      });
+      anioPicker.appendChild(btn);
+    }
+  }
+  mesSpan?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = mesPicker?.classList.contains('open');
+    closePickers();
+    if (!open) { buildMesPicker(); mesPicker?.classList.add('open'); }
+  });
+  anioSpan?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = anioPicker?.classList.contains('open');
+    closePickers();
+    if (!open) { buildAnioPicker(); anioPicker?.classList.add('open'); }
+  });
+  document.addEventListener('click', closePickers);
+
+  const agendaExpandBtn = document.getElementById('agendaExpandBtn');
+  const agLeft = document.querySelector('.agenda-left');
+  agendaExpandBtn?.addEventListener('click', () => {
+    agLeft?.classList.toggle('expanded');
+    if (!agLeft?.classList.contains('expanded')) toolbarFilterDropdown?.classList.remove('open');
   });
 }
 
@@ -489,10 +948,23 @@ export async function initAgenda() {
   const root = document.getElementById('pageContent');
   if (!root) return;
 
+  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  if (!token) {
+    renderLaravelLogin(root, 'Inicia sesión para acceder a la agenda.');
+    return;
+  }
+
   visibleDate = new Date();
   visibleDate.setDate(1);
-  appointmentsData = [];
+  curView = 'mes';
+  EVENTS = {};
   agendaTemplate = root.innerHTML;
-  bindMonthNavigation(root);
+  bindAgendaEvents(root);
+  initPopupEvents();
   await loadAgendaFromLaravel(root);
+
+  setInterval(() => {
+    if (!document.getElementById('calBody')) return;
+    rebuildCurrentView();
+  }, 30000);
 }

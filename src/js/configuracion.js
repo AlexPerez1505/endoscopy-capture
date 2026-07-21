@@ -1,54 +1,135 @@
-// ================= Configuracion - Inicializador =================
-// Tauri lee y guarda preferencias por Laravel. No toca la base de datos.
+import { apiBaseUrl, laravelFetch } from './laravel.js';
 
-import { laravelFetch } from './laravel.js';
+/* =========================================================
+   CONFIGURACIÓN TAURI
+   Laravel es la fuente principal de todos los datos.
+========================================================= */
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
-const LOCAL_SETTINGS = {
-  language: 'enclaii-lang',
-  api_url: 'enclaii-api-url',
+const API_URL_STORAGE_KEY = 'enclaii-api-url';
+
+const SYNC_INTERVAL_MS = 3000;
+
+let state = {
+  settings: {},
+  user: {},
+  profile: {},
+  plan: {},
+  clinic: {
+    is_owner: false,
+    members: [],
+    invitations: [],
+  },
+  backups: [],
 };
-const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
-let settingsTemplate = '';
-let settingsState = {};
-let userState = {};
-let planState = {};
-let isApplyingSettings = false;
-let alertTimer = null;
+let applyingLaravelData = false;
+let pendingSettings = {};
+let settingsTimer = null;
+let syncTimer = null;
+let syncRunning = false;
+let currentFingerprint = '';
+let eventsBound = false;
 
-function currentLaravelOrigin() {
-  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
-  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
-  if (window.location.port && window.location.port !== '8000') return '';
-  return window.location.origin;
+/* =========================================================
+   URL Y AUTENTICACIÓN
+========================================================= */
+
+function getApiBaseUrl() {
+  return String(
+    localStorage.getItem(API_URL_STORAGE_KEY) ||
+    apiBaseUrl() ||
+    'https://sistema.enclaii.com'
+  ).replace(/\/+$/, '');
 }
 
-function isLocalLaravelUrl(value) {
-  try {
-    const url = new URL(value);
-    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
-  } catch (_) {
-    return false;
+function endpoint(path = '') {
+  const cleanPath = String(path || '').replace(/^\/+/, '');
+
+  return `${getApiBaseUrl()}/api/tauri/configuracion${
+    cleanPath ? `/${cleanPath}` : ''
+  }`;
+}
+
+function getToken() {
+  return String(
+    sessionStorage.getItem(AUTH_STORAGE_KEY) ||
+    localStorage.getItem(AUTH_STORAGE_KEY) ||
+    ''
+  )
+    .replace(/^Bearer\s+/i, '')
+    .trim();
+}
+
+async function apiRequest(path = '', options = {}) {
+  const token = getToken();
+
+  if (!token) {
+    const error = new Error(
+      'No existe una sesión activa. Inicia sesión nuevamente.'
+    );
+
+    error.code = 'UNAUTHORIZED';
+    throw error;
   }
-}
 
-function apiBaseUrl() {
-  const saved = (localStorage.getItem(LOCAL_SETTINGS.api_url) || '').replace(/\/+$/, '');
-  const currentOrigin = currentLaravelOrigin();
+  const isFormData = options.body instanceof FormData;
 
-  if (saved) {
-    return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
+  const response = await laravelFetch(endpoint(path), {
+    ...options,
+
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+
+      ...(isFormData
+        ? {}
+        : {
+            'Content-Type': 'application/json',
+          }),
+
+      ...(options.headers || {}),
+    },
+  });
+
+  const contentType =
+    response.headers.get('content-type') || '';
+
+  let payload = {};
+
+  if (contentType.includes('application/json')) {
+    payload = await response.json().catch(() => ({}));
   }
 
-  return currentOrigin || DEFAULT_API_BASE_URL;
+  if (!response.ok || payload?.ok === false) {
+    const validationMessage = payload?.errors
+      ? Object.values(payload.errors).flat()[0]
+      : null;
+
+    const error = new Error(
+      validationMessage ||
+      payload?.message ||
+      `Laravel respondió HTTP ${response.status}.`
+    );
+
+    error.status = response.status;
+
+    if (
+      response.status === 401 ||
+      response.status === 419
+    ) {
+      error.code = 'UNAUTHORIZED';
+    }
+
+    throw error;
+  }
+
+  return payload;
 }
 
-function configEndpoint(path = '') {
-  const suffix = String(path || '').replace(/^\/+/, '');
-  return `${apiBaseUrl()}/tauri/configuracion${suffix ? `/${suffix}` : ''}`;
-}
+/* =========================================================
+   UTILIDADES
+========================================================= */
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -59,297 +140,34 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function encodeBasicCredentials(email, password) {
-  const bytes = new TextEncoder().encode(`${email}:${password}`);
-  let binary = '';
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-}
-
-function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
-}
-
-async function configRequest(options = {}) {
-  const headers = {
-    Accept: 'application/json',
-    ...(options.headers || {}),
-  };
-  const authorization = authHeader();
-  const endpoint = configEndpoint(options.path);
-
-  if (authorization) headers.Authorization = authorization;
-
-  let response;
-
-  try {
-    response = await laravelFetch(endpoint, {
-      method: options.method || 'GET',
-      headers,
-      body: options.body,
-      credentials: 'include',
-    });
-  } catch (error) {
-    const networkError = new Error(`No se pudo alcanzar Laravel en ${endpoint}. Revisa que Laravel este corriendo y que el Endpoint Laravel use el mismo host que la app (${window.location.origin}).`);
-    networkError.code = 'NETWORK';
-    networkError.cause = error;
-    throw networkError;
-  }
-  const contentType = response.headers.get('content-type') || '';
-
-  if (response.status === 401 || response.status === 419) {
-    const error = new Error('Ingresa tus credenciales de Laravel para cargar configuracion.');
-    error.code = 'UNAUTHORIZED';
-    throw error;
-  }
-
-  if (!response.ok && !contentType.includes('application/json')) {
-    throw new Error(`Laravel respondio HTTP ${response.status} en ${endpoint}. Revisa que esa ruta exista en Laravel y devuelva JSON.`);
-  }
-
-  if (!contentType.includes('application/json')) {
-    throw new Error(`Laravel no devolvio JSON. Revisa sesion y ruta: ${endpoint}`);
-  }
-
-  const payload = await response.json();
-  if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
-  }
-
-  return payload;
-}
-
-function setSettingsAlert(message, type = 'ok') {
-  const alert = document.getElementById('settingsAlert');
-  if (!alert) return;
-
-  clearTimeout(alertTimer);
-  alert.textContent = message || '';
-  alert.className = `settings-alert ${message ? type : 'is-hidden'}`;
-  if (message) {
-    alertTimer = setTimeout(() => setSettingsAlert(''), 2800);
-  }
-}
-
-function restoreSettingsTemplate(root) {
-  if (!root.querySelector('[data-settings-tab]') && settingsTemplate) {
-    root.innerHTML = settingsTemplate;
-    bindSettingsEvents(root);
-  }
-}
-
-function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Laravel.') {
-  root.innerHTML = `
-    <form class="settings-login" id="laravelSettingsLoginForm">
-      <strong>Conectar Configuracion con Laravel</strong>
-      <p>${escapeHtml(message)}</p>
-      <label for="laravelSettingsEmail">Correo</label>
-      <input id="laravelSettingsEmail" type="email" autocomplete="username" required>
-      <label for="laravelSettingsPassword">Contrasena</label>
-      <input id="laravelSettingsPassword" type="password" autocomplete="current-password" required>
-      <button type="submit">Conectar Configuracion</button>
-    </form>`;
-
-  document.getElementById('laravelSettingsLoginForm')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const email = document.getElementById('laravelSettingsEmail')?.value.trim();
-    const password = document.getElementById('laravelSettingsPassword')?.value || '';
-    if (!email || !password) return;
-
-    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
-    restoreSettingsTemplate(root);
-    await loadSettings();
-  });
-}
-
-function renderSettingsError(root, error) {
-  if (error.code === 'UNAUTHORIZED') {
-    renderLaravelLogin(root, error.message);
-    return;
-  }
-
-  root.innerHTML = `
-    <div class="card" style="padding:42px 20px;text-align:center;color:var(--txt-soft);">
-      <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con Laravel</strong>
-      <span>${escapeHtml(error.message || 'No se pudo cargar configuracion.')}</span>
-    </div>`;
-}
-
 function boolValue(value) {
-  return value === true || value === 'true' || value === '1' || value === 1;
-}
-
-function applyUiEffects(settings) {
-  document.documentElement.dataset.reading = boolValue(settings.reading_mode) ? 'on' : 'off';
-  document.documentElement.dataset.animations = boolValue(settings.animations) ? 'on' : 'off';
-  document.documentElement.dataset.compact = boolValue(settings.compact) ? 'on' : 'off';
-  localStorage.setItem('enclaii-pref-reading_mode', boolValue(settings.reading_mode) ? '1' : '0');
-  localStorage.setItem('enclaii-pref-animations', boolValue(settings.animations) ? '1' : '0');
-  localStorage.setItem('enclaii-pref-compact', boolValue(settings.compact) ? '1' : '0');
-}
-
-function setControlValue(control, value) {
-  if (control.type === 'checkbox') {
-    control.checked = boolValue(value);
-    return;
-  }
-
-  control.value = value ?? '';
-}
-
-function updateTextCounts(root) {
-  root.querySelectorAll('[data-count-for]').forEach((counter) => {
-    const field = document.getElementById(counter.dataset.countFor);
-    counter.textContent = String(field?.value.length || 0);
-  });
-}
-
-function renderQrTemplate(value) {
-  const clinicName = userState.clinic || 'Clinica principal';
-  return String(value || '')
-    .replaceAll('{enlace}', 'https://enclaii.app/registro-paciente/ejemplo')
-    .replaceAll('{codigo}', 'QR-2026-0001')
-    .replaceAll('{mensaje}', 'Por favor completa tus datos con la mayor informacion posible.')
-    .replaceAll('{clinica}', clinicName);
-}
-
-function renderQrPreviews() {
-  const whatsappInput = document.getElementById('cfgQrWhatsapp');
-  const consentInput = document.getElementById('cfgQrConsent');
-  const whatsappPreview = document.getElementById('cfgQrWhatsappPreview');
-  const consentPreview = document.getElementById('cfgQrConsentPreview');
-
-  if (whatsappPreview) {
-    const text = renderQrTemplate(whatsappInput?.value || 'Hola, te comparto tu enlace de pre-registro de ENCLAII: {enlace}');
-    whatsappPreview.textContent = text || 'Sin texto configurado.';
-  }
-
-  if (consentPreview) {
-    const text = renderQrTemplate(consentInput?.value || 'Autorizo el envio de estos datos y, si la adjunto, mi fotografia a {clinica} para preparar mi atencion y crear mi expediente despues de que el personal medico revise la informacion.');
-    consentPreview.textContent = text || 'Sin texto configurado.';
-  }
-}
-
-function setBindValue(key, value) {
-  document.querySelectorAll(`[data-config-bind="${key}"]`).forEach((node) => {
-    if ('value' in node && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA')) {
-      node.value = value ?? '';
-    } else {
-      node.textContent = value ?? '--';
-    }
-  });
-}
-
-function initialsFromName(name) {
-  const parts = String(name || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (!parts.length) return 'DR';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-}
-
-const DEFAULT_PLAN_OPTIONS = [
-  {
-    id: 'clinica',
-    name: 'Clinica',
-    storage_gb: 50,
-    accent: 'cyan',
-    prices: { monthly: 10000, quarterly: 27000, annual: 96000 },
-    features: ['Almacenamiento en la nube', 'IA Reportes basica', 'Soporte por email'],
-  },
-  {
-    id: 'hospital',
-    name: 'Hospital',
-    storage_gb: 100,
-    accent: 'purple',
-    prices: { monthly: 25000, quarterly: 67500, annual: 240000 },
-    features: ['IA Reportes avanzada', 'Almacenamiento ampliado', 'Soporte prioritario', 'Exportacion de reportes'],
-  },
-  {
-    id: 'red-medica',
-    name: 'Red medica',
-    storage_gb: 250,
-    accent: 'red',
-    prices: { monthly: 35000, quarterly: 94500, annual: 336000 },
-    features: ['Todo lo del plan Profesional', 'Mas almacenamiento', 'Integraciones avanzadas', 'Soporte 24/7'],
-  },
-];
-
-const DEFAULT_USAGE_HISTORY = [
-  { label: 'Nov 24', value: 25 },
-  { label: 'Dic 24', value: 45 },
-  { label: 'Ene 25', value: 70 },
-  { label: 'Feb 25', value: 80 },
-];
-
-const PLAN_ACTIONS = {
-  manage: { path: 'plan/portal', method: 'POST', loading: 'Conectando con Laravel...' },
-  'storage-detail': { path: 'plan/almacenamiento', method: 'GET', loading: 'Cargando detalle desde Laravel...' },
-  invoices: { path: 'plan/facturas', method: 'GET', loading: 'Consultando facturas en Laravel...' },
-  'payment-method': { path: 'plan/metodo-pago', method: 'POST', loading: 'Solicitando metodo de pago a Laravel...' },
-  recommendations: { path: 'plan/recomendaciones', method: 'GET', loading: 'Cargando recomendaciones desde Laravel...' },
-  'change-plan': { path: 'plan/cambiar', method: 'POST', loading: 'Solicitando cambio de plan a Laravel...' },
-};
-
-function firstDefined(...values) {
-  return values.find((value) => value !== undefined && value !== null && value !== '');
+  return (
+    value === true ||
+    value === 1 ||
+    value === '1' ||
+    value === 'true'
+  );
 }
 
 function numberValue(value, fallback = 0) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value.replace(/[^\d.-]/g, ''));
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
-}
+  const number = Number(value);
 
-function bytesToGb(value) {
-  const bytes = numberValue(value, 0);
-  return bytes > 0 ? bytes / 1024 / 1024 / 1024 : 0;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function formatNumber(value, maximumFractionDigits = 1) {
-  return new Intl.NumberFormat('es-MX', {
-    maximumFractionDigits,
-  }).format(value);
-}
-
-function formatGb(value) {
-  const amount = numberValue(value, NaN);
-  if (!Number.isFinite(amount)) return '--';
-  return `${formatNumber(amount, Number.isInteger(amount) ? 0 : 1)} GB`;
-}
-
-function formatMoney(value) {
-  if (typeof value === 'string' && value.trim()) return value;
-  const amount = numberValue(value, NaN);
-  if (!Number.isFinite(amount)) return '--';
-  return `$${formatNumber(amount, 0)}`;
+  return Number.isFinite(number)
+    ? number
+    : fallback;
 }
 
 function formatDate(value) {
-  if (!value) return '--';
-  if (typeof value === 'string' && value.includes('/') && !value.includes('T')) return value;
-
-  let date = null;
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    const [year, month, day] = value.slice(0, 10).split('-').map(Number);
-    date = new Date(year, month - 1, day);
-  } else {
-    date = new Date(value);
+  if (!value) {
+    return '--';
   }
 
-  if (Number.isNaN(date.getTime())) return String(value);
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
   return new Intl.DateTimeFormat('es-MX', {
     day: '2-digit',
     month: '2-digit',
@@ -357,702 +175,2630 @@ function formatDate(value) {
   }).format(date);
 }
 
-function statusLabel(status) {
-  const normalized = String(status || '').toLowerCase();
-  if (!normalized) return '';
-  if (['active', 'activo', 'paid', 'enabled'].includes(normalized)) return 'Active';
-  if (['trial', 'trialing', 'prueba'].includes(normalized)) return 'En prueba';
-  if (['past_due', 'overdue', 'vencido'].includes(normalized)) return 'Vencido';
-  if (['cancelled', 'canceled', 'cancelado'].includes(normalized)) return 'Cancelado';
-  return status;
-}
-
-function planLabel() {
-  return firstDefined(
-    planState.label,
-    planState.name,
-    planState.plan_name,
-    planState.current_plan,
-    planState.plan,
-    'Plan'
-  );
-}
-
-function planStatusLabel() {
-  return firstDefined(planState.status_label, statusLabel(planState.status), 'Activo');
-}
-
-function memberLimitLabel() {
-  return firstDefined(
-    planState.member_limit,
-    planState.members_limit,
-    planState.user_limit,
-    planState.users_limit,
-    planState.included_members,
-    '--'
-  );
-}
-
-function planBilling() {
-  return planState.billing || planState.payment || planState.subscription || {};
-}
-
-function planStorage() {
-  const storage = planState.storage || planState.storage_usage || planState.usage || {};
-  const usedGb = firstDefined(
-    storage.used_gb,
-    storage.used,
-    storage.used_storage_gb,
-    planState.storage_used_gb,
-    planState.used_storage_gb,
-    planState.storage_used
-  );
-  const totalGb = firstDefined(
-    storage.total_gb,
-    storage.total,
-    storage.limit_gb,
-    storage.quota_gb,
-    planState.storage_total_gb,
-    planState.storage_limit_gb,
-    planState.storage_quota_gb,
-    planState.storage_total
-  );
-  const usedBytes = firstDefined(storage.used_bytes, planState.storage_used_bytes);
-  const totalBytes = firstDefined(storage.total_bytes, storage.limit_bytes, planState.storage_total_bytes, planState.storage_limit_bytes);
-  const used = usedGb !== undefined ? numberValue(usedGb, 0) : bytesToGb(usedBytes);
-  let total = totalGb !== undefined ? numberValue(totalGb, 0) : bytesToGb(totalBytes);
-  if (!total) {
-    const currentLabel = String(planLabel()).toLowerCase();
-    const defaultPlan = DEFAULT_PLAN_OPTIONS.find((option) => currentLabel.includes(option.name.toLowerCase()));
-    total = numberValue(defaultPlan?.storage_gb, 0);
+function formatDateTime(value) {
+  if (!value) {
+    return '--';
   }
-  const rawAvailable = firstDefined(storage.available_gb, storage.available, planState.storage_available_gb);
-  const available = rawAvailable !== undefined ? numberValue(rawAvailable, 0) : Math.max(total - used, 0);
-  const rawPercent = firstDefined(storage.percent, storage.usage_percent, planState.storage_usage_percent);
-  const percent = rawPercent !== undefined ? numberValue(rawPercent, 0) : (total > 0 ? (used / total) * 100 : 0);
 
-  return {
-    used,
-    total,
-    available,
-    percent: clamp(percent, 0, 100),
-    source: storage,
-  };
-}
+  const date = new Date(value);
 
-function storageCategoryValue(storage, key) {
-  const source = storage.source || {};
-  const categories = source.categories || planState.storage_categories || {};
-  const aliases = {
-    images: ['images', 'image', 'imagenes', 'imagen'],
-    videos: ['videos', 'video'],
-    other: ['other', 'otros', 'otras', 'files', 'archivos', 'documents', 'documentos'],
-  };
-  const normalizeKey = (value) => String(value || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  const category = Array.isArray(categories)
-    ? categories.find((item) => [item.key, item.type, item.slug, item.name].map(normalizeKey).some((value) => aliases[key].includes(value)))
-    : categories[key];
-
-  const flatMap = {
-    images: firstDefined(source.images_gb, source.image_gb, source.images, planState.storage_images_gb, planState.images_gb),
-    videos: firstDefined(source.videos_gb, source.video_gb, source.videos, planState.storage_videos_gb, planState.videos_gb),
-    other: firstDefined(source.other_gb, source.files_gb, source.documents_gb, source.other, planState.storage_other_gb, planState.other_gb),
-  };
-
-  const value = firstDefined(category?.used_gb, category?.value_gb, category?.gb, category?.used, flatMap[key]);
-  return value === undefined && category?.used_bytes !== undefined ? bytesToGb(category.used_bytes) : numberValue(value, 0);
-}
-
-function setPlanBindValue(key, value) {
-  document.querySelectorAll(`[data-plan-bind="${key}"]`).forEach((node) => {
-    node.textContent = value ?? '--';
-  });
-}
-
-function setStorageBindValue(key, value) {
-  document.querySelectorAll(`[data-storage-bind="${key}"]`).forEach((node) => {
-    node.textContent = value ?? '--';
-  });
-}
-
-function renderStorageDashboard(storage) {
-  setPlanBindValue('storageUsedText', formatGb(storage.used));
-  setPlanBindValue('storageTotalText', formatGb(storage.total));
-  setPlanBindValue('storageAvailableText', formatGb(storage.available));
-
-  document.querySelectorAll('[data-plan-progress="storage"]').forEach((bar) => {
-    bar.style.width = `${storage.percent}%`;
-  });
-
-  const categories = {
-    images: storageCategoryValue(storage, 'images'),
-    videos: storageCategoryValue(storage, 'videos'),
-    other: storageCategoryValue(storage, 'other'),
-  };
-
-  Object.entries(categories).forEach(([key, value]) => {
-    const percent = storage.used > 0 ? Math.round((value / storage.used) * 100) : 0;
-    setStorageBindValue(`${key}.value`, formatGb(value));
-    setStorageBindValue(`${key}.percent`, `${percent}%`);
-  });
-}
-
-function normalizePlanOption(option, index) {
-  option = option && typeof option === 'object' ? option : { name: option };
-  const prices = option.prices || {};
-  const name = firstDefined(option.name, option.label, option.title, `Plan ${index + 1}`);
-  const storage = firstDefined(option.storage_gb, option.storage, option.limit_gb, option.quota_gb);
-  const priceMonthly = firstDefined(prices.monthly, option.monthly_price, option.price_monthly, option.price);
-  const priceQuarterly = firstDefined(prices.quarterly, option.quarterly_price, option.price_quarterly);
-  const priceAnnual = firstDefined(prices.annual, prices.yearly, option.annual_price, option.yearly_price, option.price_annual);
-  const features = Array.isArray(option.features)
-    ? option.features.map((feature) => firstDefined(feature.label, feature.name, feature.text, feature)).filter(Boolean)
-    : [];
-
-  const currentLabel = String(planLabel()).toLowerCase();
-  const optionName = String(name).toLowerCase();
-
-  return {
-    id: firstDefined(option.id, option.slug, String(name).toLowerCase().replace(/\s+/g, '-')),
-    name,
-    storage,
-    accent: firstDefined(option.accent, ['cyan', 'purple', 'red'][index % 3]),
-    current: boolValue(firstDefined(
-      option.current,
-      option.is_current,
-      option.active,
-      currentLabel === optionName || currentLabel.includes(optionName) || optionName.includes(currentLabel)
-    )),
-    prices: {
-      monthly: priceMonthly,
-      quarterly: firstDefined(priceQuarterly, priceMonthly ? numberValue(priceMonthly, 0) * 3 : undefined),
-      annual: firstDefined(priceAnnual, priceMonthly ? numberValue(priceMonthly, 0) * 12 : undefined),
-    },
-    features: features.length ? features : DEFAULT_PLAN_OPTIONS[index % DEFAULT_PLAN_OPTIONS.length].features,
-  };
-}
-
-function planIconSvg(accent) {
-  if (accent === 'red') {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"></path></svg>';
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
   }
-  if (accent === 'purple') {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m2 8 4 10h12l4-10-6 4-4-7-4 7-6-4z"></path></svg>';
+
+  return new Intl.DateTimeFormat('es-MX', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function formatStorage(value) {
+  if (
+    typeof value === 'string' &&
+    value.toLowerCase().includes('gb')
+  ) {
+    return value;
   }
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H8a6 6 0 1 1 5.7-7.9A4.5 4.5 0 1 1 17.5 19z"></path></svg>';
+
+  return `${numberValue(value).toFixed(
+    numberValue(value) % 1 === 0 ? 0 : 2
+  )} GB`;
 }
 
-function renderPlanOptions() {
-  const container = document.querySelector('[data-plan-options]');
-  if (!container) return;
+function formatBytes(value) {
+  const bytes = numberValue(value);
 
-  const rawOptions = firstDefined(
-    planState.available_plans,
-    planState.plans,
-    planState.upgrade_options,
-    planState.options
-  );
-  const source = Array.isArray(rawOptions) && rawOptions.length ? rawOptions : DEFAULT_PLAN_OPTIONS;
-  const plans = source.map(normalizePlanOption);
-
-  container.innerHTML = plans.map((plan) => {
-    const monthly = formatMoney(plan.prices.monthly);
-    const quarterly = formatMoney(plan.prices.quarterly);
-    const annual = formatMoney(plan.prices.annual);
-    const features = plan.features
-      .slice(0, 4)
-      .map((feature) => `<li>${escapeHtml(feature)}</li>`)
-      .join('');
-    const storageLabel = plan.storage !== undefined ? formatGb(plan.storage) : 'Incluido';
-    const buttonLabel = plan.current ? 'Plan actual' : `Cambiar a ${escapeHtml(plan.name)}`;
-
-    return `
-      <article class="settings-plan-option ${plan.current ? 'is-current' : ''}">
-        <div class="settings-plan-option-head">
-          <div class="settings-plan-option-title">
-            <span class="settings-mini-icon ${escapeHtml(plan.accent)}">${planIconSvg(plan.accent)}</span>
-            ${plan.current ? '<span class="settings-plan-badge">Plan actual</span>' : ''}
-          </div>
-          <div>
-            <h3>${escapeHtml(plan.name)}</h3>
-            <small>${escapeHtml(storageLabel)}</small>
-          </div>
-        </div>
-        <ul class="settings-plan-features">${features}</ul>
-        <div class="settings-plan-option-footer">
-          <div class="settings-plan-cycle">
-            <button class="is-active" type="button" data-plan-cycle="monthly" data-price="${escapeHtml(monthly)}" data-period="/mes">Mensual</button>
-            <button type="button" data-plan-cycle="quarterly" data-price="${escapeHtml(quarterly)}" data-period="/trim">Trimestral</button>
-            <button type="button" data-plan-cycle="annual" data-price="${escapeHtml(annual)}" data-period="/anio">Anual</button>
-          </div>
-          <div class="settings-plan-price"><strong data-plan-price-value>${escapeHtml(monthly)}</strong><span data-plan-price-period>/mes</span></div>
-          <button class="settings-plan-select ${plan.current ? '' : 'primary'}" type="button" data-plan-action="change-plan" data-plan-id="${escapeHtml(plan.id)}" ${plan.current ? 'disabled' : ''}>${buttonLabel}</button>
-        </div>
-      </article>
-    `;
-  }).join('');
-}
-
-function normalizeUsageHistory(storage) {
-  const rawHistory = firstDefined(
-    planState.usage_history,
-    planState.storage_history,
-    planState.monthly_usage,
-    storage.source?.history
-  );
-  const source = Array.isArray(rawHistory) && rawHistory.length ? rawHistory : DEFAULT_USAGE_HISTORY;
-
-  return source.map((item, index) => ({
-    label: firstDefined(item.label, item.month, item.period, item.date, `Mes ${index + 1}`),
-    value: numberValue(firstDefined(item.used_gb, item.used, item.value, item.total, item.storage_gb), 0),
-  }));
-}
-
-function renderUsageChart(storage) {
-  const container = document.querySelector('[data-usage-chart]');
-  if (!container) return;
-
-  const history = normalizeUsageHistory(storage).slice(-6);
-  const maxValue = Math.max(100, Math.ceil(Math.max(...history.map((item) => item.value), storage.total || 0) / 25) * 25);
-  const width = 560;
-  const height = 220;
-  const left = 52;
-  const right = 16;
-  const top = 14;
-  const bottom = 40;
-  const plotWidth = width - left - right;
-  const plotHeight = height - top - bottom;
-  const stepX = history.length > 1 ? plotWidth / (history.length - 1) : plotWidth;
-  const yFor = (value) => top + plotHeight - (numberValue(value, 0) / maxValue) * plotHeight;
-  const points = history.map((item, index) => ({
-    x: left + index * stepX,
-    y: yFor(item.value),
-    label: item.label,
-    value: item.value,
-  }));
-  const pointString = points.map((point) => `${point.x},${point.y}`).join(' ');
-  const areaString = `${left},${top + plotHeight} ${pointString} ${left + plotWidth},${top + plotHeight}`;
-  const grid = [maxValue, maxValue * .75, maxValue * .5, maxValue * .25, 0]
-    .map((value) => {
-      const y = yFor(value);
-      return `<line class="grid-line" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"></line><text x="0" y="${y + 4}">${formatNumber(value, 0)} GB</text>`;
-    })
-    .join('');
-  const labels = points
-    .map((point) => `<text x="${point.x}" y="${height - 10}" text-anchor="middle">${escapeHtml(point.label)}</text>`)
-    .join('');
-  const circles = points
-    .map((point) => `<circle class="usage-point" cx="${point.x}" cy="${point.y}" r="6"><title>${escapeHtml(point.label)}: ${formatGb(point.value)}</title></circle>`)
-    .join('');
-
-  container.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Historial de uso de almacenamiento">
-      ${grid}
-      <polygon class="usage-area" points="${areaString}"></polygon>
-      <polyline class="usage-line" points="${pointString}"></polyline>
-      ${circles}
-      ${labels}
-    </svg>
-  `;
-}
-
-function recommendationText(storage) {
-  const recommendations = planState.recommendations;
-  const firstRecommendation = Array.isArray(recommendations) ? recommendations[0] : recommendations;
-  const text = firstDefined(
-    planState.recommendation_text,
-    planState.storage_recommendation,
-    firstRecommendation?.message,
-    firstRecommendation?.text
-  );
-
-  if (text) return text;
-  if (storage.percent >= 90) return 'Estas por llegar al limite de tu almacenamiento. Considera liberar espacio o actualizar tu plan para evitar interrupciones.';
-  if (storage.percent >= 75) return 'Tu almacenamiento esta creciendo rapido. Revisa videos pesados y considera ampliar tu plan.';
-  return 'Tu almacenamiento se mantiene estable. Revisa periodicamente los archivos mas grandes para conservar espacio disponible.';
-}
-
-function renderPlanDashboard() {
-  const storage = planStorage();
-  const billing = planBilling();
-  const renewal = firstDefined(
-    planState.renewal_date,
-    planState.renews_at,
-    planState.next_renewal_at,
-    planState.current_period_end,
-    billing.renewal_date
-  );
-  const nextCharge = firstDefined(
-    billing.next_charge_date,
-    billing.next_payment_at,
-    billing.next_invoice_at,
-    planState.next_charge_date,
-    renewal
-  );
-
-  setPlanBindValue('renewalDate', formatDate(renewal));
-  setPlanBindValue('nextChargeDate', formatDate(nextCharge));
-  setPlanBindValue('recommendationText', recommendationText(storage));
-  renderStorageDashboard(storage);
-  renderPlanOptions();
-  renderUsageChart(storage);
-}
-
-function renderMetadata() {
-  const initials = userState.initials || initialsFromName(userState.name);
-  const role = userState.role || 'Medico';
-
-  setBindValue('userInitials', initials);
-  setBindValue('userName', userState.name || 'Doctor');
-  setBindValue('userRole', role);
-  setBindValue('userEmail', userState.email || '');
-  setBindValue('clinicName', userState.clinic || 'ENCLAII');
-  setBindValue('specialty', userState.specialty || role);
-  setBindValue('professionalLicense', userState.professional_license || '');
-  setBindValue('planLabel', planLabel());
-  setBindValue('planStatus', planStatusLabel());
-  setBindValue('memberLimit', memberLimitLabel());
-  setBindValue('signatureStatus', userState.has_signature ? 'Firma configurada' : 'Sin firma registrada');
-  setBindValue('signatureUpdated', userState.signature_updated_at || '--');
-
-  const headerProfile = document.querySelector('.profile');
-  if (headerProfile) {
-    const avatar = headerProfile.querySelector('.avatar');
-    const name = headerProfile.querySelector('strong');
-    const sub = headerProfile.querySelector('span:not(.avatar)');
-    if (avatar) avatar.textContent = initials;
-    if (name) name.textContent = userState.name || 'Doctor';
-    if (sub) sub.textContent = role;
+  if (bytes < 1024) {
+    return `${bytes} B`;
   }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function applyLocalSettings(root) {
-  root.querySelectorAll('[data-local-setting]').forEach((control) => {
-    const key = control.dataset.localSetting;
-    const storageKey = LOCAL_SETTINGS[key];
-    if (key === 'api_url') {
-      control.value = apiBaseUrl();
-      return;
-    }
-    control.value = localStorage.getItem(storageKey) || 'es';
+function initials(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) {
+    return 'DR';
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+function setText(selector, value) {
+  document.querySelectorAll(selector).forEach((element) => {
+    element.textContent = value ?? '--';
   });
 }
 
-function applySettings(payload) {
-  const root = document.getElementById('settingsAppRoot');
-  if (!root) return;
-
-  settingsState = {
-    ...(payload.settings || {}),
-    ...(payload.security || {}),
-  };
-  userState = payload.user || {};
-  planState = payload.plan || {};
-
-  isApplyingSettings = true;
-  root.querySelectorAll('[data-setting]').forEach((control) => {
-    setControlValue(control, settingsState[control.dataset.setting]);
-  });
-  root.querySelectorAll('[data-setting-list]').forEach((control) => {
-    const values = Array.isArray(settingsState[control.dataset.settingList])
-      ? settingsState[control.dataset.settingList]
-      : [];
-    control.checked = values.includes(control.value);
-  });
-  applyLocalSettings(root);
-  updateTextCounts(root);
-  renderMetadata();
-  renderPlanDashboard();
-  renderQrPreviews();
-  applyUiEffects(settingsState);
-  isApplyingSettings = false;
-}
-
-function controlPayload(control) {
-  const key = control?.dataset.setting;
-  if (!key) return null;
-
-  if (control.type === 'checkbox') return { key, value: control.checked };
-  if (key === 'capture_auto_interval') return { key, value: Number(control.value || 0) };
-  return { key, value: control.value };
-}
-
-function listPayload(root, key) {
-  const values = [...root.querySelectorAll(`[data-setting-list="${key}"]:checked`)]
-    .map((control) => control.value);
-  return { key, value: values };
-}
-
-async function saveSetting(key, value) {
-  const root = document.getElementById('settingsAppRoot');
-  if (!root || !key) return;
-
-  const previous = settingsState[key];
-  settingsState[key] = value;
-  root.dataset.saving = 'true';
-
-  try {
-    const payload = await configRequest({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [key]: value }),
+function setBinding(name, value) {
+  document
+    .querySelectorAll(`[data-config-bind="${name}"]`)
+    .forEach((element) => {
+      if (
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement
+      ) {
+        element.value = value ?? '';
+      } else {
+        element.textContent = value ?? '--';
+      }
     });
-    applySettings(payload);
-    setSettingsAlert('Cambios guardados.', 'ok');
-  } catch (error) {
-    console.error(error);
-    settingsState[key] = previous;
-    applySettings({ settings: settingsState, user: userState, plan: planState });
-    setSettingsAlert(error.message || 'No se pudo guardar el cambio.', 'error');
-  } finally {
-    root.dataset.saving = 'false';
+}
+
+function fingerprint(data) {
+  return JSON.stringify({
+    settings: data?.settings || {},
+    user: data?.user || {},
+    profile: data?.profile || {},
+    plan: data?.plan || {},
+    clinic: data?.clinic || {},
+    backups: data?.backups || [],
+  });
+}
+
+/* =========================================================
+   MENSAJES
+========================================================= */
+
+function toast(message, type = 'success') {
+  let element =
+    document.getElementById('cfgTauriToast');
+
+  if (!element) {
+    element = document.createElement('div');
+    element.id = 'cfgTauriToast';
+    element.className = 'cfg-tauri-toast';
+
+    document.body.appendChild(element);
+  }
+
+  element.textContent = message;
+  element.dataset.type = type;
+  element.classList.add('show');
+
+  clearTimeout(element._timer);
+
+  element._timer = window.setTimeout(() => {
+    element.classList.remove('show');
+  }, 2800);
+}
+
+function syncStatus(
+  message,
+  status = 'loading',
+  persistent = false
+) {
+  let element =
+    document.getElementById('cfgSyncStatus');
+
+  if (!element) {
+    element = document.createElement('div');
+    element.id = 'cfgSyncStatus';
+    element.className = 'cfg-sync-status';
+
+    document.body.appendChild(element);
+  }
+
+  element.textContent = message;
+  element.dataset.state = status;
+  element.classList.add('show');
+
+  clearTimeout(element._timer);
+
+  if (!persistent) {
+    element._timer = window.setTimeout(() => {
+      element.classList.remove('show');
+    }, 1400);
   }
 }
 
-function saveLocalSetting(control) {
-  const key = control.dataset.localSetting;
-  const storageKey = LOCAL_SETTINGS[key];
-  if (!storageKey) return;
-  const value = control.value.trim();
-  if (value) localStorage.setItem(storageKey, value);
-  setSettingsAlert(key === 'api_url' ? 'Endpoint Laravel guardado.' : 'Preferencia local guardada.', 'ok');
+/* =========================================================
+   MODO LECTURA, ANIMACIONES Y COMPACTO
+========================================================= */
+
+function applyVisualEffects(settings = {}) {
+  const readingMode =
+    boolValue(settings.reading_mode);
+
+  const animationsEnabled =
+    settings.animations === undefined
+      ? true
+      : boolValue(settings.animations);
+
+  const compactMode =
+    boolValue(settings.compact);
+
+  document.documentElement.dataset.reading =
+    readingMode ? 'on' : 'off';
+
+  document.documentElement.dataset.animations =
+    animationsEnabled ? 'on' : 'off';
+
+  document.documentElement.dataset.compact =
+    compactMode ? 'on' : 'off';
+
+  localStorage.setItem(
+    'enclaii-pref-reading_mode',
+    readingMode ? '1' : '0'
+  );
+
+  localStorage.setItem(
+    'enclaii-pref-animations',
+    animationsEnabled ? '1' : '0'
+  );
+
+  localStorage.setItem(
+    'enclaii-pref-compact',
+    compactMode ? '1' : '0'
+  );
 }
 
-function selectedPlanCycle(button) {
-  const card = button.closest('.settings-plan-option');
-  return card?.querySelector('[data-plan-cycle].is-active')?.dataset.planCycle || 'monthly';
+export function applyEarlyVisualPreferences() {
+  document.documentElement.dataset.reading =
+    localStorage.getItem(
+      'enclaii-pref-reading_mode'
+    ) === '1'
+      ? 'on'
+      : 'off';
+
+  document.documentElement.dataset.animations =
+    localStorage.getItem(
+      'enclaii-pref-animations'
+    ) === '0'
+      ? 'off'
+      : 'on';
+
+  document.documentElement.dataset.compact =
+    localStorage.getItem(
+      'enclaii-pref-compact'
+    ) === '1'
+      ? 'on'
+      : 'off';
 }
 
-function planActionPayload(action, button) {
-  if (action !== 'change-plan') return null;
+/* =========================================================
+   APLICAR ESTADO RECIBIDO DE LARAVEL
+========================================================= */
 
-  return {
-    plan_id: button.dataset.planId || '',
-    billing_cycle: selectedPlanCycle(button),
+function mergeState(payload = {}) {
+  state = {
+    ...state,
+    ...payload,
+
+    settings: {
+      ...state.settings,
+      ...(payload.settings || {}),
+    },
+
+    user: {
+      ...state.user,
+      ...(payload.user || {}),
+    },
+
+    profile: {
+      ...state.profile,
+      ...(payload.profile || {}),
+    },
+
+    plan: {
+      ...state.plan,
+      ...(payload.plan || {}),
+    },
+
+    clinic: {
+      ...state.clinic,
+      ...(payload.clinic || {}),
+    },
+
+    backups: Array.isArray(payload.backups)
+      ? payload.backups
+      : state.backups,
   };
 }
 
-function mergePlanResponse(payload = {}) {
-  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
-  const nextPlan = firstDefined(payload.plan, data.plan, payload.subscription, data.subscription, {});
-  const planPatch = nextPlan && typeof nextPlan === 'object' ? { ...nextPlan } : { label: nextPlan };
-  const storage = firstDefined(payload.storage, data.storage, payload.storage_usage, data.storage_usage);
-  const billing = firstDefined(payload.billing, data.billing, payload.payment, data.payment);
-  const recommendations = firstDefined(payload.recommendations, data.recommendations);
-  const recommendationText = firstDefined(payload.recommendation_text, data.recommendation_text);
-  const usageHistory = firstDefined(payload.usage_history, data.usage_history, payload.storage_history, data.storage_history);
-  const availablePlans = firstDefined(payload.available_plans, data.available_plans, payload.plans, data.plans);
+function updateState(
+  payload,
+  root,
+  force = false
+) {
+  const nextFingerprint =
+    fingerprint(payload);
 
-  if (storage) planPatch.storage = storage;
-  if (billing) planPatch.billing = billing;
-  if (recommendations) planPatch.recommendations = recommendations;
-  if (recommendationText) planPatch.recommendation_text = recommendationText;
-  if (usageHistory) planPatch.usage_history = usageHistory;
-  if (availablePlans) planPatch.available_plans = availablePlans;
-
-  if (Object.keys(planPatch).length) {
-    planState = { ...planState, ...planPatch };
+  if (
+    !force &&
+    nextFingerprint === currentFingerprint
+  ) {
+    return false;
   }
 
-  if (payload.user || data.user) userState = { ...userState, ...(payload.user || data.user) };
-  if (payload.settings || payload.security) {
-    settingsState = {
-      ...settingsState,
-      ...(payload.settings || {}),
-      ...(payload.security || {}),
-    };
-  }
+  currentFingerprint = nextFingerprint;
 
-  renderMetadata();
-  renderPlanDashboard();
-}
+  mergeState(payload);
+  applyStateToView(root);
 
-function normalizeLaravelUrl(value) {
-  if (!value) return '';
-  try {
-    return new URL(value, apiBaseUrl()).toString();
-  } catch (_) {
-    return '';
-  }
-}
+  document.dispatchEvent(
+    new CustomEvent('enclaiiConfigurationUpdated', {
+      detail: {
+        state,
+        source: 'laravel',
+      },
+    })
+  );
 
-function openLaravelUrl(payload = {}) {
-  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
-  const url = normalizeLaravelUrl(firstDefined(
-    payload.url,
-    payload.redirect_url,
-    payload.portal_url,
-    payload.checkout_url,
-    payload.invoice_url,
-    data.url,
-    data.redirect_url,
-    data.portal_url,
-    data.checkout_url,
-    data.invoice_url
-  ));
-
-  if (!url) return false;
-  window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
 
-function successPlanMessage(action, payload = {}) {
-  const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
-  const backendMessage = firstDefined(payload.message, data.message);
-  if (backendMessage) return backendMessage;
+function applyStateToView(root) {
+  applyingLaravelData = true;
 
-  const messages = {
-    manage: 'Gestion de plan abierta desde Laravel.',
-    'storage-detail': 'Detalle de almacenamiento actualizado desde Laravel.',
-    invoices: 'Facturas consultadas desde Laravel.',
-    'payment-method': 'Metodo de pago solicitado a Laravel.',
-    recommendations: 'Recomendaciones actualizadas desde Laravel.',
-    'change-plan': 'Solicitud de cambio de plan enviada a Laravel.',
-  };
+  root
+    .querySelectorAll('[data-setting]')
+    .forEach((control) => {
+      const key =
+        control.dataset.setting;
 
-  return messages[action] || 'Accion completada desde Laravel.';
+      const value =
+        state.settings[key];
+
+      if (
+        value === undefined ||
+        value === null
+      ) {
+        return;
+      }
+
+      if (control.type === 'checkbox') {
+        control.checked =
+          boolValue(value);
+      } else {
+        control.value =
+          String(value);
+      }
+    });
+
+  root
+    .querySelectorAll('[data-setting-list]')
+    .forEach((control) => {
+      const key =
+        control.dataset.settingList;
+
+      const values =
+        state.settings[key];
+
+      control.checked =
+        Array.isArray(values) &&
+        values.includes(control.value);
+    });
+
+  root
+    .querySelectorAll('[data-profile-field]')
+    .forEach((control) => {
+      const key =
+        control.dataset.profileField;
+
+      control.value =
+        state.profile[key] ?? '';
+    });
+
+  root
+    .querySelectorAll(
+      '[data-settings-panel="perfil"] input[name], ' +
+      '[data-settings-panel="perfil"] select[name], ' +
+      '.cfg-panel[data-panel="perfil"] input[name], ' +
+      '.cfg-panel[data-panel="perfil"] select[name]'
+    )
+    .forEach((control) => {
+      if (
+        control.type === 'file' ||
+        !control.name
+      ) {
+        return;
+      }
+
+      const value =
+        state.profile[control.name] ??
+        state.user[control.name];
+
+      if (
+        value !== undefined &&
+        value !== null
+      ) {
+        control.value = value;
+      }
+    });
+
+  applyVisualEffects(state.settings);
+
+  renderUser();
+  renderPlan();
+  renderProfileFiles();
+  renderMembers();
+  renderBackups();
+  renderQrPreviews();
+  renderCounters();
+  renderConnection();
+
+  applyingLaravelData = false;
 }
 
-function updatePlanCycle(button) {
-  const card = button.closest('.settings-plan-option');
-  if (!card) return;
+/* =========================================================
+   USUARIO Y PERFIL
+========================================================= */
 
-  card.querySelectorAll('[data-plan-cycle]').forEach((cycleButton) => {
-    cycleButton.classList.toggle('is-active', cycleButton === button);
-  });
+function renderUser() {
+  const user = state.user || {};
+  const profile = state.profile || {};
 
-  const price = card.querySelector('[data-plan-price-value]');
-  const period = card.querySelector('[data-plan-price-period]');
-  if (price) price.textContent = button.dataset.price || '--';
-  if (period) period.textContent = button.dataset.period || '';
+  const name =
+    user.account_name ||
+    user.name ||
+    profile.name ||
+    'Doctor';
+
+  const role =
+    user.role ||
+    user.clinica_rol ||
+    'Médico';
+
+  setBinding('userInitials', initials(name));
+  setBinding('userName', name);
+  setBinding('userRole', role);
+  setBinding(
+    'userEmail',
+    user.email || profile.email || ''
+  );
+
+  setBinding(
+    'clinicName',
+    user.clinic ||
+    profile.clinica_nombre ||
+    'ENCLAII'
+  );
+
+  setBinding(
+    'specialty',
+    user.specialty ||
+    profile.specialty ||
+    role
+  );
+
+  setBinding(
+    'professionalLicense',
+    user.professional_license ||
+    profile.professional_license ||
+    ''
+  );
+
+  const avatar =
+    document.getElementById('pfAva');
+
+  const empty =
+    document.getElementById('pfEmpty');
+
+  const photoUrl =
+    profile.photo_url ||
+    user.photo_url ||
+    '';
+
+  if (avatar && photoUrl) {
+    avatar.src = `${photoUrl}${
+      photoUrl.includes('?') ? '&' : '?'
+    }v=${Date.now()}`;
+
+    avatar.style.display = 'block';
+
+    if (empty) {
+      empty.style.display = 'none';
+    }
+  } else {
+    if (avatar) {
+      avatar.removeAttribute('src');
+      avatar.style.display = 'none';
+    }
+
+    if (empty) {
+      empty.style.display = 'grid';
+
+      if (!empty.querySelector('svg')) {
+        empty.textContent = initials(name);
+      }
+    }
+  }
 }
 
-async function handlePlanAction(button) {
-  if (button.disabled) return;
+function renderProfileFiles() {
+  const taxUrl =
+    state.profile.tax_document_url ||
+    state.profile.constancia_fiscal_url ||
+    '';
 
-  const action = button.dataset.planAction;
-  const actionConfig = PLAN_ACTIONS[action];
-  if (!actionConfig) return;
+  const taxName =
+    state.profile.tax_document_name ||
+    state.profile.constancia_fiscal_name ||
+    'Constancia fiscal';
 
-  const root = document.getElementById('settingsAppRoot');
-  const wasDisabled = button.disabled;
-  const body = planActionPayload(action, button);
-  const request = {
-    path: actionConfig.path,
-    method: actionConfig.method,
+  renderTaxDocument(taxUrl, taxName);
+}
+
+/* =========================================================
+   PLAN Y ALMACENAMIENTO
+========================================================= */
+
+function getPlanData() {
+  const plan = state.plan || {};
+  const storage = plan.storage || {};
+
+  return {
+    label:
+      plan.label ||
+      plan.name ||
+      plan.plan_label ||
+      'Sin plan',
+
+    status:
+      plan.status ||
+      plan.subscription_status ||
+      'inactive',
+
+    renewal:
+      plan.renewal_date ||
+      plan.subscription_renews_at ||
+      null,
+
+    personCount:
+      numberValue(
+        plan.person_count ??
+        state.clinic.member_count ??
+        1,
+        1
+      ),
+
+    memberLimit:
+      numberValue(
+        plan.member_limit ??
+        state.clinic.member_limit ??
+        0
+      ),
+
+    storagePerPerson:
+      storage.per_person_gb ??
+      plan.quota_per_person_gb ??
+      plan.storage_per_person_gb ??
+      0,
+
+    storageTotal:
+      storage.total_gb ??
+      plan.quota_gb ??
+      plan.storage_total_gb ??
+      0,
+
+    storageUsed:
+      storage.used_gb ??
+      plan.used_gb ??
+      0,
+
+    storageAvailable:
+      storage.available_gb ??
+      plan.available_gb ??
+      0,
+
+    storagePercent:
+      numberValue(
+        storage.percent ??
+        plan.used_percent ??
+        0
+      ),
+
+    images:
+      storage.images ||
+      plan.storage_categories?.images ||
+      {},
+
+    videos:
+      storage.videos ||
+      plan.storage_categories?.videos ||
+      {},
+
+    other:
+      storage.other ||
+      plan.storage_categories?.other ||
+      {},
+
+    paymentBrand:
+      plan.payment_brand ||
+      plan.pm_brand ||
+      '',
+
+    paymentLastFour:
+      plan.payment_last_four ||
+      plan.pm_last_four ||
+      '',
+
+    recommendation:
+      plan.recommendation?.message ||
+      plan.recommendation_text ||
+      'Tu almacenamiento está disponible y funcionando correctamente.',
+
+    history:
+      Array.isArray(plan.history)
+        ? plan.history
+        : Array.isArray(plan.usage_history)
+          ? plan.usage_history
+          : [],
   };
+}
 
-  if (body) {
-    request.headers = { 'Content-Type': 'application/json' };
-    request.body = JSON.stringify(body);
+function renderPlan() {
+  const plan = getPlanData();
+
+  const isActive =
+    String(plan.status).toLowerCase() === 'active' ||
+    String(plan.status).toLowerCase() === 'activo';
+
+  const statusText =
+    isActive ? 'Activo' : 'Inactivo';
+
+  setBinding(
+    'planLabel',
+    `Plan ${plan.label}`
+  );
+
+  setBinding(
+    'planStatus',
+    statusText
+  );
+
+  setBinding(
+    'memberLimit',
+    plan.memberLimit || '--'
+  );
+
+  setText(
+    '[data-plan-bind="planLabel"]',
+    `Plan ${plan.label}`
+  );
+
+  setText(
+    '[data-plan-bind="status"]',
+    statusText
+  );
+
+  setText(
+    '[data-plan-bind="personCount"]',
+    plan.personCount
+  );
+
+  setText(
+    '[data-plan-bind="storagePerPerson"]',
+    formatStorage(plan.storagePerPerson)
+  );
+
+  setText(
+    '[data-plan-bind="storageTotal"]',
+    formatStorage(plan.storageTotal)
+  );
+
+  setText(
+    '[data-plan-bind="storageUsedText"]',
+    formatStorage(plan.storageUsed)
+  );
+
+  setText(
+    '[data-plan-bind="storageAvailableText"]',
+    formatStorage(plan.storageAvailable)
+  );
+
+  setText(
+    '[data-plan-bind="renewalDate"]',
+    plan.renewal
+      ? formatDate(plan.renewal)
+      : '--'
+  );
+
+  setText(
+    '[data-plan-bind="nextChargeDate"]',
+    plan.renewal
+      ? formatDate(plan.renewal)
+      : '--'
+  );
+
+  setText(
+    '[data-plan-bind="storageImages"]',
+    formatStorage(
+      plan.images.gb ??
+      plan.images.value ??
+      0
+    )
+  );
+
+  setText(
+    '[data-plan-bind="storageVideos"]',
+    formatStorage(
+      plan.videos.gb ??
+      plan.videos.value ??
+      0
+    )
+  );
+
+  setText(
+    '[data-plan-bind="storageOther"]',
+    formatStorage(
+      plan.other.gb ??
+      plan.other.value ??
+      0
+    )
+  );
+
+  setText(
+    '[data-plan-bind="storageImagesPercent"]',
+    `${
+      numberValue(plan.images.percent)
+    }%`
+  );
+
+  setText(
+    '[data-plan-bind="storageVideosPercent"]',
+    `${
+      numberValue(plan.videos.percent)
+    }%`
+  );
+
+  setText(
+    '[data-plan-bind="storageOtherPercent"]',
+    `${
+      numberValue(plan.other.percent)
+    }%`
+  );
+
+  setText(
+    '[data-plan-bind="recommendation"]',
+    plan.recommendation
+  );
+
+  document
+    .querySelectorAll(
+      '[data-plan-progress="storage"]'
+    )
+    .forEach((element) => {
+      element.style.width =
+        `${Math.min(
+          100,
+          Math.max(0, plan.storagePercent)
+        )}%`;
+    });
+
+  document
+    .querySelectorAll(
+      '[data-plan-status]'
+    )
+    .forEach((element) => {
+      element.textContent =
+        statusText;
+
+      element.classList.toggle(
+        'success',
+        isActive
+      );
+    });
+
+  const payment =
+    document.querySelector(
+      '[data-plan-bind="paymentMethod"]'
+    );
+
+  if (payment) {
+    payment.textContent =
+      plan.paymentLastFour
+        ? `${String(
+            plan.paymentBrand ||
+            'Tarjeta'
+          ).toUpperCase()} ····${plan.paymentLastFour}`
+        : 'Sin método de pago';
   }
 
-  button.disabled = true;
-  button.setAttribute('aria-busy', 'true');
-  setSettingsAlert(actionConfig.loading, 'ok');
+  renderUsageChart(plan.history);
+}
+
+function renderUsageChart(history) {
+  const chart =
+    document.querySelector(
+      '[data-plan-usage-chart]'
+    );
+
+  if (!chart) {
+    return;
+  }
+
+  if (!history.length) {
+    chart.innerHTML = `
+      <div class="settings-chart-empty">
+        Todavía no hay historial de almacenamiento.
+      </div>
+    `;
+
+    return;
+  }
+
+  const values = history.map((item) =>
+    numberValue(
+      item.gb ??
+      item.value ??
+      item.used_gb
+    )
+  );
+
+  const maxValue =
+    Math.max(...values, 1);
+
+  const width = 300;
+  const height = 120;
+  const paddingX = 18;
+  const paddingY = 14;
+
+  const drawableWidth =
+    width - paddingX * 2;
+
+  const drawableHeight =
+    height - paddingY * 2;
+
+  const points = history.map((item, index) => {
+    const x =
+      paddingX +
+      (
+        index /
+        Math.max(history.length - 1, 1)
+      ) *
+      drawableWidth;
+
+    const value =
+      numberValue(
+        item.gb ??
+        item.value ??
+        item.used_gb
+      );
+
+    const y =
+      height -
+      paddingY -
+      (value / maxValue) *
+      drawableHeight;
+
+    return {
+      x,
+      y,
+      label:
+        item.label ||
+        item.month ||
+        '',
+      value,
+    };
+  });
+
+  const polyline =
+    points
+      .map((point) =>
+        `${point.x},${point.y}`
+      )
+      .join(' ');
+
+  chart.innerHTML = `
+    <svg
+      viewBox="0 0 ${width} ${height}"
+      preserveAspectRatio="none"
+      aria-label="Historial de almacenamiento"
+    >
+      <line
+        x1="0"
+        y1="${height - paddingY}"
+        x2="${width}"
+        y2="${height - paddingY}"
+        stroke="currentColor"
+        opacity=".12"
+      ></line>
+
+      <polyline
+        points="${polyline}"
+        fill="none"
+        stroke="var(--cyan)"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      ></polyline>
+
+      ${points.map((point) => `
+        <circle
+          cx="${point.x}"
+          cy="${point.y}"
+          r="4"
+          fill="var(--cyan)"
+        ></circle>
+      `).join('')}
+    </svg>
+
+    <div class="settings-chart-labels">
+      ${points.map((point) => `
+        <span>${escapeHtml(point.label)}</span>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* =========================================================
+   QR Y PRE-REGISTRO
+========================================================= */
+
+function qrText(value) {
+  const clinic =
+    state.user.clinic ||
+    state.profile.clinica_nombre ||
+    'la clínica';
+
+  return String(value || '')
+    .replaceAll(
+      '{enlace}',
+      'https://enclaii.app/registro-paciente/ejemplo'
+    )
+    .replaceAll(
+      '{codigo}',
+      'QR-2026-0001'
+    )
+    .replaceAll(
+      '{mensaje}',
+      'Por favor completa tus datos.'
+    )
+    .replaceAll(
+      '{clinica}',
+      clinic
+    );
+}
+
+function renderQrPreviews() {
+  const whatsapp =
+    document.getElementById(
+      'cfgQrWhatsapp'
+    );
+
+  const consent =
+    document.getElementById(
+      'cfgQrConsent'
+    );
+
+  const whatsappPreview =
+    document.getElementById(
+      'cfgQrWhatsappPreview'
+    );
+
+  const consentPreview =
+    document.getElementById(
+      'cfgQrConsentPreview'
+    );
+
+  if (whatsappPreview) {
+    whatsappPreview.textContent =
+      qrText(whatsapp?.value) ||
+      'Sin plantilla configurada.';
+  }
+
+  if (consentPreview) {
+    consentPreview.textContent =
+      qrText(consent?.value) ||
+      'Sin consentimiento configurado.';
+  }
+}
+
+function renderCounters() {
+  document
+    .querySelectorAll('[data-count-for]')
+    .forEach((counter) => {
+      const input =
+        document.getElementById(
+          counter.dataset.countFor
+        );
+
+      counter.textContent =
+        String(input?.value.length || 0);
+    });
+}
+
+/* =========================================================
+   MIEMBROS DE LA CLÍNICA
+========================================================= */
+
+function renderMembers() {
+  const tbody =
+    document.getElementById(
+      'clinicMembersBody'
+    );
+
+  if (!tbody) {
+    return;
+  }
+
+  const roles = {
+    propietario: 'Propietario',
+    administrador: 'Administrador',
+    medico: 'Médico',
+    recepcionista: 'Recepcionista',
+    asistente: 'Asistente',
+  };
+
+  const members =
+    Array.isArray(state.clinic.members)
+      ? state.clinic.members
+      : [];
+
+  const invitations =
+    Array.isArray(
+      state.clinic.invitations
+    )
+      ? state.clinic.invitations
+      : [];
+
+  const memberRows =
+    members.map((member) => {
+      const role =
+        member.role ||
+        member.clinica_rol ||
+        'medico';
+
+      const canRemove =
+        state.clinic.is_owner &&
+        !member.is_current_user &&
+        role !== 'propietario';
+
+      return `
+        <tr>
+          <td>
+            <span class="gp-u">
+              ${escapeHtml(member.name)}
+
+              ${
+                member.is_current_user
+                  ? '<span class="gp-you">Tú</span>'
+                  : ''
+              }
+            </span>
+
+            <small class="gp-member-email">
+              ${escapeHtml(member.email)}
+            </small>
+          </td>
+
+          <td>
+            ${escapeHtml(
+              roles[role] ||
+              role
+            )}
+          </td>
+
+          <td>
+            <span class="gp-st">
+              Activo
+            </span>
+          </td>
+
+          <td>
+            ${
+              member.is_current_user
+                ? 'Ahora'
+                : escapeHtml(
+                    member.last_activity ||
+                    'Sin acceso reciente'
+                  )
+            }
+          </td>
+
+          <td>
+            ${
+              canRemove
+                ? `
+                  <button
+                    type="button"
+                    class="gp-member-remove"
+                    data-member-id="${member.id}"
+                    data-member-name="${escapeHtml(
+                      member.name
+                    )}"
+                  >
+                    Retirar
+                  </button>
+                `
+                : '<span class="gp-no-action">—</span>'
+            }
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  const invitationRows =
+    invitations.map((invitation) => {
+      const role =
+        invitation.role ||
+        invitation.rol ||
+        'medico';
+
+      return `
+        <tr>
+          <td>
+            <span class="gp-u">
+              ${escapeHtml(invitation.email)}
+            </span>
+
+            <small class="gp-member-email">
+              Correo autorizado para crear cuenta
+            </small>
+          </td>
+
+          <td>
+            ${escapeHtml(
+              roles[role] || role
+            )}
+          </td>
+
+          <td>
+            <span class="gp-st pending">
+              Pendiente
+            </span>
+          </td>
+
+          <td>
+            Esperando registro
+          </td>
+
+          <td>
+            ${
+              state.clinic.is_owner
+                ? `
+                  <button
+                    type="button"
+                    class="gp-invite-revoke"
+                    data-invitation-id="${invitation.id}"
+                  >
+                    Cancelar
+                  </button>
+                `
+                : '<span class="gp-no-action">—</span>'
+            }
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  tbody.innerHTML =
+    memberRows + invitationRows;
+
+  if (!tbody.innerHTML.trim()) {
+    tbody.innerHTML = `
+      <tr>
+        <td
+          colspan="5"
+          class="gp-empty"
+        >
+          No hay usuarios ni invitaciones.
+        </td>
+      </tr>
+    `;
+  }
+}
+
+/* =========================================================
+   COPIAS DE CONFIGURACIÓN
+========================================================= */
+
+function renderBackups() {
+  const backups =
+    Array.isArray(state.backups)
+      ? state.backups
+      : [];
+
+  const list =
+    document.getElementById(
+      'intBackupList'
+    ) ||
+    document.querySelector(
+      '.int-backup-list'
+    );
+
+  const count =
+    document.getElementById(
+      'intBackupCount'
+    ) ||
+    document.querySelector(
+      '.int-backup-count'
+    );
+
+  if (count) {
+    count.textContent =
+      `${backups.length} ${
+        backups.length === 1
+          ? 'copia'
+          : 'copias'
+      }`;
+  }
+
+  const latestTitle =
+    document.getElementById(
+      'intBackupLatestTitle'
+    ) ||
+    document.querySelector(
+      '.int-backup-summary-main strong'
+    );
+
+  const latestDate =
+    document.getElementById(
+      'intBackupLatestDate'
+    ) ||
+    document.querySelector(
+      '.int-backup-summary-main div span'
+    );
+
+  if (backups.length) {
+    if (latestTitle) {
+      latestTitle.textContent =
+        'Última copia completada';
+    }
+
+    if (latestDate) {
+      latestDate.textContent =
+        formatDateTime(
+          backups[0].created_at
+        );
+    }
+  } else {
+    if (latestTitle) {
+      latestTitle.textContent =
+        'Todavía no hay copias';
+    }
+
+    if (latestDate) {
+      latestDate.textContent =
+        'Crea la primera para proteger tu configuración actual.';
+    }
+  }
+
+  if (!list) {
+    return;
+  }
+
+  if (!backups.length) {
+    list.innerHTML = `
+      <div class="int-backup-empty">
+        Cuando crees una copia aparecerá aquí.
+      </div>
+    `;
+
+    return;
+  }
+
+  list.innerHTML =
+    backups.map((backup) => `
+      <div
+        class="int-backup-row"
+        data-backup-row="${backup.id}"
+      >
+        <div class="int-backup-info">
+          <span class="int-backup-file">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+          </span>
+
+          <div style="min-width:0">
+            <div class="int-backup-name">
+              ${escapeHtml(backup.name)}
+            </div>
+
+            <div class="int-backup-meta">
+              ${formatDateTime(
+                backup.created_at
+              )}
+              · ${formatBytes(backup.size)}
+              · ${
+                backup.type === 'automatic'
+                  ? 'Automática'
+                  : 'Manual'
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="int-backup-actions">
+          <button
+            type="button"
+            class="int-backup-action restore"
+            data-backup-restore="${backup.id}"
+            data-backup-name="${escapeHtml(
+              backup.name
+            )}"
+            title="Restaurar"
+          >
+            ↻
+          </button>
+
+          <button
+            type="button"
+            class="int-backup-action"
+            data-backup-download="${backup.id}"
+            title="Descargar"
+          >
+            ↓
+          </button>
+
+          <button
+            type="button"
+            class="int-backup-action delete"
+            data-backup-delete="${backup.id}"
+            data-backup-name="${escapeHtml(
+              backup.name
+            )}"
+            title="Eliminar"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    `).join('');
+}
+
+/* =========================================================
+   CONEXIÓN
+========================================================= */
+
+function renderConnection() {
+  const status =
+    document.getElementById(
+      'cfgConnectionStatus'
+    );
+
+  const api =
+    document.getElementById(
+      'cfgApiEndpoint'
+    );
+
+  if (status) {
+    status.textContent = 'En línea';
+    status.classList.add('cfg-online');
+  }
+
+  if (api) {
+    api.textContent =
+      getApiBaseUrl();
+
+    api.title =
+      getApiBaseUrl();
+  }
+}
+
+/* =========================================================
+   GUARDAR AJUSTES
+========================================================= */
+
+function settingValue(control) {
+  if (control.type === 'checkbox') {
+    return control.checked;
+  }
+
+  const numericKeys = [
+    'items_per_page',
+    'qr_default_expiration_hours',
+    'capture_auto_interval',
+  ];
+
+  if (
+    numericKeys.includes(
+      control.dataset.setting
+    )
+  ) {
+    return Number(control.value);
+  }
+
+  return control.value;
+}
+
+function queueSetting(key, value) {
+  pendingSettings[key] = value;
+
+  clearTimeout(settingsTimer);
+
+  settingsTimer =
+    window.setTimeout(
+      savePendingSettings,
+      400
+    );
+}
+
+async function savePendingSettings() {
+  const payload = {
+    ...pendingSettings,
+  };
+
+  pendingSettings = {};
+
+  if (!Object.keys(payload).length) {
+    return;
+  }
 
   try {
-    const payload = await configRequest(request);
-    mergePlanResponse(payload);
-    const opened = openLaravelUrl(payload);
-    setSettingsAlert(opened ? 'Laravel devolvio un enlace y se abrio en una nueva pestana.' : successPlanMessage(action, payload), 'ok');
+    syncStatus(
+      'Guardando...',
+      'loading',
+      true
+    );
+
+    const response =
+      await apiRequest('', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+
+    const root =
+      document.getElementById(
+        'settingsAppRoot'
+      );
+
+    if (root) {
+      updateState(
+        response,
+        root,
+        true
+      );
+    }
+
+    syncStatus(
+      'Cambios guardados',
+      'success'
+    );
   } catch (error) {
     console.error(error);
-    if (error.code === 'UNAUTHORIZED') {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
-      if (root) renderSettingsError(root, error);
-      return;
+
+    syncStatus(
+      error.message ||
+      'No se pudieron guardar los cambios',
+      'error'
+    );
+
+    await loadConfiguration({
+      silent: true,
+      force: true,
+    });
+  }
+}
+
+/* =========================================================
+   GUARDAR PERFIL
+========================================================= */
+
+function profilePayload() {
+  const payload = {};
+
+  document
+    .querySelectorAll('[data-profile-field]')
+    .forEach((control) => {
+      payload[
+        control.dataset.profileField
+      ] = control.value;
+    });
+
+  document
+    .querySelectorAll(
+      '[data-settings-panel="perfil"] input[name], ' +
+      '[data-settings-panel="perfil"] select[name], ' +
+      '.cfg-panel[data-panel="perfil"] input[name], ' +
+      '.cfg-panel[data-panel="perfil"] select[name]'
+    )
+    .forEach((control) => {
+      if (
+        control.type !== 'file' &&
+        control.name
+      ) {
+        payload[control.name] =
+          control.value;
+      }
+    });
+
+  return payload;
+}
+
+async function saveProfile() {
+  const button =
+    document.getElementById(
+      'pfSaveBtn'
+    );
+
+  const text =
+    document.getElementById(
+      'pfSaveTxt'
+    );
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  if (text) {
+    text.textContent =
+      'Guardando...';
+  }
+
+  try {
+    const response =
+      await apiRequest('perfil', {
+        method: 'PATCH',
+        body: JSON.stringify(
+          profilePayload()
+        ),
+      });
+
+    mergeState(response);
+    renderUser();
+
+    toast(
+      response.message ||
+      'Perfil guardado correctamente.'
+    );
+
+    if (text) {
+      text.textContent =
+        '¡Guardado!';
     }
-    setSettingsAlert(error.message || 'Laravel no pudo completar la accion del plan.', 'error');
+  } catch (error) {
+    console.error(error);
+
+    toast(
+      error.message,
+      'error'
+    );
+
+    if (text) {
+      text.textContent =
+        'Error al guardar';
+    }
   } finally {
-    if (document.contains(button)) {
-      button.disabled = wasDisabled;
-      button.removeAttribute('aria-busy');
-    }
+    window.setTimeout(() => {
+      if (button) {
+        button.disabled = false;
+      }
+
+      if (text) {
+        text.textContent =
+          'Guardar cambios';
+      }
+    }, 1600);
   }
 }
 
-async function loadSettings() {
-  const root = document.getElementById('settingsAppRoot');
-  if (!root) return;
-  restoreSettingsTemplate(root);
+/* =========================================================
+   FOTO DE PERFIL
+========================================================= */
+
+async function uploadPhoto(file) {
+  if (!file) {
+    return;
+  }
+
+  const formData =
+    new FormData();
+
+  formData.append('foto', file);
+
+  const response =
+    await apiRequest('foto', {
+      method: 'POST',
+      body: formData,
+    });
+
+  state.profile.photo_url =
+    response.url ||
+    response.photo_url;
+
+  renderUser();
+
+  toast(
+    response.message ||
+    'Foto actualizada.'
+  );
+}
+
+async function deletePhoto() {
+  const response =
+    await apiRequest('foto', {
+      method: 'DELETE',
+    });
+
+  state.profile.photo_url = null;
+
+  renderUser();
+
+  toast(
+    response.message ||
+    'Foto eliminada.'
+  );
+}
+
+/* =========================================================
+   CONSTANCIA FISCAL
+========================================================= */
+
+function renderTaxDocument(
+  url,
+  filename = 'Constancia fiscal'
+) {
+  const preview =
+    document.getElementById(
+      'csfPreview'
+    );
+
+  const uploadArea =
+    document.getElementById(
+      'csfUploadArea'
+    );
+
+  const actions =
+    document.getElementById(
+      'csfActions'
+    );
+
+  if (!preview) {
+    return;
+  }
+
+  if (!url) {
+    preview.innerHTML = '';
+    preview.style.display = 'none';
+
+    if (uploadArea) {
+      uploadArea.style.display = '';
+    }
+
+    if (actions) {
+      actions.style.display = 'none';
+    }
+
+    return;
+  }
+
+  const extension =
+    String(filename)
+      .split('.')
+      .pop()
+      .toLowerCase();
+
+  if (
+    extension === 'pdf' ||
+    String(url).toLowerCase().includes('.pdf')
+  ) {
+    preview.innerHTML = `
+      <div class="csf-pdf-card">
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+        </svg>
+
+        <div class="csf-pdf-info">
+          <span>${escapeHtml(filename)}</span>
+
+          <a
+            href="${escapeHtml(url)}"
+            target="_blank"
+            class="csf-view-link"
+          >
+            Ver documento
+          </a>
+        </div>
+      </div>
+    `;
+  } else {
+    preview.innerHTML = `
+      <img
+        id="csfImg"
+        src="${escapeHtml(url)}"
+        alt="Constancia fiscal"
+      >
+    `;
+  }
+
+  preview.style.display = '';
+
+  if (uploadArea) {
+    uploadArea.style.display = 'none';
+  }
+
+  if (actions) {
+    actions.style.display = 'flex';
+  }
+}
+
+async function uploadTaxDocument(file) {
+  if (!file) {
+    return;
+  }
+
+  const formData =
+    new FormData();
+
+  formData.append(
+    'constancia',
+    file
+  );
+
+  const response =
+    await apiRequest(
+      'constancia-fiscal',
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
+
+  const url =
+    response.url ||
+    response.tax_document_url;
+
+  state.profile.tax_document_url =
+    url;
+
+  state.profile.tax_document_name =
+    response.name ||
+    file.name;
+
+  renderTaxDocument(
+    url,
+    response.name || file.name
+  );
+
+  toast(
+    response.message ||
+    'Constancia fiscal actualizada.'
+  );
+}
+
+async function deleteTaxDocument() {
+  const response =
+    await apiRequest(
+      'constancia-fiscal',
+      {
+        method: 'DELETE',
+      }
+    );
+
+  state.profile.tax_document_url =
+    null;
+
+  state.profile.tax_document_name =
+    null;
+
+  renderTaxDocument(null);
+
+  toast(
+    response.message ||
+    'Constancia fiscal eliminada.'
+  );
+}
+
+/* =========================================================
+   COPIAS
+========================================================= */
+
+function openBackupModal() {
+  const modal =
+    document.getElementById(
+      'intBackupModal'
+    );
+
+  const input =
+    document.getElementById(
+      'intBackupName'
+    );
+
+  if (
+    input &&
+    !input.value.trim()
+  ) {
+    input.value =
+      `Configuración principal - ${
+        new Intl.DateTimeFormat(
+          'es-MX',
+          {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          }
+        ).format(new Date())
+      }`;
+  }
+
+  modal?.classList.add('open');
+
+  modal?.setAttribute(
+    'aria-hidden',
+    'false'
+  );
+}
+
+function closeBackupModal() {
+  const modal =
+    document.getElementById(
+      'intBackupModal'
+    );
+
+  modal?.classList.remove('open');
+
+  modal?.setAttribute(
+    'aria-hidden',
+    'true'
+  );
+}
+
+async function createBackup() {
+  const name =
+    document
+      .getElementById(
+        'intBackupName'
+      )
+      ?.value
+      .trim();
+
+  const mode =
+    document.querySelector(
+      'input[name="mode"]:checked'
+    )?.value ||
+    'complete';
+
+  const scope = [
+    ...document.querySelectorAll(
+      'input[name="scope[]"]:checked'
+    ),
+  ].map((input) => input.value);
+
+  const response =
+    await apiRequest('copias', {
+      method: 'POST',
+
+      body: JSON.stringify({
+        name,
+        mode,
+        scope,
+      }),
+    });
+
+  closeBackupModal();
+
+  toast(
+    response.message ||
+    'Copia creada.'
+  );
+
+  await loadConfiguration({
+    silent: true,
+    force: true,
+  });
+}
+
+async function restoreBackup(id) {
+  const response =
+    await apiRequest(
+      `copias/${id}/restaurar`,
+      {
+        method: 'POST',
+      }
+    );
+
+  toast(
+    response.message ||
+    'Configuración restaurada.'
+  );
+
+  await loadConfiguration({
+    silent: true,
+    force: true,
+  });
+}
+
+async function removeBackup(id) {
+  const response =
+    await apiRequest(
+      `copias/${id}`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+  toast(
+    response.message ||
+    'Copia eliminada.'
+  );
+
+  await loadConfiguration({
+    silent: true,
+    force: true,
+  });
+}
+
+async function downloadBackup(id) {
+  const response =
+    await laravelFetch(
+      endpoint(
+        `copias/${id}/descargar`
+      ),
+      {
+        headers: {
+          Accept:
+            'application/octet-stream',
+
+          Authorization:
+            `Bearer ${getToken()}`,
+        },
+      }
+    );
+
+  if (!response.ok) {
+    throw new Error(
+      'No se pudo descargar la copia.'
+    );
+  }
+
+  const blob =
+    await response.blob();
+
+  const objectUrl =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement('a');
+
+  link.href = objectUrl;
+  link.download =
+    `configuracion-${id}.json`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(objectUrl);
+}
+
+/* =========================================================
+   MIEMBROS
+========================================================= */
+
+async function removeMember(id) {
+  const response =
+    await apiRequest(
+      `miembros/${id}`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+  toast(
+    response.message ||
+    'Usuario retirado.'
+  );
+
+  await loadConfiguration({
+    silent: true,
+    force: true,
+  });
+}
+
+async function revokeInvitation(id) {
+  const response =
+    await apiRequest(
+      `invitaciones/${id}`,
+      {
+        method: 'DELETE',
+      }
+    );
+
+  toast(
+    response.message ||
+    'Invitación cancelada.'
+  );
+
+  await loadConfiguration({
+    silent: true,
+    force: true,
+  });
+}
+
+/* =========================================================
+   CARGAR Y SINCRONIZAR
+========================================================= */
+
+function showSessionError(
+  root,
+  message
+) {
+  root.innerHTML = `
+    <div class="settings-card settings-session-error">
+      <strong>Sesión requerida</strong>
+
+      <p>${escapeHtml(message)}</p>
+
+      <button
+        type="button"
+        id="settingsGoLogin"
+      >
+        Volver a iniciar sesión
+      </button>
+    </div>
+  `;
+
+  document
+    .getElementById(
+      'settingsGoLogin'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        const redirect =
+          encodeURIComponent(
+            './app.html#configuracion'
+          );
+
+        window.location.href =
+          `./login.html?redirect=${redirect}`;
+      }
+    );
+}
+
+export async function loadConfiguration({
+  silent = false,
+  force = true,
+} = {}) {
+  const root =
+    document.getElementById(
+      'settingsAppRoot'
+    );
+
+  if (!root) {
+    return;
+  }
 
   try {
-    const payload = await configRequest();
-    setSettingsAlert('');
-    applySettings(payload);
+    if (!silent) {
+      syncStatus(
+        'Cargando configuración...',
+        'loading',
+        true
+      );
+    }
+
+    const response =
+      await apiRequest();
+
+    updateState(
+      response,
+      root,
+      force
+    );
+
+    if (!silent) {
+      syncStatus(
+        'Configuración sincronizada',
+        'success'
+      );
+    }
   } catch (error) {
     console.error(error);
-    if (error.code === 'UNAUTHORIZED') sessionStorage.removeItem(AUTH_STORAGE_KEY);
-    renderSettingsError(root, error);
+
+    if (
+      error.code === 'UNAUTHORIZED'
+    ) {
+      showSessionError(
+        root,
+        error.message
+      );
+
+      return;
+    }
+
+    if (!silent) {
+      toast(
+        error.message ||
+        'No se pudo cargar la configuración.',
+        'error'
+      );
+    }
+
+    const status =
+      document.getElementById(
+        'cfgConnectionStatus'
+      );
+
+    if (status) {
+      status.textContent =
+        'Sin conexión';
+
+      status.classList.remove(
+        'cfg-online'
+      );
+    }
   }
 }
 
-function bindSettingsEvents(root) {
-  if (root.dataset.settingsBound === 'true') return;
-  root.dataset.settingsBound = 'true';
+export async function refreshConfiguration({
+  silent = true,
+  force = false,
+} = {}) {
+  if (syncRunning) {
+    return;
+  }
 
-  root.addEventListener('click', (event) => {
-    const planCycle = event.target.closest('[data-plan-cycle]');
-    if (planCycle) {
-      updatePlanCycle(planCycle);
-      return;
-    }
+  if (!navigator.onLine) {
+    return;
+  }
 
-    const planAction = event.target.closest('[data-plan-action]');
-    if (planAction) {
-      handlePlanAction(planAction);
-      return;
-    }
+  syncRunning = true;
 
-    const tab = event.target.closest('[data-settings-tab]');
-    if (!tab) return;
-    const target = tab.dataset.settingsTab;
-
-    root.querySelectorAll('[data-settings-tab]').forEach((button) => {
-      button.classList.toggle('is-active', button === tab);
+  try {
+    await loadConfiguration({
+      silent,
+      force,
     });
-    root.querySelectorAll('[data-settings-panel]').forEach((panel) => {
-      panel.classList.toggle('is-active', panel.dataset.settingsPanel === target);
-    });
-  });
-
-  root.addEventListener('input', (event) => {
-    if (event.target.matches('textarea[data-setting]')) {
-      updateTextCounts(root);
-      renderQrPreviews();
-    }
-  });
-
-  root.addEventListener('change', (event) => {
-    if (isApplyingSettings) return;
-
-    const localControl = event.target.closest('[data-local-setting]');
-    if (localControl) {
-      saveLocalSetting(localControl);
-      return;
-    }
-
-    const listControl = event.target.closest('[data-setting-list]');
-    if (listControl) {
-      const payload = listPayload(root, listControl.dataset.settingList);
-      saveSetting(payload.key, payload.value);
-      return;
-    }
-
-    const control = event.target.closest('[data-setting]');
-    const payload = controlPayload(control);
-    if (payload) saveSetting(payload.key, payload.value);
-  });
+  } finally {
+    syncRunning = false;
+  }
 }
 
-export function initConfiguracion() {
-  const root = document.getElementById('settingsAppRoot');
-  if (!root) return;
-  if (!settingsTemplate) settingsTemplate = root.innerHTML;
-  bindSettingsEvents(root);
-  loadSettings();
+export function startRealtimeSync() {
+  stopRealtimeSync();
+
+  syncTimer =
+    window.setInterval(() => {
+      if (
+        document.visibilityState ===
+          'visible' &&
+        navigator.onLine
+      ) {
+        refreshConfiguration({
+          silent: true,
+          force: false,
+        });
+      }
+    }, SYNC_INTERVAL_MS);
 }
+
+export function stopRealtimeSync() {
+  if (syncTimer) {
+    window.clearInterval(syncTimer);
+    syncTimer = null;
+  }
+}
+
+/* =========================================================
+   EVENTOS
+========================================================= */
+
+function bindTabs(root) {
+  root.addEventListener(
+    'click',
+    (event) => {
+      const tab =
+        event.target.closest(
+          '[data-settings-tab]'
+        );
+
+      if (!tab) {
+        return;
+      }
+
+      const target =
+        tab.dataset.settingsTab;
+
+      root
+        .querySelectorAll(
+          '[data-settings-tab]'
+        )
+        .forEach((button) => {
+          button.classList.toggle(
+            'is-active',
+            button === tab
+          );
+        });
+
+      root
+        .querySelectorAll(
+          '[data-settings-panel]'
+        )
+        .forEach((panel) => {
+          panel.classList.toggle(
+            'is-active',
+            panel.dataset.settingsPanel ===
+              target
+          );
+        });
+    }
+  );
+}
+
+function bindEvents(root) {
+  if (eventsBound) {
+    return;
+  }
+
+  eventsBound = true;
+
+  bindTabs(root);
+
+  root.addEventListener(
+    'input',
+    (event) => {
+      if (
+        event.target.matches('textarea')
+      ) {
+        renderQrPreviews();
+        renderCounters();
+      }
+    }
+  );
+
+  root.addEventListener(
+    'change',
+    (event) => {
+      if (applyingLaravelData) {
+        return;
+      }
+
+      const listControl =
+        event.target.closest(
+          '[data-setting-list]'
+        );
+
+      if (listControl) {
+        const key =
+          listControl.dataset.settingList;
+
+        const values = [
+          ...root.querySelectorAll(
+            `[data-setting-list="${key}"]:checked`
+          ),
+        ].map((control) => control.value);
+
+        queueSetting(key, values);
+        return;
+      }
+
+      const control =
+        event.target.closest(
+          '[data-setting]'
+        );
+
+      if (control) {
+        const key =
+          control.dataset.setting;
+
+        const value =
+          settingValue(control);
+
+        state.settings[key] = value;
+
+        applyVisualEffects(
+          state.settings
+        );
+
+        queueSetting(key, value);
+        return;
+      }
+
+      if (
+        event.target.id === 'pfPhoto' &&
+        event.target.files?.[0]
+      ) {
+        uploadPhoto(
+          event.target.files[0]
+        ).catch((error) => {
+          console.error(error);
+          toast(error.message, 'error');
+        });
+
+        return;
+      }
+
+      if (
+        event.target.id === 'csfInput' &&
+        event.target.files?.[0]
+      ) {
+        uploadTaxDocument(
+          event.target.files[0]
+        ).catch((error) => {
+          console.error(error);
+          toast(error.message, 'error');
+        });
+      }
+    }
+  );
+
+  root.addEventListener(
+    'click',
+    async (event) => {
+      try {
+        if (
+          event.target.closest(
+            '#pfSaveBtn'
+          )
+        ) {
+          await saveProfile();
+          return;
+        }
+
+        if (
+          event.target.closest(
+            '#pfEdit'
+          )
+        ) {
+          document
+            .getElementById('pfPhoto')
+            ?.click();
+
+          return;
+        }
+
+        if (
+          event.target.closest(
+            '#pfDel'
+          )
+        ) {
+          const accepted =
+            window.confirm(
+              '¿Eliminar tu foto de perfil?'
+            );
+
+          if (accepted) {
+            await deletePhoto();
+          }
+
+          return;
+        }
+
+        if (
+          event.target.closest(
+            '#csfPickBtn'
+          ) ||
+          event.target.closest(
+            '#csfChangeBtn'
+          ) ||
+          event.target.closest(
+            '#csfUploadArea'
+          )
+        ) {
+          document
+            .getElementById('csfInput')
+            ?.click();
+
+          return;
+        }
+
+        if (
+          event.target.closest(
+            '#csfDeleteBtn'
+          )
+        ) {
+          const accepted =
+            window.confirm(
+              '¿Eliminar la constancia fiscal?'
+            );
+
+          if (accepted) {
+            await deleteTaxDocument();
+          }
+
+          return;
+        }
+
+        if (
+          event.target.closest(
+            '#intBackupOpen'
+          )
+        ) {
+          openBackupModal();
+          return;
+        }
+
+        if (
+          event.target.closest(
+            '#intBackupClose'
+          ) ||
+          event.target.closest(
+            '#intBackupCancel'
+          )
+        ) {
+          closeBackupModal();
+          return;
+        }
+
+        const restore =
+          event.target.closest(
+            '[data-backup-restore]'
+          );
+
+        if (restore) {
+          const accepted =
+            window.confirm(
+              `¿Restaurar “${
+                restore.dataset.backupName ||
+                'esta copia'
+              }”?`
+            );
+
+          if (accepted) {
+            await restoreBackup(
+              restore.dataset.backupRestore
+            );
+          }
+
+          return;
+        }
+
+        const backupDelete =
+          event.target.closest(
+            '[data-backup-delete]'
+          );
+
+        if (backupDelete) {
+          const accepted =
+            window.confirm(
+              `¿Eliminar “${
+                backupDelete.dataset.backupName ||
+                'esta copia'
+              }”?`
+            );
+
+          if (accepted) {
+            await removeBackup(
+              backupDelete.dataset.backupDelete
+            );
+          }
+
+          return;
+        }
+
+        const backupDownload =
+          event.target.closest(
+            '[data-backup-download]'
+          );
+
+        if (backupDownload) {
+          await downloadBackup(
+            backupDownload.dataset.backupDownload
+          );
+
+          return;
+        }
+
+        const member =
+          event.target.closest(
+            '[data-member-id]'
+          );
+
+        if (member) {
+          const accepted =
+            window.confirm(
+              `¿Retirar a ${
+                member.dataset.memberName ||
+                'este usuario'
+              } de la clínica?`
+            );
+
+          if (accepted) {
+            await removeMember(
+              member.dataset.memberId
+            );
+          }
+
+          return;
+        }
+
+        const invitation =
+          event.target.closest(
+            '[data-invitation-id]'
+          );
+
+        if (invitation) {
+          const accepted =
+            window.confirm(
+              '¿Cancelar esta invitación?'
+            );
+
+          if (accepted) {
+            await revokeInvitation(
+              invitation.dataset.invitationId
+            );
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        toast(error.message, 'error');
+      }
+    }
+  );
+
+  document
+    .getElementById(
+      'intBackupForm'
+    )
+    ?.addEventListener(
+      'submit',
+      async (event) => {
+        event.preventDefault();
+
+        const button =
+          document.getElementById(
+            'intBackupSubmit'
+          );
+
+        if (button) {
+          button.disabled = true;
+          button.textContent =
+            'Creando...';
+        }
+
+        try {
+          await createBackup();
+        } catch (error) {
+          console.error(error);
+          toast(error.message, 'error');
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent =
+              'Crear copia';
+          }
+        }
+      }
+    );
+
+  document
+    .getElementById(
+      'intBackupModal'
+    )
+    ?.addEventListener(
+      'click',
+      (event) => {
+        if (
+          event.target.id ===
+          'intBackupModal'
+        ) {
+          closeBackupModal();
+        }
+      }
+    );
+}
+
+function bindRealtimeEvents() {
+  if (
+    document.documentElement.dataset
+      .configRealtimeBound === 'true'
+  ) {
+    return;
+  }
+
+  document.documentElement.dataset
+    .configRealtimeBound = 'true';
+
+  window.addEventListener(
+    'focus',
+    () => {
+      refreshConfiguration({
+        silent: true,
+        force: false,
+      });
+    }
+  );
+
+  window.addEventListener(
+    'online',
+    () => {
+      syncStatus(
+        'Conexión recuperada',
+        'success'
+      );
+
+      refreshConfiguration({
+        silent: false,
+        force: true,
+      });
+    }
+  );
+
+  window.addEventListener(
+    'offline',
+    () => {
+      syncStatus(
+        'Sin conexión',
+        'error',
+        true
+      );
+    }
+  );
+
+  document.addEventListener(
+    'visibilitychange',
+    () => {
+      if (
+        document.visibilityState ===
+        'visible'
+      ) {
+        refreshConfiguration({
+          silent: true,
+          force: false,
+        });
+      }
+    }
+  );
+}
+
+/* =========================================================
+   INICIALIZACIÓN
+========================================================= */
+
+export async function initConfiguracion() {
+  const root =
+    document.getElementById(
+      'settingsAppRoot'
+    );
+
+  if (!root) {
+    console.warn(
+      'No existe #settingsAppRoot.'
+    );
+
+    return;
+  }
+
+  bindEvents(root);
+  bindRealtimeEvents();
+
+  await loadConfiguration({
+    silent: false,
+    force: true,
+  });
+
+  startRealtimeSync();
+}
+
+applyEarlyVisualPreferences();

@@ -1,62 +1,93 @@
-// ================= IA Reportes · Inicializador =================
-// Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
+// ================= IA Reportes - Inicializador =================
+// Tauri consume Laravel por HTTP. La base de datos y la IA viven en Laravel.
 
-import { laravelFetch } from './laravel.js';
+import { apiBaseUrl, authHeader, laravelFetch } from './laravel.js';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000';
-const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
-
-function currentLaravelOrigin() {
-  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
-  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
-  if (window.location.port && window.location.port !== '8000') return '';
-  return window.location.origin;
-}
-
-function isLocalLaravelUrl(value) {
-  try {
-    const url = new URL(value);
-    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
-  } catch (_) {
-    return false;
-  }
-}
-
-function apiBaseUrl() {
-  const saved = (localStorage.getItem('enclaii-api-url') || '').replace(/\/+$/, '');
-  const currentOrigin = currentLaravelOrigin();
-  if (saved) return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
-  return currentOrigin || DEFAULT_API_BASE_URL;
-}
-
-const API_BASE_URL = apiBaseUrl();
-const REPORTS_ENDPOINT = `${API_BASE_URL}/tauri/reportes`;
+const REPORTS_BASE = `${apiBaseUrl()}/api/tauri/reportes`;
+const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 let reportsTemplate = '';
+let editorState = {
+  studies: [],
+  templates: [],
+  findings: [],
+  selectedStudy: null,
+  selectedTemplate: null,
+  saving: false,
+  generating: false,
+  chatting: false,
+};
 
 function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
 }
 
-function encodeBasicCredentials(email, password) {
-  const bytes = new TextEncoder().encode(`${email}:${password}`);
-  let binary = '';
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
+function endpoint(path = '') {
+  const suffix = String(path || '').replace(/^\/+/, '');
+  return `${REPORTS_BASE}${suffix ? `/${suffix}` : ''}`;
+}
+
+function jsonHeaders() {
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+  const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
+  return headers;
+}
+
+async function reportsRequest(path = '', options = {}) {
+  const response = await laravelFetch(endpoint(path), {
+    method: options.method || 'GET',
+    headers: {
+      ...jsonHeaders(),
+      ...(options.headers || {}),
+    },
+    body: options.body,
+    credentials: 'include',
   });
+  const contentType = response.headers.get('content-type') || '';
 
-  return btoa(binary);
+  if (response.status === 401 || response.status === 419) {
+    const error = new Error('Ingresa tus credenciales de Laravel para cargar reportes.');
+    error.code = 'UNAUTHORIZED';
+    throw error;
+  }
+
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Laravel no devolvio JSON. Revisa la ruta: ${endpoint(path)}`);
+  }
+
+  const payload = await response.json();
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
+  }
+  return payload;
 }
 
-function authHeader() {
-  const token = sessionStorage.getItem(AUTH_STORAGE_KEY);
-  return token ? `Basic ${token}` : '';
+async function loginToLaravel(email, password) {
+  const response = await laravelFetch(LOGIN_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  const payload = await response.json();
+
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || 'No se pudo iniciar sesion.');
+  }
+  return payload.token;
 }
 
 function initialsFromName(name) {
@@ -65,10 +96,13 @@ function initialsFromName(name) {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
+    .map(part => part.charAt(0).toUpperCase())
     .join('');
-
   return initials || 'RP';
+}
+
+function pick(value, fallback = '') {
+  return value === undefined || value === null || value === '' ? fallback : value;
 }
 
 function normalizeReportsPayload(payload) {
@@ -84,15 +118,7 @@ function normalizeReportsPayload(payload) {
 }
 
 function normalizeReport(item) {
-  const name =
-    item?.paciente ||
-    item?.patient ||
-    item?.patient_name ||
-    item?.nombre_paciente ||
-    item?.name ||
-    'Paciente sin nombre';
-  const date = item?.fecha || item?.date || item?.created_date || '';
-  const time = item?.hora || item?.time || item?.created_time || '';
+  const name = pick(item?.paciente || item?.patient || item?.patient_name || item?.nombre_paciente || item?.name, 'Paciente sin nombre');
   const critical = Boolean(item?.critical ?? item?.critico ?? item?.contiene_hallazgos_criticos);
 
   return {
@@ -100,8 +126,8 @@ function normalizeReport(item) {
     name,
     initials: item?.initials || item?.iniciales || initialsFromName(name),
     study: item?.estudio || item?.study || item?.procedimiento || item?.tipo || 'Estudio',
-    date,
-    time,
+    date: item?.fecha || item?.date || item?.created_date || '',
+    time: item?.hora || item?.time || item?.created_time || '',
     critical,
     status: item?.estado_texto || item?.status_text || (critical ? 'Critico' : 'Normal'),
     viewUrl: item?.view_url || item?.ver_url || '',
@@ -119,6 +145,51 @@ function normalizeFinding(item, index) {
   };
 }
 
+function normalizeStudy(item, index) {
+  const patientName = item?.paciente || item?.patient_name || item?.nombre_paciente || item?.patient?.name || item?.patient?.nombre || 'Paciente sin nombre';
+  const procedure = item?.procedimiento || item?.procedure || item?.tipo_estudio || item?.tipo || item?.study_type || 'Estudio';
+  const date = item?.fecha || item?.date || item?.fecha_estudio || item?.study_date || '';
+
+  return {
+    id: String(item?.id ?? item?.study_id ?? item?.estudio_id ?? index),
+    patientId: item?.paciente_id ?? item?.patient_id ?? item?.patient?.id ?? '',
+    patientName,
+    patientAge: item?.edad || item?.age || item?.patient?.edad || item?.patient?.age || '--',
+    patientGender: item?.sexo || item?.gender || item?.patient?.sexo || item?.patient?.gender || '--',
+    patientBirthDate: item?.fecha_nacimiento || item?.birth_date || item?.patient?.fecha_nacimiento || item?.patient?.birth_date || '--',
+    procedure,
+    type: item?.tipo || item?.type || procedure,
+    date,
+    label: item?.label || `${patientName} - ${procedure}${date ? ` - ${date}` : ''}`,
+    raw: item,
+  };
+}
+
+function normalizeTemplate(item, index) {
+  const name = item?.nombre || item?.name || item?.titulo || item?.title || `Plantilla ${index + 1}`;
+  return {
+    id: String(item?.id ?? item?.plantilla_id ?? index),
+    name,
+    description: item?.descripcion || item?.description || item?.tipo || '',
+    type: item?.tipo || item?.type || name,
+    content: item?.contenido || item?.content || item?.html || item?.cuerpo || '',
+    raw: item,
+  };
+}
+
+function normalizeEditorPayload(payload) {
+  const data = payload?.data || payload || {};
+  const studies = data.estudios_sin_reporte || data.estudios || data.studies || data.pending_studies || [];
+  const templates = data.plantillas || data.templates || [];
+  const findings = data.hallazgos || data.findings || [];
+
+  return {
+    studies: Array.isArray(studies) ? studies.map(normalizeStudy) : [],
+    templates: Array.isArray(templates) ? templates.map(normalizeTemplate) : [],
+    findings: Array.isArray(findings) ? findings.map(normalizeFinding) : [],
+  };
+}
+
 function setText(root, selector, value) {
   const el = root.querySelector(selector);
   if (el) el.textContent = value;
@@ -127,7 +198,6 @@ function setText(root, selector, value) {
 function setKpi(root, bind, value) {
   const el = root.querySelector(`[data-bind="${bind}"]`);
   if (!el) return;
-
   const count = Number(value) || 0;
   el.dataset.target = String(count);
   el.textContent = '0';
@@ -136,7 +206,6 @@ function setKpi(root, bind, value) {
 function setTrend(root, bind, value) {
   const el = root.querySelector(`[data-bind="${bind}"]`);
   if (!el) return;
-
   const trend = Number(value) || 0;
   const isDown = trend < 0;
   el.classList.toggle('is-positive', trend > 0);
@@ -157,7 +226,6 @@ function animateCounters(root) {
       counter.textContent = target.toLocaleString('es-MX');
       return;
     }
-
     const duration = 900;
     const start = performance.now();
     function tick(time) {
@@ -166,27 +234,8 @@ function animateCounters(root) {
       counter.textContent = Math.round(target * eased).toLocaleString('es-MX');
       if (progress < 1) requestAnimationFrame(tick);
     }
-
     requestAnimationFrame(tick);
   });
-}
-
-function setReportsLoading(root) {
-  const tbody = document.getElementById('reportsTableBody');
-  if (tbody) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align:center;padding:28px;color:var(--txt-soft)">Cargando reportes desde Laravel...</td>
-      </tr>`;
-  }
-
-  setText(root, '.rep-hall h3', 'HALLAZGOS');
-}
-
-function restoreReportsShell(root) {
-  if (!root.querySelector('#reportsTableBody') && reportsTemplate) {
-    root.innerHTML = reportsTemplate;
-  }
 }
 
 function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Laravel.') {
@@ -203,24 +252,29 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
 
   document.getElementById('laravelReportsLoginForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-
     const email = document.getElementById('laravelReportsEmail')?.value.trim();
     const password = document.getElementById('laravelReportsPassword')?.value || '';
-
     if (!email || !password) return;
 
-    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
-    restoreReportsShell(root);
-    await loadReportsFromLaravel(root);
+    try {
+      const token = await loginToLaravel(email, password);
+      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      if (reportsTemplate) root.innerHTML = reportsTemplate;
+      if (root.querySelector('.report-editor-page')) initReportEditor();
+      else await loadReportsFromLaravel(root);
+    } catch (error) {
+      console.error(error);
+      renderLaravelLogin(root, error.message || 'No se pudo iniciar sesion.');
+    }
   });
 }
 
 function renderReportsError(root, error) {
   if (error.code === 'UNAUTHORIZED') {
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
     renderLaravelLogin(root, error.message);
     return;
   }
-
   root.innerHTML = `
     <div style="padding:42px 20px;text-align:center;color:var(--txt-soft);">
       <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con Laravel</strong>
@@ -228,40 +282,17 @@ function renderReportsError(root, error) {
     </div>`;
 }
 
-async function fetchLaravelReports() {
-  const headers = {
-    Accept: 'application/json',
-  };
-  const authorization = authHeader();
-
-  if (authorization) {
-    headers.Authorization = authorization;
+function setReportsLoading(root) {
+  const tbody = document.getElementById('reportsTableBody');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr><td colspan="5" style="text-align:center;padding:28px;color:var(--txt-soft)">Cargando reportes desde Laravel...</td></tr>`;
   }
+  setText(root, '.rep-hall h3', 'HALLAZGOS');
+}
 
-  const response = await laravelFetch(REPORTS_ENDPOINT, {
-    headers,
-    credentials: 'include',
-  });
-
-  const contentType = response.headers.get('content-type') || '';
-
-  if (response.status === 401 || response.status === 419) {
-    const error = new Error('Ingresa tus credenciales de Laravel para cargar reportes.');
-    error.code = 'UNAUTHORIZED';
-    throw error;
-  }
-
-  if (!contentType.includes('application/json')) {
-    throw new Error(`Laravel no devolvio JSON. Revisa sesion y ruta: ${REPORTS_ENDPOINT}`);
-  }
-
-  const payload = await response.json();
-
-  if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
-  }
-
-  return normalizeReportsPayload(payload);
+function restoreReportsShell(root) {
+  if (!root.querySelector('#reportsTableBody') && reportsTemplate) root.innerHTML = reportsTemplate;
 }
 
 function reportRowHTML(report) {
@@ -288,15 +319,10 @@ function reportRowHTML(report) {
 function renderReportsTable(reports) {
   const tbody = document.getElementById('reportsTableBody');
   if (!tbody) return;
-
   if (!reports.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align:center;padding:28px;color:var(--txt-soft)">No hay reportes generados todavia.</td>
-      </tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--txt-soft)">No hay reportes generados todavia.</td></tr>`;
     return;
   }
-
   tbody.innerHTML = reports.map(reportRowHTML).join('');
 }
 
@@ -315,9 +341,7 @@ function findingHTML(finding, index) {
   const percent = Math.max(0, Math.min(100, finding.percentage));
   const barClass = `c${(index % 3) + 1}`;
   const criticalStyle = finding.critical ? 'style="background:rgba(255,90,110,.12)"' : '';
-  const innerStyle = finding.critical
-    ? `style="width:${percent}%;background:var(--red)"`
-    : `style="width:${percent}%"`;
+  const innerStyle = finding.critical ? `style="width:${percent}%;background:var(--red)"` : `style="width:${percent}%"`;
 
   return `
     <div class="find">
@@ -329,30 +353,20 @@ function findingHTML(finding, index) {
 function renderFindings(root, findings) {
   const panel = root.querySelector('.rep-hall');
   if (!panel) return;
-
   const title = '<h3>HALLAZGOS</h3>';
   const link = '<a class="reports-link" href="#ia-reportes">Ver todos los hallazgos <span>-></span></a>';
-  if (!findings.length) {
-    panel.innerHTML = `${title}<div class="find-empty">Sin hallazgos registrados</div>${link}`;
-    return;
-  }
-
-  panel.innerHTML = title + findings.slice(0, 5).map(findingHTML).join('') + link;
+  panel.innerHTML = findings.length
+    ? title + findings.slice(0, 5).map(findingHTML).join('') + link
+    : `${title}<div class="find-empty">Sin hallazgos registrados</div>${link}`;
 }
 
 function renderPredictive(root, reports) {
   const first = reports[0];
   if (!first) return;
-
-  const initials = root.querySelector('[data-bind="predictive-initials"]');
-  const name = root.querySelector('[data-bind="predictive-name"]');
-  const study = root.querySelector('[data-bind="predictive-study"]');
-  const date = root.querySelector('[data-bind="predictive-date"]');
-
-  if (initials) initials.textContent = first.initials;
-  if (name) name.textContent = first.name;
-  if (study) study.textContent = first.study;
-  if (date) date.textContent = first.date || 'Sin fecha';
+  setText(root, '[data-bind="predictive-initials"]', first.initials);
+  setText(root, '[data-bind="predictive-name"]', first.name);
+  setText(root, '[data-bind="predictive-study"]', first.study);
+  setText(root, '[data-bind="predictive-date"]', first.date || 'Sin fecha');
 }
 
 function renderReportsData(root, data) {
@@ -365,92 +379,341 @@ function renderReportsData(root, data) {
 async function loadReportsFromLaravel(root) {
   restoreReportsShell(root);
   setReportsLoading(root);
-
   try {
-    const data = await fetchLaravelReports();
+    const data = normalizeReportsPayload(await reportsRequest());
     renderReportsData(root, data);
   } catch (error) {
     console.error(error);
-
-    if (error.code === 'UNAUTHORIZED') {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-
     renderReportsError(root, error);
+  }
+}
+
+function setEditorAlert(root, message, type = 'info') {
+  const alert = root.querySelector('#reportEditorAlert');
+  if (!alert) return;
+  alert.textContent = message || '';
+  alert.dataset.type = type;
+  alert.hidden = !message;
+}
+
+function setButtonBusy(button, busy, label) {
+  if (!button) return;
+  if (!button.dataset.originalText) button.dataset.originalText = button.textContent.trim();
+  button.disabled = busy;
+  if (label) {
+    const span = button.querySelector('span');
+    if (span) span.lastChild.textContent = label;
+    else button.textContent = label;
+  } else if (!busy && button.dataset.originalText) {
+    const span = button.querySelector('span');
+    if (span) span.lastChild.textContent = button.dataset.originalText;
+    else button.textContent = button.dataset.originalText;
+  }
+}
+
+function renderStudyOptions(root) {
+  const select = root.querySelector('#reportStudySelect');
+  if (!select) return;
+  select.innerHTML = `<option value="">Selecciona un estudio sin reporte...</option>`;
+  editorState.studies.forEach((study) => {
+    const option = document.createElement('option');
+    option.value = study.id;
+    option.textContent = study.label;
+    select.appendChild(option);
+  });
+}
+
+function renderTypeOptions(root) {
+  const select = root.querySelector('#reportTypeSelect');
+  if (!select) return;
+  const types = [...new Set([
+    ...editorState.templates.map(template => template.type || template.name),
+    ...editorState.studies.map(study => study.type || study.procedure),
+  ].filter(Boolean))];
+  select.innerHTML = '';
+  (types.length ? types : ['Colonoscopia', 'Gastroscopia', 'Duodenoscopia']).forEach((type) => {
+    const option = document.createElement('option');
+    option.value = type;
+    option.textContent = type;
+    select.appendChild(option);
+  });
+}
+
+function templateIcon() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg>';
+}
+
+function gearIcon() {
+  return '<svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.04a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.87.34l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.04A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05A1.7 1.7 0 0 0 19.4 9c.24.61.84 1 1.56 1H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15Z"/></svg>';
+}
+
+function renderTemplates(root) {
+  const list = root.querySelector('#templateList');
+  if (!list) return;
+  const templates = editorState.templates.length
+    ? editorState.templates
+    : [{ id: 'blank', name: 'En blanco', description: 'Empieza desde cero', type: '', content: '' }];
+
+  list.innerHTML = templates.map(template => `
+    <button class="template-item" type="button" data-template-id="${escapeHtml(template.id)}">
+      <span class="template-ico">${template.id === 'blank' ? '+' : templateIcon()}</span>
+      <span><strong>${escapeHtml(template.name)}</strong><small>${escapeHtml(template.description || 'Plantilla de reporte')}</small></span>
+      ${gearIcon()}
+    </button>`).join('');
+}
+
+function applyStudy(root, study) {
+  editorState.selectedStudy = study || null;
+  const today = new Date().toLocaleDateString('es-MX');
+  const patientData = root.querySelector('.patient-data');
+  const patientValues = patientData?.querySelectorAll('span, strong') || [];
+  setText(root, '#reportDateText', today);
+  setText(root, '[data-bind="doc-patient"]', study?.patientName || 'Nombre del paciente');
+  setText(root, '[data-bind="doc-age"]', study?.patientAge || '--');
+  setText(root, '[data-bind="doc-gender"]', study?.patientGender || '--');
+  setText(root, '[data-bind="doc-birth-date"]', study?.patientBirthDate || 'dd/mm/aaaa');
+  setText(root, '[data-bind="doc-study-date"]', study?.date || today);
+  setText(root, '[data-bind="doc-date"]', study?.date || today);
+  setText(root, '[data-bind="doc-procedure"]', study?.procedure || 'Tipo de procedimiento');
+  if (patientValues[1]) patientValues[1].textContent = study?.patientAge || '--';
+  if (patientValues[2]) patientValues[2].textContent = study?.patientGender || '--';
+  if (patientValues[3]) patientValues[3].textContent = study?.patientBirthDate || 'dd/mm/aaaa';
+  if (patientValues[4]) patientValues[4].textContent = study?.date || today;
+
+  const typeSelect = root.querySelector('#reportTypeSelect');
+  if (typeSelect && study?.type) {
+    const hasOption = Array.from(typeSelect.options).some(option => option.value === study.type);
+    if (!hasOption) typeSelect.append(new Option(study.type, study.type));
+    typeSelect.value = study.type;
+  }
+}
+
+function applyTemplate(root, template) {
+  editorState.selectedTemplate = template || null;
+  root.querySelectorAll('.template-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.templateId === template?.id);
+  });
+  if (template?.type) {
+    const typeSelect = root.querySelector('#reportTypeSelect');
+    const hasOption = Array.from(typeSelect?.options || []).some(option => option.value === template.type);
+    if (typeSelect && !hasOption) typeSelect.append(new Option(template.type, template.type));
+    if (typeSelect) typeSelect.value = template.type;
+    setText(root, '[data-bind="doc-procedure"]', template.type);
+  }
+  if (template?.content) {
+    root.querySelector('#reportDocument').innerHTML = template.content;
+    applyStudy(root, editorState.selectedStudy);
+  }
+}
+
+function appendMessage(root, text, role = 'me') {
+  const chatMessages = root.querySelector('.chat-msgs');
+  if (!chatMessages || !String(text || '').trim()) return;
+  const bubble = document.createElement('div');
+  bubble.className = `chat-msg ${role}`;
+  bubble.textContent = String(text).trim();
+  chatMessages.appendChild(bubble);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function collectReportPayload(root) {
+  const documentEl = root.querySelector('#reportDocument');
+  const typeSelect = root.querySelector('#reportTypeSelect');
+  return {
+    estudio_id: editorState.selectedStudy?.id || root.querySelector('#reportStudySelect')?.value || null,
+    paciente_id: editorState.selectedStudy?.patientId || null,
+    plantilla_id: editorState.selectedTemplate?.id && editorState.selectedTemplate.id !== 'blank' ? editorState.selectedTemplate.id : null,
+    tipo_estudio: typeSelect?.value || editorState.selectedStudy?.type || '',
+    fecha_reporte: new Date().toISOString().slice(0, 10),
+    contenido_html: documentEl?.innerHTML || '',
+    contenido_texto: documentEl?.innerText || '',
+  };
+}
+
+function responseContent(payload) {
+  return payload?.contenido_html || payload?.html || payload?.reporte || payload?.report || payload?.data?.contenido_html || payload?.data?.html || '';
+}
+
+async function loadEditorData(root) {
+  setEditorAlert(root, 'Cargando estudios, plantillas y hallazgos desde Laravel...');
+  const payload = await reportsRequest('editor');
+  const data = normalizeEditorPayload(payload);
+  editorState = {
+    ...editorState,
+    studies: data.studies,
+    templates: data.templates,
+    findings: data.findings,
+    selectedStudy: null,
+    selectedTemplate: null,
+  };
+  renderStudyOptions(root);
+  renderTypeOptions(root);
+  renderTemplates(root);
+  setEditorAlert(root, '');
+
+  if (!data.studies.length) {
+    setEditorAlert(root, 'No hay estudios sin reporte disponibles.', 'warn');
+  }
+}
+
+async function generateReport(root) {
+  if (editorState.generating) return;
+  const button = root.querySelector('#generateAiReportBtn');
+  editorState.generating = true;
+  setButtonBusy(button, true, 'Generando...');
+  setEditorAlert(root, 'Generando reporte con IA...');
+
+  try {
+    const payload = await reportsRequest('generar', {
+      method: 'POST',
+      body: JSON.stringify(collectReportPayload(root)),
+    });
+    const content = responseContent(payload);
+    if (content) root.querySelector('#reportDocument').innerHTML = content;
+    appendMessage(root, payload?.message || 'Reporte generado con IA.', 'ai');
+    setEditorAlert(root, 'Reporte generado. Revisa el contenido antes de guardar.', 'ok');
+  } catch (error) {
+    console.error(error);
+    setEditorAlert(root, error.message || 'No se pudo generar el reporte.', 'error');
+  } finally {
+    editorState.generating = false;
+    setButtonBusy(button, false);
+  }
+}
+
+async function saveReport(root) {
+  if (editorState.saving) return;
+  const button = root.querySelector('#saveReportBtn');
+  editorState.saving = true;
+  setButtonBusy(button, true, 'Guardando...');
+  setEditorAlert(root, 'Guardando reporte en Laravel...');
+
+  try {
+    await reportsRequest('', {
+      method: 'POST',
+      body: JSON.stringify(collectReportPayload(root)),
+    });
+    setEditorAlert(root, 'Reporte guardado correctamente.', 'ok');
+    setText(root, '.status-pill', 'Guardado');
+  } catch (error) {
+    console.error(error);
+    setEditorAlert(root, error.message || 'No se pudo guardar el reporte.', 'error');
+  } finally {
+    editorState.saving = false;
+    setButtonBusy(button, false);
+  }
+}
+
+async function sendChat(root, text) {
+  if (editorState.chatting || !String(text || '').trim()) return;
+  const input = root.querySelector('.chat-input input');
+  const button = root.querySelector('.chat-input button');
+  editorState.chatting = true;
+  button.disabled = true;
+  appendMessage(root, text, 'me');
+  if (input) input.value = '';
+
+  try {
+    const payload = await reportsRequest('chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        mensaje: text,
+        reporte: collectReportPayload(root),
+        hallazgos: editorState.findings,
+      }),
+    });
+    const answer = payload?.respuesta || payload?.answer || payload?.message || payload?.data?.respuesta || 'Listo.';
+    appendMessage(root, answer, 'ai');
+    const content = responseContent(payload);
+    if (content) root.querySelector('#reportDocument').innerHTML = content;
+  } catch (error) {
+    console.error(error);
+    appendMessage(root, error.message || 'No pude conectar con la IA.', 'ai');
+  } finally {
+    editorState.chatting = false;
+    button.disabled = false;
   }
 }
 
 export async function initReports() {
   const root = document.getElementById('pageContent');
   if (!root) return;
-
   reportsTemplate = root.innerHTML;
+
+  if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+    renderLaravelLogin(root, 'Inicia sesion para acceder a los reportes.');
+    return;
+  }
   await loadReportsFromLaravel(root);
 }
 
-export function initReportEditor() {
+export async function initReportEditor() {
   const root = document.getElementById('pageContent');
   if (!root) return;
+  reportsTemplate = root.innerHTML;
 
-  const documentEl = root.querySelector('#reportDocument');
-  const chatMessages = root.querySelector('.chat-msgs');
-  const chatInput = root.querySelector('.chat-input input');
-  const chatSend = root.querySelector('.chat-input button');
-  const typeSelect = root.querySelector('#reportTypeSelect');
-  const procedureText = root.querySelector('[data-bind="doc-procedure"]');
+  if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+    renderLaravelLogin(root, 'Inicia sesion para redactar reportes.');
+    return;
+  }
 
   root.querySelectorAll('[data-command]').forEach((button) => {
     button.addEventListener('click', () => {
-      documentEl?.focus();
+      root.querySelector('#reportDocument')?.focus();
       document.execCommand(button.dataset.command, false, null);
       button.classList.toggle('active', ['bold', 'italic', 'underline', 'strikeThrough'].includes(button.dataset.command));
     });
   });
 
-  typeSelect?.addEventListener('change', () => {
-    if (procedureText) procedureText.textContent = typeSelect.value;
+  root.querySelector('#reportStudySelect')?.addEventListener('change', (event) => {
+    const study = editorState.studies.find(item => item.id === event.target.value);
+    applyStudy(root, study);
   });
 
-  function appendMessage(text, role = 'me') {
-    if (!chatMessages || !text.trim()) return;
+  root.querySelector('#reportTypeSelect')?.addEventListener('change', (event) => {
+    setText(root, '[data-bind="doc-procedure"]', event.target.value);
+  });
 
-    const bubble = document.createElement('div');
-    bubble.className = `chat-msg ${role}`;
-    bubble.textContent = text.trim();
-    chatMessages.appendChild(bubble);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
+  root.querySelector('#templateList')?.addEventListener('click', (event) => {
+    const button = event.target.closest('.template-item');
+    if (!button) return;
+    const template = editorState.templates.find(item => item.id === button.dataset.templateId) || {
+      id: 'blank',
+      name: 'En blanco',
+      content: '',
+    };
+    applyTemplate(root, template);
+  });
 
   root.querySelectorAll('.quick-prompts button').forEach((button) => {
-    button.addEventListener('click', () => {
-      appendMessage(button.textContent || '', 'me');
-      appendMessage('Listo. Puedo ayudarte a convertirlo en texto clínico claro dentro del reporte.', 'ai');
-    });
+    button.addEventListener('click', () => sendChat(root, button.textContent || ''));
   });
 
-  chatSend?.addEventListener('click', () => {
-    appendMessage(chatInput?.value || '', 'me');
-    if (chatInput) chatInput.value = '';
+  root.querySelector('.chat-input button')?.addEventListener('click', () => {
+    sendChat(root, root.querySelector('.chat-input input')?.value || '');
   });
 
-  chatInput?.addEventListener('keydown', (event) => {
+  root.querySelector('.chat-input input')?.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
-    chatSend?.click();
+    root.querySelector('.chat-input button')?.click();
   });
 
-  root.querySelectorAll('.template-item').forEach((button) => {
-    button.addEventListener('click', () => {
-      root.querySelectorAll('.template-item').forEach((item) => item.classList.remove('active'));
-      button.classList.add('active');
+  root.querySelector('#generateAiReportBtn')?.addEventListener('click', () => generateReport(root));
+  root.querySelector('#saveReportBtn')?.addEventListener('click', () => saveReport(root));
 
-      const title = button.querySelector('strong')?.textContent?.trim();
-      if (title && typeSelect) {
-        typeSelect.value = Array.from(typeSelect.options).some((option) => option.value === title)
-          ? title
-          : typeSelect.value;
-        if (procedureText && title !== 'En blanco') procedureText.textContent = title;
-      }
-    });
-  });
+  try {
+    await loadEditorData(root);
+  } catch (error) {
+    console.error(error);
+    if (error.code === 'UNAUTHORIZED') {
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+      renderLaravelLogin(root, error.message);
+      return;
+    }
+    setEditorAlert(root, error.message || 'No se pudo cargar el editor.', 'error');
+    renderStudyOptions(root);
+    renderTypeOptions(root);
+    renderTemplates(root);
+  }
 }
