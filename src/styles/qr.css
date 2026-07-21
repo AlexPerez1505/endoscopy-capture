@@ -412,12 +412,57 @@
 .qr-history-code{
   color:#eef4ff;
   font-weight:900;
+  background:none;
+  border:0;
+  cursor:pointer;
+  text-decoration:underline;
+  text-decoration-color:transparent;
 }
+
+.qr-history-code:hover{text-decoration-color:currentColor}
 
 .qr-history-more{
   color:#9eb3df;
   font-size:22px;
+  background:none;
+  border:0;
+  cursor:pointer;
 }
+
+.qr-history-menu{position:relative}
+.qr-history-menu summary{list-style:none;cursor:pointer;color:#9eb3df;font-size:20px;user-select:none}
+.qr-history-menu summary::-webkit-details-marker{display:none}
+.qr-history-menu-pop{
+  position:absolute;
+  right:0;
+  top:26px;
+  z-index:10;
+  display:grid;
+  min-width:140px;
+  padding:6px;
+  border:1px solid rgba(99,133,205,.3);
+  border-radius:10px;
+  background:#121c33;
+  box-shadow:0 14px 32px rgba(0,0,0,.35);
+}
+.qr-history-menu-pop button{
+  width:100%;
+  padding:8px 9px;
+  border:0;
+  border-radius:6px;
+  text-align:left;
+  color:#c7d3ee;
+  background:transparent;
+  font:inherit;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+}
+.qr-history-menu-pop button:hover{background:rgba(99,133,205,.16)}
+.qr-history-menu-pop button.danger{color:#ff7183}
+
+html[data-theme="light"] .qr-history-menu-pop{background:#fff;border-color:rgba(15,23,42,.12)}
+html[data-theme="light"] .qr-history-menu-pop button{color:#3b4a6b}
 
 .qr-empty-row{
   padding:24px 10px;

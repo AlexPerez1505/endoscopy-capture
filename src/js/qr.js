@@ -226,6 +226,7 @@ function renderHistoryTabs(counts = {}) {
 }
 
 function historyRow(link) {
+  const canInvalidate = link.status === 'active';
   return `
     <tr data-history-status="${escapeHtml(link.status)}" ${link.status === qrHistoryFilter ? '' : 'hidden'}>
       <td><button class="qr-history-code" type="button" data-qr-select="${escapeHtml(link.id)}">${escapeHtml(link.code)}</button></td>
@@ -234,7 +235,16 @@ function historyRow(link) {
       <td>${escapeHtml(link.expires_date || link.expires_label || '--')}</td>
       <td><span class="qr-status-badge ${statusClass(link.status)}">${escapeHtml(link.status_text || link.status)}</span></td>
       <td>${Number(link.registrations || 0)}</td>
-      <td><button class="qr-history-more" type="button" data-qr-select="${escapeHtml(link.id)}" aria-label="Ver codigo">...</button></td>
+      <td>
+        <details class="qr-history-menu">
+          <summary aria-label="Acciones del codigo">&#8942;</summary>
+          <div class="qr-history-menu-pop">
+            <button type="button" data-qr-select="${escapeHtml(link.id)}">Ver codigo</button>
+            ${canInvalidate ? `<button type="button" class="danger" data-qr-revoke="${escapeHtml(link.id)}">Invalidar</button>` : ''}
+            <button type="button" class="danger" data-qr-archive="${escapeHtml(link.id)}">Eliminar</button>
+          </div>
+        </details>
+      </td>
     </tr>`;
 }
 
@@ -400,6 +410,30 @@ async function createQr(event) {
   }
 }
 
+async function revokeQrLink(id) {
+  if (!confirm('Invalidar este QR?')) return;
+  try {
+    const payload = await qrRequest(`/enlaces/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    renderQrDashboard(payload);
+    setQrAlert('Codigo QR cancelado.', 'ok');
+  } catch (error) {
+    console.error(error);
+    setQrAlert(error.message || 'No se pudo invalidar el QR.', 'error');
+  }
+}
+
+async function archiveQrLink(id) {
+  if (!confirm('Eliminar este QR del historial visible?')) return;
+  try {
+    const payload = await qrRequest(`/enlaces/${encodeURIComponent(id)}/archivar`, { method: 'DELETE' });
+    renderQrDashboard(payload);
+    setQrAlert('Codigo QR eliminado de la lista.', 'ok');
+  } catch (error) {
+    console.error(error);
+    setQrAlert(error.message || 'No se pudo eliminar el QR.', 'error');
+  }
+}
+
 async function reviewPreregistration(id, action) {
   const label = action === 'accept' ? 'aceptar este pre-registro' : 'rechazar este pre-registro';
   if (!confirm(`Deseas ${label}?`)) return;
@@ -487,7 +521,22 @@ function bindQrEvents(root) {
 
     const selectButton = event.target.closest('[data-qr-select]');
     if (selectButton) {
+      selectButton.closest('details.qr-history-menu')?.removeAttribute('open');
       loadQrDashboard(selectButton.dataset.qrSelect);
+      return;
+    }
+
+    const revokeButton = event.target.closest('[data-qr-revoke]');
+    if (revokeButton) {
+      revokeButton.closest('details.qr-history-menu')?.removeAttribute('open');
+      revokeQrLink(revokeButton.dataset.qrRevoke);
+      return;
+    }
+
+    const archiveButton = event.target.closest('[data-qr-archive]');
+    if (archiveButton) {
+      archiveButton.closest('details.qr-history-menu')?.removeAttribute('open');
+      archiveQrLink(archiveButton.dataset.qrArchive);
       return;
     }
 
