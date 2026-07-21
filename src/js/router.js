@@ -6,6 +6,7 @@ import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
 import { initPacienteForm } from './pacientes-form.js';
 import { initAgenda } from './agenda/index.js';
+import { initAgendar } from './agenda/agendar/index.js';
 import {
   initReports,
   initReportEditor,
@@ -47,6 +48,11 @@ const HEAD = {
   agenda: {
     title: 'Agenda',
     sub: 'Gestiona tus citas y estudios',
+  },
+
+  agendar: {
+    title: 'Agendar cita',
+    sub: 'Programa una nueva cita o reprograma una existente',
   },
 
   pacientes: {
@@ -102,6 +108,7 @@ const HEAD = {
 const AVAILABLE = new Set([
   'dashboard',
   'agenda',
+  'agendar',
   'pacientes',
   'pacientes-crear',
   'pacientes-editar',
@@ -131,6 +138,9 @@ const PAGE_FILES = {
 
   agenda:
     './pages/agenda_html/index.blade.html',
+
+  agendar:
+    './pages/agenda_html/agendar/index.blade.html',
 
   pacientes:
     './pages/pacientes.html',
@@ -212,6 +222,10 @@ function navRouteFor(route) {
     route === 'pacientes-editar'
   ) {
     return 'pacientes';
+  }
+
+  if (route === 'agendar') {
+    return 'agenda';
   }
 
   if (
@@ -476,6 +490,10 @@ async function initializeRoute(route) {
 
     case 'agenda':
       await initAgenda();
+      break;
+
+    case 'agendar':
+      await initAgendar();
       break;
 
     case 'qr':

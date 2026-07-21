@@ -42,6 +42,7 @@ const BLOQUEOS_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda/bloqueos`;
 const PATIENTS_ENDPOINT = `${API_BASE_URL}/api/tauri/pacientes`;
 const LOGIN_ENDPOINT = `${API_BASE_URL}/api/tauri/login`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
+const AGENDAR_PREFILL_STORAGE_KEY = 'enclaii-agendar-prefill';
 
 let EVENTS = {};
 let BLOCKS = {};
@@ -245,6 +246,12 @@ function buildCal(date) {
       dnRow.appendChild(dn);
       td.appendChild(dnRow);
 
+      td.addEventListener('click', (e) => {
+        if (e.target.closest('.cal-event, .cal-block, .cal-more-btn')) return;
+        const iso = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
+        openAgendarModal(iso);
+      });
+
       evs.slice(0, MAX_VISIBLE).forEach((ev) => {
         const liveCls = recomputeClass(ev, key);
         const div = document.createElement('div');
@@ -263,6 +270,9 @@ function buildCal(date) {
         div.dataset.cls = liveCls;
         div.dataset.time = ev.hora || (ev.h ? String(ev.h).padStart(2, '0') + ':00' : '');
         div.dataset.duration = ev.duracion || '60';
+        div.dataset.fecha = key;
+        div.dataset.sala = ev.sala || '';
+        div.dataset.notas = ev.notas || '';
         div.innerHTML = `<div class="ce-line1">${escapeHtml(dispName)}</div><div class="ce-line2">${escapeHtml(proc)}</div>`;
         td.appendChild(div);
       });
@@ -369,6 +379,12 @@ function buildWeek(date) {
       const cellEvents = (EVENTS[key] || []).filter((ev) => ev.h === hr);
       const MAX_VISIBLE = 2;
 
+      td.addEventListener('click', (e) => {
+        if (e.target.closest('.wk-event, .wk-block, .wk-more-btn')) return;
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        openAgendarModal(iso, hr);
+      });
+
       cellEvents.slice(0, MAX_VISIBLE).forEach((ev) => {
         const liveCls = recomputeClass(ev, key);
         const div = document.createElement('div');
@@ -388,6 +404,9 @@ function buildWeek(date) {
         div.dataset.cls = liveCls;
         div.dataset.time = ev.hora || (ev.h ? String(ev.h).padStart(2, '0') + ':00' : '');
         div.dataset.duration = ev.duracion || '60';
+        div.dataset.fecha = key;
+        div.dataset.sala = ev.sala || '';
+        div.dataset.notas = ev.notas || '';
         td.appendChild(div);
       });
 
@@ -505,6 +524,9 @@ function parseEventData(el) {
     time: el.dataset.time || '00:00',
     duration: el.dataset.duration || '60',
     cls: el.dataset.cls || 'ev-soon',
+    fecha: el.dataset.fecha || '',
+    sala: el.dataset.sala || '',
+    notas: el.dataset.notas || '',
   };
 }
 
@@ -532,10 +554,10 @@ function positionPopup(e) {
 }
 
 const STATUS_BUTTONS = {
-  'ev-done': [{ label: 'Datos del paciente', cls: 'primary' }, { label: 'Ver Informe', cls: 'secondary' }],
-  'ev-wait': [{ label: 'Iniciar Estudio', cls: 'primary' }, { label: 'Datos del paciente', cls: 'secondary' }],
-  'ev-cancel': [{ label: 'Datos del paciente', cls: 'primary' }],
-  'ev-soon': [{ label: 'Datos del paciente', cls: 'primary' }],
+  'ev-done': [{ label: 'Datos del paciente', cls: 'primary' }, { label: 'Reprogramar', cls: 'secondary' }, { label: 'Ver Informe', cls: 'secondary' }],
+  'ev-wait': [{ label: 'Iniciar Estudio', cls: 'primary' }, { label: 'Datos del paciente', cls: 'secondary' }, { label: 'Reprogramar', cls: 'secondary' }],
+  'ev-cancel': [{ label: 'Reprogramar', cls: 'primary' }, { label: 'Datos del paciente', cls: 'secondary' }],
+  'ev-soon': [{ label: 'Reprogramar', cls: 'primary' }, { label: 'Datos del paciente', cls: 'secondary' }],
 };
 
 function navigateHash(route) {
@@ -595,6 +617,8 @@ function showPopupForData(d, e, dateKey) {
         navigateHash('pacientes');
       } else if (b.label === 'Ver Informe') {
         navigateHash('ia-reportes');
+      } else if (b.label === 'Reprogramar') {
+        openReprogramarScreen(d);
       }
     });
     evPopBtns.appendChild(btn);
@@ -914,106 +938,36 @@ function confirmDeleteBlock(blockId) {
     });
 }
 
-/* ---- Pacientes para el selector de "Agendar cita" ---- */
-async function fetchPatientsForSelect() {
-  const headers = { Accept: 'application/json' };
-  const authorization = authHeader();
-  if (authorization) headers.Authorization = authorization;
-
-  const response = await laravelFetch(PATIENTS_ENDPOINT, { headers, credentials: 'include' });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const payload = await response.json();
-  return payload.patients || payload.data || [];
-}
-
-async function populateAgendarPacienteSelect() {
-  const select = document.getElementById('agendarPaciente');
-  if (!select) return;
-  select.innerHTML = '<option value="">Sin paciente registrado</option>';
-  try {
-    const patients = await fetchPatientsForSelect();
-    patients.forEach((patient) => {
-      const option = document.createElement('option');
-      option.value = patient.id ?? patient.patient_id ?? '';
-      option.textContent = patient.name || 'Paciente sin nombre';
-      select.appendChild(option);
-    });
-  } catch (error) {
-    console.error('No se pudieron cargar los pacientes para agendar:', error);
+/* ---- Navegar a la pantalla completa de "Agendar cita" ---- */
+function openAgendarModal(prefillDate = null, prefillHour = null) {
+  const prefill = { mode: 'create' };
+  if (prefillDate) prefill.fecha = prefillDate;
+  if (prefillHour !== null && prefillHour !== undefined) {
+    prefill.hora = `${String(prefillHour).padStart(2, '0')}:00`;
   }
+  sessionStorage.setItem(AGENDAR_PREFILL_STORAGE_KEY, JSON.stringify(prefill));
+  navigateHash('agendar');
 }
 
-/* ---- Modal: Agendar cita ---- */
-function openAgendarModal() {
-  const overlay = document.getElementById('agendarModalOverlay');
-  const form = document.getElementById('agendarForm');
-  const errorBox = document.getElementById('agendarError');
-  if (!overlay || !form) return;
-  form.reset();
-  errorBox?.classList.remove('visible');
-  document.getElementById('agendarDuracion').value = '60';
-  populateAgendarPacienteSelect();
-  overlay.classList.add('open');
-}
-
-function closeAgendarModal() {
-  document.getElementById('agendarModalOverlay')?.classList.remove('open');
-}
-
-async function handleAgendarSubmit(event, root) {
-  event.preventDefault();
-  const errorBox = document.getElementById('agendarError');
-  const submitBtn = document.getElementById('agendarSubmitBtn');
-  errorBox.classList.remove('visible');
-
-  const pacienteId = document.getElementById('agendarPaciente').value;
-  const body = {
-    paciente_id: pacienteId || null,
-    paciente_nombre: document.getElementById('agendarPacienteNombre').value.trim() || null,
-    procedimiento: document.getElementById('agendarProcedimiento').value.trim() || null,
-    fecha: document.getElementById('agendarFecha').value,
-    hora: document.getElementById('agendarHora').value,
-    duracion_minutos: parseInt(document.getElementById('agendarDuracion').value, 10) || 60,
-    sala: document.getElementById('agendarSala').value.trim() || null,
-    notas: document.getElementById('agendarNotas').value.trim() || null,
+function openReprogramarScreen(d) {
+  const prefill = {
+    mode: 'edit',
+    cita: {
+      id: d.id,
+      pacienteId: d.pacienteId || null,
+      pacienteNombre: d.fullName || d.displayName || '',
+      procedimiento: d.proc || '',
+      fecha: d.fecha || null,
+      hora: d.time || null,
+      horaTexto: d.time ? time24To12h(d.time) : '',
+      fechaTexto: d.fechaTexto || '',
+      duracion: d.duration || 60,
+      sala: d.sala || '',
+      notas: d.notas || '',
+    },
   };
-
-  if (!body.fecha || !body.hora) {
-    errorBox.textContent = 'Selecciona fecha y hora para la cita.';
-    errorBox.classList.add('visible');
-    return;
-  }
-  if (!pacienteId && !body.paciente_nombre) {
-    errorBox.textContent = 'Selecciona un paciente registrado o escribe su nombre.';
-    errorBox.classList.add('visible');
-    return;
-  }
-
-  const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
-  const authorization = authHeader();
-  if (authorization) headers.Authorization = authorization;
-
-  submitBtn.disabled = true;
-  try {
-    const response = await laravelFetch(CITAS_ENDPOINT, {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify(body),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.ok === false) {
-      throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
-    }
-    closeAgendarModal();
-    await loadAgendaFromLaravel(root);
-  } catch (error) {
-    console.error(error);
-    errorBox.textContent = error.message || 'No se pudo registrar la cita.';
-    errorBox.classList.add('visible');
-  } finally {
-    submitBtn.disabled = false;
-  }
+  sessionStorage.setItem(AGENDAR_PREFILL_STORAGE_KEY, JSON.stringify(prefill));
+  navigateHash('agendar');
 }
 
 /* ---- Modal: Bloquear horario ---- */
@@ -1136,13 +1090,7 @@ function bindAgendaEvents(root) {
     if (e.target.id === 'wkModalOverlay') closeWeekModal();
   });
 
-  document.getElementById('openAgendarBtn')?.addEventListener('click', openAgendarModal);
-  document.getElementById('agendarModalClose')?.addEventListener('click', closeAgendarModal);
-  document.getElementById('agendarCancelBtn')?.addEventListener('click', closeAgendarModal);
-  document.getElementById('agendarModalOverlay')?.addEventListener('click', (e) => {
-    if (e.target.id === 'agendarModalOverlay') closeAgendarModal();
-  });
-  document.getElementById('agendarForm')?.addEventListener('submit', (e) => handleAgendarSubmit(e, root));
+  document.getElementById('openAgendarBtn')?.addEventListener('click', () => openAgendarModal());
 
   document.getElementById('openBloqueoBtn')?.addEventListener('click', openBloqueoModal);
   document.getElementById('bloqueoModalClose')?.addEventListener('click', closeBloqueoModal);
