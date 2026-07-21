@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use base64::{
     engine::general_purpose::STANDARD as BASE64_STANDARD,
@@ -6,6 +8,80 @@ use base64::{
 };
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+
+/*
+ * Host de producción permitido para el proxy HTTP hacia Laravel.
+ *
+ * Es una constante COMPILADA en el binario, no un valor leído de
+ * localStorage/JS: aunque el WebView estuviera comprometido (XSS), no puede
+ * modificar esta lista, porque no vive en el lado que controla.
+ */
+const PRODUCTION_HOST: &str = "sistema.enclaii.com";
+
+/*
+ * Hosts adicionales permitidos SOLO en builds de desarrollo (para apuntar a
+ * un Laravel corriendo localmente). `#[cfg(debug_assertions)]` hace que esta
+ * ruta ni siquiera exista en el binario de release que se distribuye a las
+ * clínicas: no es "está desactivada por configuración", es código que no se
+ * compila.
+ */
+#[cfg(debug_assertions)]
+const ALLOWED_DEV_HOSTS: &[&str] = &["localhost", "127.0.0.1", "::1"];
+
+fn is_allowed_host(host: &str) -> bool {
+    if host == PRODUCTION_HOST {
+        return true;
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if ALLOWED_DEV_HOSTS.contains(&host) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn validate_request_url(raw_url: &str) -> Result<reqwest::Url, String> {
+    let parsed = reqwest::Url::parse(raw_url)
+        .map_err(|error| format!("URL inválida: {error}"))?;
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "La URL no tiene un host válido.".to_string())?
+        .to_ascii_lowercase();
+
+    if !is_allowed_host(&host) {
+        return Err(format!("Host no autorizado para esta aplicación: {host}"));
+    }
+
+    if host == PRODUCTION_HOST && parsed.scheme() != "https" {
+        return Err(
+            "Solo se permiten conexiones HTTPS al servidor de producción.".to_string(),
+        );
+    }
+
+    Ok(parsed)
+}
+
+/*
+ * Cliente HTTP único y reutilizado (no se crea uno nuevo por cada petición),
+ * con timeout explícito: sin esto, si Laravel se cuelga o hay un problema de
+ * red que deja la conexión abierta, el `await` de la petición podía
+ * quedarse esperando indefinidamente y la UI de JS nunca se enteraba.
+ */
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .expect("no se pudo construir el cliente HTTP")
+    })
+}
 
 #[derive(Debug, Deserialize)]
 struct LaravelRequest {
@@ -36,11 +112,13 @@ async fn laravel_request(
             format!("Método HTTP inválido: {error}")
         })?;
 
-    let client = reqwest::Client::new();
+    let validated_url = validate_request_url(&request.url)?;
+
+    let client = http_client();
 
     let mut builder = client.request(
         method,
-        &request.url,
+        validated_url,
     );
 
     /*
@@ -132,9 +210,13 @@ async fn laravel_request(
         .send()
         .await
         .map_err(|error| {
-            format!(
-                "No se pudo alcanzar Laravel: {error}"
-            )
+            if error.is_timeout() {
+                "Laravel no respondió a tiempo (timeout).".to_string()
+            } else {
+                format!(
+                    "No se pudo alcanzar Laravel: {error}"
+                )
+            }
         })?;
 
     let status = response.status();
