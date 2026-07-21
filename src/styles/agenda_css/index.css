@@ -185,7 +185,7 @@ html[data-theme="light"] .agenda-expand-btn:hover{background:#F0F4FA;color:#0E15
 }
 .cal-grid thead tr th:first-child{border-radius:8px 0 0 0}
 .cal-grid thead tr th:last-child{border-radius:0 8px 0 0}
-.cal-grid td{vertical-align:top;width:calc(100%/7);border:1px solid rgba(110,160,255,.07);padding:6px 5px;min-height:90px;position:relative}
+.cal-grid td{vertical-align:top;width:calc(100%/7);border:1px solid rgba(110,160,255,.07);padding:6px 5px;min-height:90px;position:relative;cursor:pointer}
 .day-num-row{display:flex;align-items:center;margin-bottom:5px}
 .day-num-row .day-num{margin-right:auto}
 .cal-grid td.off-month .day-num{color:var(--off)}
@@ -217,7 +217,7 @@ html[data-theme="light"] .agenda-expand-btn:hover{background:#F0F4FA;color:#0E15
 .week-table thead tr th:last-child{border-radius:0 8px 0 0}
 .week-table th.wk-today{color:#EAF1FF !important;background:linear-gradient(to bottom,#0A2A5E 30%,#1668D9 100%) !important}
 .week-table .hr-label{font-size:9.5px;color:var(--txt-soft);text-align:right;padding:0 5px 0 0;width:38px;vertical-align:top;padding-top:3px;border-right:1px solid rgba(110,160,255,.1);white-space:nowrap}
-.week-table td.wk-cell{vertical-align:top;border:1px solid rgba(110,160,255,.06);padding:2px 3px;height:40px;position:relative}
+.week-table td.wk-cell{vertical-align:top;border:1px solid rgba(110,160,255,.06);padding:2px 3px;height:40px;position:relative;cursor:pointer}
 .week-table td.wk-cell.wk-today-col{background:rgba(22,139,217,.05)}
 .wk-event{border-radius:4px;padding:2px 5px;font-size:9.5px;font-weight:600;line-height:1.2;margin-bottom:1px;cursor:pointer;transition:opacity 150ms ease;word-wrap:break-word;hyphens:auto;display:block;width:100%;box-sizing:border-box}
 .wk-event:hover{opacity:.8}

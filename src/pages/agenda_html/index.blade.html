@@ -191,60 +191,6 @@
   </div>
 </div>
 
-<!-- Modal: Agendar cita -->
-<div class="wk-modal-overlay" id="agendarModalOverlay">
-  <div class="wk-modal">
-    <div class="wk-modal-header">
-      <div class="wk-modal-title">Agendar cita</div>
-      <button class="wk-modal-close" id="agendarModalClose" aria-label="Cerrar">&times;</button>
-    </div>
-    <form class="wk-modal-body form-modal-body" id="agendarForm">
-      <div class="form-field">
-        <label for="agendarPaciente">Paciente</label>
-        <select id="agendarPaciente">
-          <option value="">Sin paciente registrado</option>
-        </select>
-      </div>
-      <div class="form-field">
-        <label for="agendarPacienteNombre">Nombre del paciente (si no está registrado)</label>
-        <input type="text" id="agendarPacienteNombre" placeholder="Nombre completo">
-      </div>
-      <div class="form-field">
-        <label for="agendarProcedimiento">Procedimiento</label>
-        <input type="text" id="agendarProcedimiento" placeholder="Ej. Endoscopia">
-      </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label for="agendarFecha">Fecha</label>
-          <input type="date" id="agendarFecha" required>
-        </div>
-        <div class="form-field">
-          <label for="agendarHora">Hora</label>
-          <input type="time" id="agendarHora" required>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label for="agendarDuracion">Duración (minutos)</label>
-          <input type="number" id="agendarDuracion" min="1" max="1440" value="60">
-        </div>
-        <div class="form-field">
-          <label for="agendarSala">Sala</label>
-          <input type="text" id="agendarSala" placeholder="Sala 3">
-        </div>
-      </div>
-      <div class="form-field">
-        <label for="agendarNotas">Notas</label>
-        <textarea id="agendarNotas" placeholder="Notas adicionales"></textarea>
-      </div>
-      <div class="form-modal-error" id="agendarError"></div>
-      <div class="form-modal-footer">
-        <button type="button" class="btn-secondary" id="agendarCancelBtn">Cancelar</button>
-        <button type="submit" class="btn-primary" id="agendarSubmitBtn">Guardar cita</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 <!-- Modal: Bloquear horario -->
 <div class="wk-modal-overlay" id="bloqueoModalOverlay">

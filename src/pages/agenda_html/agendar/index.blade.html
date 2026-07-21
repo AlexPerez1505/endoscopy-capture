@@ -1,153 +1,272 @@
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_base.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/index.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_tarjetas.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_mes.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_semana.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_dia.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_popup.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_bloqueos.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_sidebar.css">
-<link rel="stylesheet" href="./styles/agenda_css/agendar/_events.css">
-
-<div class="agenda-header rise d2">
-  <div class="agenda-header-left">
-    <h2>Agenda</h2>
-    <p>Gestiona tus citas y procedimientos</p>
+<div class="agendar-page">
+<div class="ag-wrap" id="agendarWrap">
+  <div class="ag-header">
+    <button class="ag-back" id="agBack" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Regresar
+    </button>
+    <h1 class="ag-title" id="agendarTitle">Agendar Nueva CITA</h1>
+    <div style="width:80px"></div>
   </div>
-  <a href="#agendar" class="btn-primary" data-nav="agendar">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-    Agendar cita
-  </a>
-</div>
 
-<div class="agenda-body rise d3">
+  <div class="ag-grid-main">
 
-  <div class="agenda-left">
+    <!-- Paso 1: Paciente -->
+    <div>
+      <div class="ag-card" id="stepPaciente">
+        <div class="ag-card-title">
+          <span class="ag-step-badge">1</span>
+          Datos Del Paciente
+        </div>
 
-    <!-- Toolbar: pestañas de vista + navegación mes -->
-    <div class="cal-toolbar">
-      <div class="view-tabs">
-        <button class="view-tab">Día</button>
-        <button class="view-tab">Semana</button>
-        <button class="view-tab active">Mes</button>
+        <label class="ag-label">Buscar paciente</label>
+        <div class="pac-search-wrap">
+          <input class="ag-input" id="pacSearch" type="text" placeholder="Busca por nombre, folio, teléfono o correo" style="padding-right:40px" autocomplete="off">
+          <div class="pac-suggestions" id="pacSuggestions"></div>
+        </div>
+
+        <div class="pac-result" id="pacResult">
+          <div class="pac-avatar" id="pacAvatar">PX</div>
+          <div class="pac-info">
+            <div class="pac-name" id="pacName">Selecciona un paciente</div>
+            <div class="pac-folio" id="pacFolio">Folio: --</div>
+            <div class="pac-meta">
+              <div class="pac-meta-item"><span id="pacAge">Sin edad</span></div>
+              <div class="pac-meta-item"><span id="pacGenero">No especificado</span></div>
+              <div class="pac-meta-item"><span id="pacNac">Sin fecha</span></div>
+            </div>
+          </div>
+          <button class="pac-chevron" id="pacChevron" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+
+        <div class="pac-fields" id="pacFields">
+          <div class="ag-field">
+            <label class="ag-label">Teléfono</label>
+            <input class="ag-input" id="pacTel" type="tel" placeholder="Teléfono" readonly>
+          </div>
+          <div class="ag-field">
+            <label class="ag-label">Correo</label>
+            <input class="ag-input" id="pacEmail" type="email" placeholder="correo@ejemplo.com" readonly>
+          </div>
+          <div class="ag-field">
+            <label class="ag-label">Dirección</label>
+            <input class="ag-input" id="pacDir" type="text" placeholder="Dirección" readonly>
+          </div>
+          <a class="pac-link" id="pacHistoryLink" href="#pacientes">Ver historial completo</a>
+        </div>
       </div>
-      <div class="toolbar-right">
-        <div class="month-nav">
-          <button aria-label="Mes anterior">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          <div class="month-label">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <div class="picker-wrap">
-              <span id="mesActual">Mayo</span>
-              <div class="picker-dropdown" id="mesPicker"><div class="picker-title">Mes</div></div>
-            </div>
-            <div class="picker-wrap">
-              <span class="year" id="anioActual">2024</span>
-              <div class="picker-dropdown" id="anioPicker"><div class="picker-title">Año</div></div>
-            </div>
-          </div>
-          <button aria-label="Mes siguiente">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
+    </div>
+
+    <!-- Paso 2: Cita -->
+    <div>
+      <div class="ag-card" id="stepCita">
+        <div class="ag-card-title">
+          <span class="ag-step-badge">2</span>
+          Datos De la Cita
         </div>
-        <button class="toolbar-filter-btn" id="toolbarFilterBtn" title="Mostrar filtros" aria-label="Filtros">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-          </svg>
-        </button>
-        <!-- Dropdown de filtros (solo visible cuando está expandido) -->
-        <div class="filter-dropdown" id="toolbarFilterDropdown">
-          <h4>Filtrar citas</h4>
-          <div class="filter-list">
-            <label class="filter-row" data-filter="ev-done">
-              <input type="checkbox" checked>
-              <span class="filter-indicator done"></span>
-              <span class="filter-text">Completado</span>
-            </label>
-            <label class="filter-row" data-filter="ev-wait">
-              <input type="checkbox" checked>
-              <span class="filter-indicator wait"></span>
-              <span class="filter-text">En espera</span>
-            </label>
-            <label class="filter-row" data-filter="ev-cancel">
-              <input type="checkbox" checked>
-              <span class="filter-indicator cancel"></span>
-              <span class="filter-text">Cancelado</span>
-            </label>
-            <label class="filter-row" data-filter="ev-soon">
-              <input type="checkbox" checked>
-              <span class="filter-indicator soon"></span>
-              <span class="filter-text">Próximo</span>
-            </label>
+
+        <div class="ag-field">
+          <label class="ag-label">Doctor</label>
+          <div class="ag-input-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <select class="ag-input ag-select" id="citaEspecialista">
+              <option value="" disabled selected>Seleccione a un Doctor</option>
+            </select>
           </div>
         </div>
-        <button class="agenda-expand-btn" id="agendaExpandBtn" title="Expandir/Colapsar sidebar" aria-label="Expandir">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-          </svg>
+
+        <div class="ag-field">
+          <label class="ag-label">Procedimiento</label>
+          <div class="ag-input-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <select class="ag-input ag-select" id="citaProcedimiento">
+              <option value="" disabled selected>Seleccione procedimiento</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ag-row ag-field">
+          <div>
+            <label class="ag-label">Fecha</label>
+            <div class="ag-input-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <input class="ag-input" id="citaFecha" type="text" placeholder="DD/MM/AAAA" readonly>
+            </div>
+          </div>
+          <div>
+            <label class="ag-label">Hora</label>
+            <input class="ag-input" id="citaHora" type="text" placeholder="08:00 AM" value="" readonly>
+          </div>
+        </div>
+
+        <select class="ag-input ag-select" name="sala" id="citaSala">
+          <option value="">Seleccione una sala</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Paso 3: Calendario -->
+    <div>
+      <div class="ag-card" id="stepCalendario">
+        <div class="ag-card-title">
+          <span class="ag-step-badge">3</span>
+          Selección de Fecha y Hora
+        </div>
+
+        <div class="reprogram-info" id="reprogramInfo"></div>
+
+        <div class="cal-ag-wrap">
+          <div class="cal-ag-nav-header">
+            <div class="cal-ag-nav-group">
+              <button class="cal-ag-nav-btn" id="calAgYearPrev" type="button"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <span class="cal-ag-nav-title" id="calAgYear"></span>
+              <button class="cal-ag-nav-btn" id="calAgYearNext" type="button"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+            </div>
+            <div class="cal-ag-nav-group">
+              <button class="cal-ag-nav-btn" id="calAgMonthPrev" type="button"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <span class="cal-ag-nav-title" id="calAgMonth"></span>
+              <button class="cal-ag-nav-btn" id="calAgMonthNext" type="button"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+            </div>
+          </div>
+          <div class="cal-ag-grid" id="calAgGrid"></div>
+        </div>
+
+        <div class="time-section">
+          <div class="time-section-title" id="timeSectionTitle">Horarios disponibles</div>
+
+          <div class="timeline-wrap">
+            <div class="timeline-inner">
+              <div class="timeline-labels" id="timelineLabels"></div>
+              <div class="timeline-bar" id="timelineBar">
+                <div class="timeline-cursor" id="timelineCursor" style="left:0"></div>
+                <div class="timeline-selection" id="timelineSelection"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="time-picker-wrap">
+            <div class="time-picker-col">
+              <label>Hora</label>
+              <input type="text" id="timeHour" inputmode="numeric" pattern="[0-9]{1,2}" maxlength="2" value="08">
+            </div>
+            <div class="time-separator">:</div>
+            <div class="time-picker-col">
+              <label>Min</label>
+              <input type="text" id="timeMin" inputmode="numeric" pattern="[0-9]{1,2}" maxlength="2" value="00">
+            </div>
+          </div>
+
+          <div class="duration-picker-wrap">
+            <label class="duration-label">Duración</label>
+            <div class="duration-input-group">
+              <button type="button" class="dur-btn" id="durMinus" aria-label="Disminuir duración">−</button>
+              <input class="duration-input" id="citaDuracion" type="number" min="1" max="1440" step="1" value="60" placeholder="Ej. 45">
+              <span class="duration-suffix">min</span>
+              <button type="button" class="dur-btn" id="durPlus" aria-label="Aumentar duración">+</button>
+            </div>
+          </div>
+
+          <div class="time-meta">
+            <div class="time-end">Termina a las <b id="timeEnd">--:--</b></div>
+            <div class="time-status ok" id="timeStatus">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Horario disponible
+            </div>
+          </div>
+
+          <div class="slots-legend">
+            <div class="legend-item"><span class="legend-dot libre"></span> Libre</div>
+            <div class="legend-item"><span class="legend-dot ocupado"></span> Ocupado</div>
+            <div class="legend-item"><span class="legend-dot bloqueado"></span> Bloqueado</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paso 4: Motivo -->
+  <div class="ag-card" id="stepMotivo">
+    <div class="ag-card-title">
+      <span class="ag-step-badge">4</span>
+      Motivo / Observaciones
+    </div>
+    <textarea class="motivo-textarea" id="motivoText" maxlength="500" placeholder="Describe el motivo de la cita u observación"></textarea>
+    <div class="motivo-counter"><span id="motivoCount">0</span>/500</div>
+  </div>
+
+  <!-- Paso 5: Confirmación -->
+  <div class="ag-grid-confirm">
+    <div class="ag-card" id="stepConfirmacion">
+      <div class="ag-card-title">
+        <span class="ag-step-badge">5</span>
+        Confirmación de Cita
+      </div>
+
+      <div class="confirm-row" id="confirmRow">
+        <div class="confirm-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <div><div class="confirm-lbl">Paciente</div><div class="confirm-val" id="cfmPaciente">Paciente</div></div>
+        </div>
+        <div class="confirm-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <div><div class="confirm-lbl">Especialista</div><div class="confirm-val" id="cfmEspecialista">Especialista</div></div>
+        </div>
+        <div class="confirm-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <div><div class="confirm-lbl">Procedimiento</div><div class="confirm-val" id="cfmProcedimiento">Procedimiento</div></div>
+        </div>
+        <div class="confirm-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <div><div class="confirm-lbl">Fecha</div><div class="confirm-val" id="cfmFecha">Fecha</div></div>
+        </div>
+        <div class="confirm-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div><div class="confirm-lbl">Hora</div><div class="confirm-val" id="cfmHora">Hora</div></div>
+        </div>
+        <div class="confirm-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <div><div class="confirm-lbl">Sala</div><div class="confirm-val" id="cfmSala">Sala</div></div>
+        </div>
+      </div>
+
+      <div class="confirm-actions">
+        <button class="ag-btn-secondary" id="cfmCancelar" type="button">Cancelar</button>
+        <button class="ag-btn-primary" id="cfmAgendar" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Agendar cita
         </button>
       </div>
     </div>
 
-    <!-- partial: _tarjetas -->
-    <div data-partial="_tarjetas"></div>
-
-    <!-- partial: _mes -->
-    <div data-partial="_mes"></div>
-
-    <!-- partial: _semana -->
-    <div data-partial="_semana"></div>
-
-    <!-- partial: _dia -->
-    <div data-partial="_dia"></div>
-
+    <div class="info-card">
+      <div class="info-card-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Información importante
+      </div>
+      <div class="info-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        El paciente recibirá una notificación por WhatsApp y correo
+      </div>
+      <div class="info-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Llegará 15 minutos antes de la cita
+      </div>
+    </div>
   </div>
-
-  <!-- Panel derecho: filtros + próximas citas -->
-  <div class="agenda-right">
-    <div data-partial="_sidebar"></div>
-  </div>
-
 </div>
 
-<!-- partial: _bloqueos -->
-<div data-partial="_bloqueos"></div>
-
-<!-- partial: _popup -->
-<div data-partial="_popup"></div>
-
-<!-- partial: _events (datos compartidos) -->
-<div data-partial="_events"></div>
-
-<script type="module">
-  // Cargar HTML de partials antes de ejecutar el JS principal
-  async function loadPartials() {
-    const partials = document.querySelectorAll('[data-partial]');
-    for (const el of partials) {
-      const name = el.dataset.partial;
-      try {
-        const res = await fetch(`./pages/agenda_html/agendar/_${name}.blade.html`);
-        if (!res.ok) continue;
-        const html = await res.text();
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = html;
-        el.replaceWith(...wrapper.childNodes);
-      } catch (err) {
-        console.error('Error cargando partial', name, err);
-      }
-    }
-  }
-  await loadPartials();
-
-  // Importar los módulos JS de cada partial (registran funciones globales)
-  await import('./js/agenda/agendar/_events.js');
-  await import('./js/agenda/agendar/_mes.js');
-  await import('./js/agenda/agendar/_semana.js');
-  await import('./js/agenda/agendar/_dia.js');
-  await import('./js/agenda/agendar/_popup.js');
-  await import('./js/agenda/agendar/_bloqueos.js');
-  await import('./js/agenda/agendar/_sidebar.js');
-  await import('./js/agenda/agendar/_tarjetas.js');
-</script>
-<script src="./js/agenda/agendar/index.js" type="module"></script>
+<!-- Overlay cita agendada -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-card">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+    <h3>¡Cita agendada!</h3>
+    <p id="successText">La cita se guardó correctamente. Se enviará una notificación al paciente.</p>
+    <div class="success-actions">
+      <a class="btn-primary" href="#agenda" id="btnGoAgenda">Salir</a>
+      <a class="btn-secondary" href="#mensajes" id="btnGoChat">Ver mensaje</a>
+    </div>
+  </div>
+</div>
+</div>
