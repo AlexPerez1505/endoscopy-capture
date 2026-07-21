@@ -1276,10 +1276,11 @@ finishStudyGalleryBtn?.addEventListener('click', () => {
 
 // Flujo de captura (funciona igual con el mouse, el boton en pantalla y el
 // remoto del capturador):
-//   - Un clic    -> toma una foto al instante (sin retraso).
-//   - Doble clic -> inicia la grabacion (mismo procedimiento que el boton
-//     "Iniciar grabación": llama directamente a startRecording()).
-//   - Un clic mientras se esta grabando -> detiene la grabacion al instante.
+//   - Un clic    -> toma una foto al instante (sin retraso), sin importar si
+//     ya se esta grabando un video (permite fotos durante la grabacion).
+//   - Doble clic -> si no se esta grabando, inicia la grabacion; si ya se
+//     esta grabando, la detiene. Es decir, el doble clic es el unico gesto
+//     que arranca/detiene el video; un solo clic nunca detiene la grabacion.
 //
 // El evento nativo "dblclick" del navegador NO sirve aqui: solo se dispara
 // cuando ambos clics vienen de un mismo puntero de mouse real (cuenta
@@ -1287,6 +1288,16 @@ finishStudyGalleryBtn?.addEventListener('click', () => {
 // teclado emulado o click() sintetico) y nunca incrementan ese contador, asi
 // que "dblclick" jamas se disparaba. Por eso el doble clic se detecta a mano
 // comparando el timestamp entre dos "click" consecutivos.
+//
+// El switch fisico del remoto tambien genera rebote de contacto: un solo
+// pulso fisico puede disparar dos eventos "click" casi simultaneos (unos
+// pocos ms de diferencia). Sin filtrarlo, ese segundo clic "fantasma" caia
+// justo dentro de la ventana de doble clic y arrancaba una grabacion no
+// pedida; el siguiente clic real la detenia de inmediato en vez de tomar una
+// foto, dando la sensacion de que el remoto "se traba" y deja de responder.
+// Por eso, antes de cualquier otra logica, se ignoran por completo (sin
+// registrar su timestamp) los clics que llegan a menos de
+// CLICK_BOUNCE_IGNORE_MS del clic anterior aceptado.
 //
 // El switch fisico soldado al remoto no tiene un timing 100% estable: el
 // intervalo real entre los dos clics de un "doble clic" deliberado se ha
@@ -1308,6 +1319,9 @@ const DOUBLE_CLICK_WINDOW_MIN_MS = 1200;
 const DOUBLE_CLICK_WINDOW_MAX_MS = 6000;
 const DOUBLE_CLICK_NEAR_MISS_MARGIN_MS = 1500;
 const DOUBLE_CLICK_WINDOW_STORAGE_KEY = 'enclaii-double-click-window-ms';
+// Rebote de contacto del switch: muy por debajo de DOUBLE_CLICK_WINDOW_MIN_MS,
+// asi que nunca se confunde con un doble clic deliberado.
+const CLICK_BOUNCE_IGNORE_MS = 250;
 
 function clampDoubleClickWindow(value) {
   return Math.min(DOUBLE_CLICK_WINDOW_MAX_MS, Math.max(DOUBLE_CLICK_WINDOW_MIN_MS, Math.round(value)));
@@ -1331,6 +1345,14 @@ function handleCaptureClick(event) {
   const now = Date.now();
   const elapsedSinceLastClick = lastCaptureClickAt ? now - lastCaptureClickAt : null;
 
+  // Rebote de contacto: se ignora por completo, sin tocar lastCaptureClickAt,
+  // para que no cuente como un nuevo clic ni distorsione el intervalo usado
+  // en la deteccion de doble clic.
+  if (elapsedSinceLastClick !== null && elapsedSinceLastClick < CLICK_BOUNCE_IGNORE_MS) {
+    addLog(`Clic ignorado por rebote de contacto (+${elapsedSinceLastClick}ms).`);
+    return;
+  }
+
   // Log de diagnostico: cuantos ms pasaron desde el clic anterior, para
   // poder seguir observando el comportamiento real del remoto/mouse fisico.
   addLog(
@@ -1341,23 +1363,24 @@ function handleCaptureClick(event) {
 
   const isRecording = mediaRecorder && mediaRecorder.state !== 'inactive';
 
-  if (isRecording) {
-    lastCaptureClickAt = 0;
-    addLog('Clic detectado: deteniendo grabación...');
-    stopRecording();
-    return;
-  }
-
   const isDoubleClick = elapsedSinceLastClick !== null && elapsedSinceLastClick <= doubleClickWindowMs;
 
   if (isDoubleClick) {
     lastCaptureClickAt = 0;
     const previousWindow = doubleClickWindowMs;
     setDoubleClickWindow(elapsedSinceLastClick + 300);
-    addLog(
-      `Doble clic detectado (${elapsedSinceLastClick}ms, ventana ${previousWindow}ms → ${doubleClickWindowMs}ms): iniciando grabación...`
-    );
-    startRecording();
+
+    if (isRecording) {
+      addLog(
+        `Doble clic detectado (${elapsedSinceLastClick}ms, ventana ${previousWindow}ms → ${doubleClickWindowMs}ms): deteniendo grabación...`
+      );
+      stopRecording();
+    } else {
+      addLog(
+        `Doble clic detectado (${elapsedSinceLastClick}ms, ventana ${previousWindow}ms → ${doubleClickWindowMs}ms): iniciando grabación...`
+      );
+      startRecording();
+    }
     return;
   }
 

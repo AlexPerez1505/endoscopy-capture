@@ -37,10 +37,14 @@ function apiBaseUrl() {
 
 const API_BASE_URL = apiBaseUrl();
 const AGENDA_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda`;
+const CITAS_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda/citas`;
+const BLOQUEOS_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda/bloqueos`;
+const PATIENTS_ENDPOINT = `${API_BASE_URL}/api/tauri/pacientes`;
 const LOGIN_ENDPOINT = `${API_BASE_URL}/api/tauri/login`;
 const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 let EVENTS = {};
+let BLOCKS = {};
 let visibleDate = new Date();
 let curView = 'mes';
 let agendaTemplate = '';
@@ -127,6 +131,29 @@ function buildEventsFromCitas(citas) {
       estado_url: cita.estado_url,
       reprogramar_url: cita.reprogramar_url,
       inits: initials(paciente),
+    });
+  });
+
+  Object.keys(map).forEach((key) => {
+    map[key].sort((a, b) => (a.h - b.h) || String(a.hora || '').localeCompare(String(b.hora || '')));
+  });
+
+  return map;
+}
+
+function buildBlocksFromBloqueos(bloqueos) {
+  const map = {};
+
+  (bloqueos || []).forEach((bloqueo) => {
+    if (!bloqueo.fecha_key) return;
+    map[bloqueo.fecha_key] = map[bloqueo.fecha_key] || [];
+    map[bloqueo.fecha_key].push({
+      id: bloqueo.id,
+      label: bloqueo.label || 'Bloqueo de tiempo',
+      hora: bloqueo.hora,
+      hora_fin: bloqueo.hora_fin,
+      h: bloqueo.h ?? (parseInt(String(bloqueo.hora || '0').substring(0, 2), 10) || 0),
+      duracion: bloqueo.duracion ?? 60,
     });
   });
 
@@ -252,6 +279,19 @@ function buildCal(date) {
         td.appendChild(moreBtn);
       }
 
+      (BLOCKS[key] || []).forEach((block) => {
+        const div = document.createElement('div');
+        div.className = 'cal-block';
+        div.dataset.blockId = block.id;
+        const timeLabel = block.hora_fin ? `${block.hora} – ${block.hora_fin}` : block.hora;
+        div.innerHTML = `<div class="ce-line1">${escapeHtml(block.label)}</div><div class="ce-line2">${escapeHtml(timeLabel)}</div>`;
+        div.addEventListener('click', (e) => {
+          e.stopPropagation();
+          confirmDeleteBlock(block.id);
+        });
+        td.appendChild(div);
+      });
+
       if (isCurMonth || evs.length) hasContent = true;
       tr.appendChild(td);
       day += 1;
@@ -361,6 +401,19 @@ function buildWeek(date) {
         });
         td.appendChild(moreBtn);
       }
+
+      (BLOCKS[key] || []).filter((block) => block.h === hr).forEach((block) => {
+        const div = document.createElement('div');
+        div.className = 'wk-block';
+        div.dataset.blockId = block.id;
+        const timeLabel = block.hora_fin ? `${block.hora} – ${block.hora_fin}` : block.hora;
+        div.innerHTML = `<div class="wk-line1">${escapeHtml(block.label)}</div><div class="wk-line2">${escapeHtml(timeLabel)}</div>`;
+        div.addEventListener('click', (e) => {
+          e.stopPropagation();
+          confirmDeleteBlock(block.id);
+        });
+        td.appendChild(div);
+      });
 
       tr.appendChild(td);
     });
@@ -813,7 +866,7 @@ async function fetchLaravelAgenda() {
     throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
   }
 
-  return payload.citas || [];
+  return { citas: payload.citas || [], bloqueos: payload.bloqueos || [] };
 }
 
 async function loadAgendaFromLaravel(root) {
@@ -821,8 +874,9 @@ async function loadAgendaFromLaravel(root) {
   setAgendaLoading();
 
   try {
-    const citas = await fetchLaravelAgenda();
+    const { citas, bloqueos } = await fetchLaravelAgenda();
     EVENTS = buildEventsFromCitas(citas);
+    BLOCKS = buildBlocksFromBloqueos(bloqueos);
     rebuildCurrentView();
   } catch (error) {
     console.error(error);
@@ -830,6 +884,213 @@ async function loadAgendaFromLaravel(root) {
       sessionStorage.removeItem('enclaii-tauri-basic-auth');
     }
     renderAgendaError(root, error);
+  }
+}
+
+/* ---- Bloqueos: eliminar ---- */
+async function deleteBlock(blockId) {
+  const headers = { Accept: 'application/json' };
+  const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
+
+  const response = await laravelFetch(`${BLOQUEOS_ENDPOINT}/${blockId}`, {
+    method: 'DELETE',
+    headers,
+    credentials: 'include',
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+}
+
+function confirmDeleteBlock(blockId) {
+  if (!blockId) return;
+  if (!window.confirm('¿Eliminar este bloqueo de horario?')) return;
+
+  deleteBlock(blockId)
+    .then(() => loadAgendaFromLaravel(document.getElementById('pageContent')))
+    .catch((error) => {
+      console.error(error);
+      window.alert('No se pudo eliminar el bloqueo. Verifica tu conexión con Laravel.');
+    });
+}
+
+/* ---- Pacientes para el selector de "Agendar cita" ---- */
+async function fetchPatientsForSelect() {
+  const headers = { Accept: 'application/json' };
+  const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
+
+  const response = await laravelFetch(PATIENTS_ENDPOINT, { headers, credentials: 'include' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const payload = await response.json();
+  return payload.patients || payload.data || [];
+}
+
+async function populateAgendarPacienteSelect() {
+  const select = document.getElementById('agendarPaciente');
+  if (!select) return;
+  select.innerHTML = '<option value="">Sin paciente registrado</option>';
+  try {
+    const patients = await fetchPatientsForSelect();
+    patients.forEach((patient) => {
+      const option = document.createElement('option');
+      option.value = patient.id ?? patient.patient_id ?? '';
+      option.textContent = patient.name || 'Paciente sin nombre';
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error('No se pudieron cargar los pacientes para agendar:', error);
+  }
+}
+
+/* ---- Modal: Agendar cita ---- */
+function openAgendarModal() {
+  const overlay = document.getElementById('agendarModalOverlay');
+  const form = document.getElementById('agendarForm');
+  const errorBox = document.getElementById('agendarError');
+  if (!overlay || !form) return;
+  form.reset();
+  errorBox?.classList.remove('visible');
+  document.getElementById('agendarDuracion').value = '60';
+  populateAgendarPacienteSelect();
+  overlay.classList.add('open');
+}
+
+function closeAgendarModal() {
+  document.getElementById('agendarModalOverlay')?.classList.remove('open');
+}
+
+async function handleAgendarSubmit(event, root) {
+  event.preventDefault();
+  const errorBox = document.getElementById('agendarError');
+  const submitBtn = document.getElementById('agendarSubmitBtn');
+  errorBox.classList.remove('visible');
+
+  const pacienteId = document.getElementById('agendarPaciente').value;
+  const body = {
+    paciente_id: pacienteId || null,
+    paciente_nombre: document.getElementById('agendarPacienteNombre').value.trim() || null,
+    procedimiento: document.getElementById('agendarProcedimiento').value.trim() || null,
+    fecha: document.getElementById('agendarFecha').value,
+    hora: document.getElementById('agendarHora').value,
+    duracion_minutos: parseInt(document.getElementById('agendarDuracion').value, 10) || 60,
+    sala: document.getElementById('agendarSala').value.trim() || null,
+    notas: document.getElementById('agendarNotas').value.trim() || null,
+  };
+
+  if (!body.fecha || !body.hora) {
+    errorBox.textContent = 'Selecciona fecha y hora para la cita.';
+    errorBox.classList.add('visible');
+    return;
+  }
+  if (!pacienteId && !body.paciente_nombre) {
+    errorBox.textContent = 'Selecciona un paciente registrado o escribe su nombre.';
+    errorBox.classList.add('visible');
+    return;
+  }
+
+  const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
+  const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
+
+  submitBtn.disabled = true;
+  try {
+    const response = await laravelFetch(CITAS_ENDPOINT, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
+    }
+    closeAgendarModal();
+    await loadAgendaFromLaravel(root);
+  } catch (error) {
+    console.error(error);
+    errorBox.textContent = error.message || 'No se pudo registrar la cita.';
+    errorBox.classList.add('visible');
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+/* ---- Modal: Bloquear horario ---- */
+function openBloqueoModal() {
+  const overlay = document.getElementById('bloqueoModalOverlay');
+  const form = document.getElementById('bloqueoForm');
+  const errorBox = document.getElementById('bloqueoError');
+  if (!overlay || !form) return;
+  form.reset();
+  errorBox?.classList.remove('visible');
+  overlay.classList.add('open');
+}
+
+function closeBloqueoModal() {
+  document.getElementById('bloqueoModalOverlay')?.classList.remove('open');
+}
+
+function datesInRange(start, end) {
+  const dates = [];
+  const cursor = new Date(start);
+  const last = new Date(end);
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+async function handleBloqueoSubmit(event, root) {
+  event.preventDefault();
+  const errorBox = document.getElementById('bloqueoError');
+  const submitBtn = document.getElementById('bloqueoSubmitBtn');
+  errorBox.classList.remove('visible');
+
+  const fechaInicio = document.getElementById('bloqueoFechaInicio').value;
+  const fechaFin = document.getElementById('bloqueoFechaFin').value || fechaInicio;
+  const hora = document.getElementById('bloqueoHoraInicio').value;
+  const horaFin = document.getElementById('bloqueoHoraFin').value || null;
+
+  if (!fechaInicio || !hora) {
+    errorBox.textContent = 'Selecciona al menos la fecha y la hora de inicio.';
+    errorBox.classList.add('visible');
+    return;
+  }
+
+  const fechas = datesInRange(fechaInicio, fechaFin);
+  const body = {
+    label: document.getElementById('bloqueoLabel').value.trim() || null,
+    fechas,
+    hora,
+    hora_fin: horaFin,
+  };
+
+  const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
+  const authorization = authHeader();
+  if (authorization) headers.Authorization = authorization;
+
+  submitBtn.disabled = true;
+  try {
+    const response = await laravelFetch(BLOQUEOS_ENDPOINT, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
+    }
+    closeBloqueoModal();
+    await loadAgendaFromLaravel(root);
+  } catch (error) {
+    console.error(error);
+    errorBox.textContent = error.message || 'No se pudo registrar el bloqueo.';
+    errorBox.classList.add('visible');
+  } finally {
+    submitBtn.disabled = false;
   }
 }
 
@@ -874,6 +1135,22 @@ function bindAgendaEvents(root) {
   document.getElementById('wkModalOverlay')?.addEventListener('click', (e) => {
     if (e.target.id === 'wkModalOverlay') closeWeekModal();
   });
+
+  document.getElementById('openAgendarBtn')?.addEventListener('click', openAgendarModal);
+  document.getElementById('agendarModalClose')?.addEventListener('click', closeAgendarModal);
+  document.getElementById('agendarCancelBtn')?.addEventListener('click', closeAgendarModal);
+  document.getElementById('agendarModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'agendarModalOverlay') closeAgendarModal();
+  });
+  document.getElementById('agendarForm')?.addEventListener('submit', (e) => handleAgendarSubmit(e, root));
+
+  document.getElementById('openBloqueoBtn')?.addEventListener('click', openBloqueoModal);
+  document.getElementById('bloqueoModalClose')?.addEventListener('click', closeBloqueoModal);
+  document.getElementById('bloqueoCancelBtn')?.addEventListener('click', closeBloqueoModal);
+  document.getElementById('bloqueoModalOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'bloqueoModalOverlay') closeBloqueoModal();
+  });
+  document.getElementById('bloqueoForm')?.addEventListener('submit', (e) => handleBloqueoSubmit(e, root));
 
   const toolbarFilterBtn = document.getElementById('toolbarFilterBtn');
   const toolbarFilterDropdown = document.getElementById('toolbarFilterDropdown');

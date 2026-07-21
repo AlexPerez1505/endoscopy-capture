@@ -14,6 +14,37 @@
 .btn-primary:active{transform:scale(.97)}
 @media(hover:hover) and (pointer:fine){.btn-primary:hover{opacity:.88}}
 
+.agenda-header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn-secondary{
+  display:inline-flex;align-items:center;gap:8px;padding:11px 20px;
+  border-radius:var(--r-md);background:transparent;
+  border:1.5px solid rgba(110,160,255,.4);
+  color:var(--txt);font-size:14px;font-weight:700;cursor:pointer;
+  transition:background 150ms ease,border-color 150ms ease,transform 160ms var(--ease-out);
+}
+.btn-secondary:active{transform:scale(.97)}
+@media(hover:hover) and (pointer:fine){.btn-secondary:hover{background:rgba(110,160,255,.12);border-color:rgba(110,160,255,.6)}}
+
+/* ---- Bloqueos en calendario ---- */
+.cal-block{border-radius:5px;padding:3px 6px;font-size:10px;font-weight:600;line-height:1.2;margin-bottom:3px;cursor:pointer;min-width:0;word-wrap:break-word;background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 6px,rgba(255,255,255,0) 6px 12px),#3A2F45;color:#D8C7FF;border:1.27px dashed #8B6FD9;transition:opacity 150ms ease}
+.cal-block:hover{opacity:.8}
+.wk-block{border-radius:5px;padding:3px 6px;font-size:10px;font-weight:600;line-height:1.2;cursor:pointer;background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 6px,rgba(255,255,255,0) 6px 12px),#3A2F45;color:#D8C7FF;border:1.27px dashed #8B6FD9;transition:opacity 150ms ease}
+.wk-block:hover{opacity:.8}
+
+/* ---- Modales de formulario (Agendar cita / Bloquear horario) ---- */
+.form-modal-body{display:flex;flex-direction:column;gap:14px}
+.form-field{display:flex;flex-direction:column;gap:6px}
+.form-field label{font-size:12px;font-weight:600;color:var(--txt-soft)}
+.form-field input,.form-field select,.form-field textarea{
+  width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--stroke);
+  background:var(--bg);color:var(--txt);font-size:13.5px;font-family:inherit;
+}
+.form-field textarea{resize:vertical;min-height:64px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-modal-error{display:none;color:#FF6B6B;font-size:12.5px;line-height:1.4}
+.form-modal-error.visible{display:block}
+.form-modal-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
+
 .agenda-body{display:grid;grid-template-columns:1fr 260px;gap:18px;align-items:start}
 .agenda-left{
   background:#000B1E;border:1.84px solid #168BD9;
