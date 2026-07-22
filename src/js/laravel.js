@@ -1,8 +1,10 @@
+import { authHeader } from './auth.js';
+import { API_URL_STORAGE_KEY } from './storage-keys.js';
+
+export { authHeader };
+
 const DEFAULT_API_BASE_URL =
   'https://sistema.enclaii.com';
-
-const AUTH_STORAGE_KEY =
-  'enclaii-tauri-basic-auth';
 
 const LOCAL_LARAVEL_HOSTS =
   new Set([
@@ -93,13 +95,43 @@ export async function laravelFetch(
    URL BASE
 ========================================================= */
 
+/**
+ * Valida que el valor guardado sea una URL http(s) absoluta y bien
+ * formada (protocolo + host). Cualquier otra cosa (texto suelto, una
+ * ruta relativa, un valor truncado o corrupto) se considera inválida.
+ */
+export function isValidApiBaseUrl(value) {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      Boolean(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function apiBaseUrl() {
-  const saved =
-    String(
-      localStorage.getItem(
-        'enclaii-api-url'
-      ) || ''
-    ).replace(/\/+$/, '');
+  const rawSaved = localStorage.getItem(
+    API_URL_STORAGE_KEY
+  );
+
+  let saved = String(rawSaved || '')
+    .trim()
+    .replace(/\/+$/, '');
+
+  if (saved && !isValidApiBaseUrl(saved)) {
+    console.warn(
+      `Valor guardado en localStorage['${API_URL_STORAGE_KEY}'] no es una URL válida ("${saved}"). Se descarta automáticamente.`
+    );
+
+    localStorage.removeItem(
+      API_URL_STORAGE_KEY
+    );
+
+    saved = '';
+  }
 
   const currentOrigin =
     currentLaravelOrigin();
@@ -119,29 +151,6 @@ export function apiBaseUrl() {
     currentOrigin ||
     DEFAULT_API_BASE_URL
   );
-}
-
-/* =========================================================
-   AUTORIZACIÓN
-========================================================= */
-
-export function authHeader() {
-  const token =
-    String(
-      sessionStorage.getItem(
-        AUTH_STORAGE_KEY
-      ) ||
-      localStorage.getItem(
-        AUTH_STORAGE_KEY
-      ) ||
-      ''
-    )
-      .replace(/^Bearer\s+/i, '')
-      .trim();
-
-  return token
-    ? `Bearer ${token}`
-    : '';
 }
 
 /* =========================================================

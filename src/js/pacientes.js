@@ -1,10 +1,13 @@
-import { laravelFetch } from './laravel.js';
-
-const DEFAULT_API_BASE_URL =
-  'https://sistema.enclaii.com';
-
-const AUTH_STORAGE_KEY =
-  'enclaii-tauri-basic-auth';
+import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { getAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
+import {
+  EDIT_PATIENT_ID_STORAGE_KEY,
+  REPORT_PATIENT_ID_STORAGE_KEY,
+  STUDY_PATIENT_ID_STORAGE_KEY,
+  STUDY_PATIENT_NAME_STORAGE_KEY,
+  PATIENTS_REFRESH_STORAGE_KEY,
+} from './storage-keys.js';
 
 const PAGE_SIZE = 15;
 const PATIENTS_SYNC_INTERVAL_MS = 3000;
@@ -21,13 +24,6 @@ let patientsFingerprint = '';
 let patientsModuleActive = false;
 let openMenuPatientId = null;
 
-function apiBaseUrl() {
-  return String(
-    localStorage.getItem('enclaii-api-url') ||
-    DEFAULT_API_BASE_URL
-  ).replace(/\/+$/, '');
-}
-
 function endpoint(path = '') {
   const cleanPath = String(path || '').replace(/^\/+/, '');
 
@@ -36,18 +32,8 @@ function endpoint(path = '') {
   }`;
 }
 
-function token() {
-  return String(
-    sessionStorage.getItem(AUTH_STORAGE_KEY) ||
-    localStorage.getItem(AUTH_STORAGE_KEY) ||
-    ''
-  )
-    .replace(/^Bearer\s+/i, '')
-    .trim();
-}
-
 async function request(path = '', options = {}) {
-  const authToken = token();
+  const authToken = getAuthToken();
 
   if (!authToken) {
     const error = new Error(
@@ -101,15 +87,6 @@ async function request(path = '', options = {}) {
   }
 
   return payload;
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
 }
 
 function initials(name) {
@@ -783,7 +760,7 @@ function renderPagination(totalPages) {
 
 function navigateToPatientCreate() {
   sessionStorage.removeItem(
-    'enclaii-edit-patient-id'
+    EDIT_PATIENT_ID_STORAGE_KEY
   );
 
   window.location.hash =
@@ -798,7 +775,7 @@ function openPatientEdit(index) {
   }
 
   sessionStorage.setItem(
-    'enclaii-edit-patient-id',
+    EDIT_PATIENT_ID_STORAGE_KEY,
     String(patient.id)
   );
 
@@ -814,7 +791,7 @@ function openPatientReport(index) {
   }
 
   sessionStorage.setItem(
-    'enclaii-report-patient-id',
+    REPORT_PATIENT_ID_STORAGE_KEY,
     String(patient.id)
   );
 
@@ -1321,12 +1298,12 @@ function startPatientStudy(index) {
   });
 
   sessionStorage.setItem(
-    'enclaii-patient_id',
+    STUDY_PATIENT_ID_STORAGE_KEY,
     String(patient.id)
   );
 
   sessionStorage.setItem(
-    'enclaii-patient_name',
+    STUDY_PATIENT_NAME_STORAGE_KEY,
     patient.name
   );
 
@@ -1436,11 +1413,11 @@ export async function initPacientes() {
 
   if (
     sessionStorage.getItem(
-      'enclaii-patients-refresh'
+      PATIENTS_REFRESH_STORAGE_KEY
     )
   ) {
     sessionStorage.removeItem(
-      'enclaii-patients-refresh'
+      PATIENTS_REFRESH_STORAGE_KEY
     );
 
     await syncPatientsFromLaravel({

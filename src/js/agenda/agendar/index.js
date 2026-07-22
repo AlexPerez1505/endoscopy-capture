@@ -1,14 +1,18 @@
 // ================= Agendar cita (pantalla completa) =================
 // Port 1:1 del flujo de Laravel (resources/views/agenda/agendar) a la SPA de Tauri.
 
-import { apiBaseUrl, authHeader, laravelFetch } from '../../laravel.js';
+import { apiBaseUrl, laravelFetch } from '../../laravel.js';
+import { authHeader } from '../../auth.js';
+import { escapeHtml } from '../../html.js';
+import {
+  AGENDAR_PREFILL_STORAGE_KEY,
+  OPEN_PATIENT_ID_STORAGE_KEY,
+} from '../../storage-keys.js';
 
 const CITAS_ENDPOINT = `${apiBaseUrl()}/api/tauri/agenda/citas`;
 const AGENDA_ENDPOINT = `${apiBaseUrl()}/api/tauri/agenda`;
 const SALAS_ENDPOINT = `${apiBaseUrl()}/api/tauri/agenda/salas`;
 const PATIENTS_ENDPOINT = `${apiBaseUrl()}/api/tauri/pacientes`;
-
-export const AGENDAR_PREFILL_STORAGE_KEY = 'enclaii-agendar-prefill';
 
 const MESES_AG = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DIAS_AG = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
@@ -18,14 +22,7 @@ const DAY_START = 8;
 const DAY_END = 24;
 const TIMELINE_SEGMENTS = 32;
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
+let timeStepInterval = null;
 
 function jsonHeaders() {
   const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
@@ -293,7 +290,7 @@ function bindPacienteStep() {
   const historyLink = document.getElementById('pacHistoryLink');
   historyLink?.addEventListener('click', () => {
     if (state.selectedPatientId) {
-      sessionStorage.setItem('enclaii-open-patient-id', String(state.selectedPatientId));
+      sessionStorage.setItem(OPEN_PATIENT_ID_STORAGE_KEY, String(state.selectedPatientId));
     }
   });
 }
@@ -680,7 +677,11 @@ function bindCalendarStep() {
     e.currentTarget.scrollLeft += e.deltaY * 1.5;
   }, { passive: false });
 
-  setInterval(() => {
+  if (timeStepInterval) {
+    clearInterval(timeStepInterval);
+  }
+
+  timeStepInterval = setInterval(() => {
     if (!isSelectedToday()) return;
     const min = getMinSelectableMinutes();
     if (getSelectedMinutes() < min) {
@@ -914,7 +915,7 @@ async function applyPrefill() {
    INICIALIZACIÓN
 ========================================================= */
 
-export async function initAgendar() {
+export async function initAgendar({ signal } = {}) {
   document.getElementById('agBack')?.addEventListener('click', () => { window.location.hash = 'agenda'; });
 
   bindPacienteStep();
@@ -951,4 +952,11 @@ export async function initAgendar() {
   renderTimeSection(initialDay);
   if (!state.agSelected) state.agSelected = { y: state.agY, m: state.agM, d: initialDay };
   renderCalAg();
+
+  signal?.addEventListener('abort', () => {
+    if (timeStepInterval) {
+      clearInterval(timeStepInterval);
+      timeStepInterval = null;
+    }
+  });
 }

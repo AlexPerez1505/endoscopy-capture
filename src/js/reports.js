@@ -1,11 +1,12 @@
 // ================= IA Reportes - Inicializador =================
 // Tauri consume Laravel por HTTP. La base de datos y la IA viven en Laravel.
 
-import { apiBaseUrl, authHeader, laravelFetch } from './laravel.js';
+import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { authHeader, clearAuthToken, getAuthToken, setAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
 
 const REPORTS_BASE = `${apiBaseUrl()}/api/tauri/reportes`;
 const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 let reportsTemplate = '';
 let editorState = {
@@ -18,16 +19,6 @@ let editorState = {
   generating: false,
   chatting: false,
 };
-
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, character => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[character]);
-}
 
 function endpoint(path = '') {
   const suffix = String(path || '').replace(/^\/+/, '');
@@ -258,7 +249,7 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
 
     try {
       const token = await loginToLaravel(email, password);
-      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      setAuthToken(token);
       if (reportsTemplate) root.innerHTML = reportsTemplate;
       if (root.querySelector('.report-editor-page')) initReportEditor();
       else await loadReportsFromLaravel(root);
@@ -271,7 +262,7 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
 
 function renderReportsError(root, error) {
   if (error.code === 'UNAUTHORIZED') {
-    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    clearAuthToken();
     renderLaravelLogin(root, error.message);
     return;
   }
@@ -640,7 +631,7 @@ export async function initReports() {
   if (!root) return;
   reportsTemplate = root.innerHTML;
 
-  if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+  if (!getAuthToken()) {
     renderLaravelLogin(root, 'Inicia sesion para acceder a los reportes.');
     return;
   }
@@ -652,7 +643,7 @@ export async function initReportEditor() {
   if (!root) return;
   reportsTemplate = root.innerHTML;
 
-  if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+  if (!getAuthToken()) {
     renderLaravelLogin(root, 'Inicia sesion para redactar reportes.');
     return;
   }
@@ -707,7 +698,7 @@ export async function initReportEditor() {
   } catch (error) {
     console.error(error);
     if (error.code === 'UNAUTHORIZED') {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+      clearAuthToken();
       renderLaravelLogin(root, error.message);
       return;
     }

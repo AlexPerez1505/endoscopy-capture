@@ -15,17 +15,24 @@ import { initGaleria } from './galeria.js';
 import { initMensajes } from './mensajes.js';
 import { initQr } from './qr.js';
 import { initConfiguracion } from './configuracion.js';
+import { clearAuthToken, getAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
+import {
+  THEME_STORAGE_KEY,
+  ACCOUNT_NAME_STORAGE_KEY,
+  ACCOUNT_ROLE_STORAGE_KEY,
+  DEVICE_TOKEN_STORAGE_KEY,
+  DEVICE_SESSION_STORAGE_KEY,
+  EDIT_PATIENT_ID_STORAGE_KEY,
+  PATIENTS_REFRESH_STORAGE_KEY,
+  SIDEBAR_COLLAPSED_STORAGE_KEY,
+} from './storage-keys.js';
 
 /* =========================================================
    AUTENTICACIÓN
 ========================================================= */
 
-const AUTH_STORAGE_KEY =
-  'enclaii-tauri-basic-auth';
-
-const authToken =
-  sessionStorage.getItem(AUTH_STORAGE_KEY) ||
-  localStorage.getItem(AUTH_STORAGE_KEY);
+const authToken = getAuthToken();
 
 if (!authToken) {
   window.location.href = './login.html';
@@ -185,18 +192,18 @@ const headSub =
 
 let currentLoadingRoute = null;
 
+/*
+ * Controlador de aborto de la página activa. Cada llamada a loadPage()
+ * cancela el anterior antes de crear uno nuevo, y lo pasa a initializeRoute()
+ * para que cada módulo pueda limpiar sus propios timers/listeners cuando el
+ * usuario navega a otra sección (ver signal?.addEventListener('abort', ...)
+ * en configuracion.js, agenda/index.js y agenda/agendar/index.js).
+ */
+let currentPageAbortController = null;
+
 /* =========================================================
    UTILIDADES
 ========================================================= */
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
 
 function normalizeRoute(route) {
   const normalized = String(
@@ -473,51 +480,51 @@ function renderError(route, error) {
    INICIALIZAR CADA PÁGINA
 ========================================================= */
 
-async function initializeRoute(route) {
+async function initializeRoute(route, signal) {
   switch (route) {
     case 'dashboard':
-      await initDashboard();
+      await initDashboard({ signal });
       break;
 
     case 'pacientes':
-      await initPacientes();
+      await initPacientes({ signal });
       break;
 
     case 'pacientes-crear':
     case 'pacientes-editar':
-      await initPacienteForm();
+      await initPacienteForm({ signal });
       break;
 
     case 'agenda':
-      await initAgenda();
+      await initAgenda({ signal });
       break;
 
     case 'agendar':
-      await initAgendar();
+      await initAgendar({ signal });
       break;
 
     case 'qr':
-      await initQr();
+      await initQr({ signal });
       break;
 
     case 'ia-reportes':
-      await initReports();
+      await initReports({ signal });
       break;
 
     case 'ia-reportes-redactar':
-      await initReportEditor();
+      await initReportEditor({ signal });
       break;
 
     case 'galeria':
-      await initGaleria();
+      await initGaleria({ signal });
       break;
 
     case 'mensajes':
-      await initMensajes();
+      await initMensajes({ signal });
       break;
 
     case 'configuracion':
-      await initConfiguracion();
+      await initConfiguracion({ signal });
       break;
 
     default:
@@ -560,6 +567,14 @@ function cleanupModules(nextRoute) {
 async function loadPage(route) {
   const normalizedRoute =
     normalizeRoute(route);
+
+  currentPageAbortController?.abort();
+
+  const pageAbortController =
+    new AbortController();
+
+  currentPageAbortController =
+    pageAbortController;
 
   cleanupModules(
     normalizedRoute
@@ -651,7 +666,8 @@ async function loadPage(route) {
       html;
 
     await initializeRoute(
-      normalizedRoute
+      normalizedRoute,
+      pageAbortController.signal
     );
 
     document.dispatchEvent(
@@ -805,7 +821,7 @@ document.addEventListener(
   'enclaii:patient-saved',
   () => {
     sessionStorage.setItem(
-      'enclaii-patients-refresh',
+      PATIENTS_REFRESH_STORAGE_KEY,
       String(Date.now())
     );
   }
@@ -839,12 +855,90 @@ if (themeToggle) {
         nextTheme;
 
       localStorage.setItem(
-        'enclaii-theme',
+        THEME_STORAGE_KEY,
         nextTheme
       );
     }
   );
 }
+
+/* =========================================================
+   SIDEBAR (contraer / expandir)
+========================================================= */
+
+const sidebarCollapseBtn =
+  document.getElementById(
+    'sidebarCollapseBtn'
+  );
+
+const sidebarEl =
+  document.querySelector(
+    '.side'
+  );
+
+const dashEl =
+  document.querySelector(
+    '.dash'
+  );
+
+function setSidebarCollapsed(collapsed) {
+  if (!sidebarEl || !dashEl) {
+    return;
+  }
+
+  sidebarEl.classList.toggle(
+    'is-collapsed',
+    collapsed
+  );
+
+  dashEl.classList.toggle(
+    'sidebar-collapsed',
+    collapsed
+  );
+
+  if (sidebarCollapseBtn) {
+    sidebarCollapseBtn.setAttribute(
+      'aria-expanded',
+      collapsed
+        ? 'false'
+        : 'true'
+    );
+
+    sidebarCollapseBtn.setAttribute(
+      'aria-label',
+      collapsed
+        ? 'Expandir barra lateral'
+        : 'Contraer barra lateral'
+    );
+  }
+
+  localStorage.setItem(
+    SIDEBAR_COLLAPSED_STORAGE_KEY,
+    String(collapsed)
+  );
+}
+
+if (sidebarCollapseBtn) {
+  sidebarCollapseBtn.addEventListener(
+    'click',
+    () => {
+      const isCollapsed =
+        sidebarEl?.classList.contains(
+          'is-collapsed'
+        );
+
+      setSidebarCollapsed(
+        !isCollapsed
+      );
+    }
+  );
+}
+
+setSidebarCollapsed(
+  localStorage.getItem(
+    SIDEBAR_COLLAPSED_STORAGE_KEY
+  ) === 'true'
+);
 
 /* =========================================================
    PERFIL
@@ -936,19 +1030,19 @@ function restoreHeaderProfile() {
 
   const accountName =
     sessionStorage.getItem(
-      'enclaii-account-name'
+      ACCOUNT_NAME_STORAGE_KEY
     ) ||
     localStorage.getItem(
-      'enclaii-account-name'
+      ACCOUNT_NAME_STORAGE_KEY
     ) ||
     'Doctor';
 
   const accountRole =
     sessionStorage.getItem(
-      'enclaii-account-role'
+      ACCOUNT_ROLE_STORAGE_KEY
     ) ||
     localStorage.getItem(
-      'enclaii-account-role'
+      ACCOUNT_ROLE_STORAGE_KEY
     ) ||
     'Médico';
 
@@ -1016,44 +1110,38 @@ if (logoutBtn) {
           .stopPatientsRealtimeSync();
       }
 
+      clearAuthToken();
+
       sessionStorage.removeItem(
-        AUTH_STORAGE_KEY
+        ACCOUNT_NAME_STORAGE_KEY
       );
 
       localStorage.removeItem(
-        AUTH_STORAGE_KEY
+        ACCOUNT_NAME_STORAGE_KEY
       );
 
       sessionStorage.removeItem(
-        'enclaii-account-name'
+        ACCOUNT_ROLE_STORAGE_KEY
       );
 
       localStorage.removeItem(
-        'enclaii-account-name'
+        ACCOUNT_ROLE_STORAGE_KEY
       );
 
       sessionStorage.removeItem(
-        'enclaii-account-role'
-      );
-
-      localStorage.removeItem(
-        'enclaii-account-role'
+        DEVICE_TOKEN_STORAGE_KEY
       );
 
       sessionStorage.removeItem(
-        'enclaii-device-token'
+        DEVICE_SESSION_STORAGE_KEY
       );
 
       sessionStorage.removeItem(
-        'enclaii-device-session-id'
+        EDIT_PATIENT_ID_STORAGE_KEY
       );
 
       sessionStorage.removeItem(
-        'enclaii-edit-patient-id'
-      );
-
-      sessionStorage.removeItem(
-        'enclaii-patients-refresh'
+        PATIENTS_REFRESH_STORAGE_KEY
       );
 
       window.location.href =

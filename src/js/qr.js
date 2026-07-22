@@ -1,50 +1,16 @@
 // ================= QR - Inicializador =================
 // Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
 
-import { laravelFetch } from './laravel.js';
-
-const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
-const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
-
-function currentLaravelOrigin() {
-  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
-  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
-  if (window.location.port && window.location.port !== '8000') return '';
-  return window.location.origin;
-}
-
-function isLocalLaravelUrl(value) {
-  try {
-    const url = new URL(value);
-    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
-  } catch (_) {
-    return false;
-  }
-}
-
-function apiBaseUrl() {
-  const saved = (localStorage.getItem('enclaii-api-url') || '').replace(/\/+$/, '');
-  const currentOrigin = currentLaravelOrigin();
-  if (saved) return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
-  return currentOrigin || DEFAULT_API_BASE_URL;
-}
+import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { authHeader, clearAuthToken, getAuthToken, setAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
 
 const API_BASE_URL = apiBaseUrl();
 const QR_ENDPOINT = `${API_BASE_URL}/tauri/qr`;
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 let qrTemplate = '';
 let qrState = null;
 let qrHistoryFilter = 'active';
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
 
 function encodeBasicCredentials(email, password) {
   const bytes = new TextEncoder().encode(`${email}:${password}`);
@@ -53,11 +19,6 @@ function encodeBasicCredentials(email, password) {
     binary += String.fromCharCode(byte);
   });
   return btoa(binary);
-}
-
-function authHeader() {
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
-  return token ? `Bearer ${token}` : '';
 }
 
 async function qrRequest(path = '', options = {}) {
@@ -145,7 +106,7 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
     const password = document.getElementById('laravelQrPassword')?.value || '';
     if (!email || !password) return;
 
-    sessionStorage.setItem(AUTH_STORAGE_KEY, encodeBasicCredentials(email, password));
+    setAuthToken(encodeBasicCredentials(email, password));
     restoreQrTemplate(root);
     await loadQrDashboard();
   });
@@ -380,7 +341,7 @@ async function loadQrDashboard(selectedId = '') {
     renderQrDashboard(payload);
   } catch (error) {
     console.error(error);
-    if (error.code === 'UNAUTHORIZED') sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    if (error.code === 'UNAUTHORIZED') clearAuthToken();
     renderQrError(root, error);
   }
 }
@@ -573,7 +534,7 @@ export function initQr() {
   if (!qrTemplate) qrTemplate = root.innerHTML;
 
   // Check if user is already logged in
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  const token = getAuthToken();
   if (!token) {
     renderLaravelLogin(root, 'Inicia sesión para acceder a los códigos QR.');
     return;

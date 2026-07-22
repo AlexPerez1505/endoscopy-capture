@@ -1,0 +1,2 @@
+node scripts/check-duplicated-helpers.js
+npx lint-staged

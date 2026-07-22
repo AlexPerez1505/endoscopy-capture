@@ -7,33 +7,13 @@ const DIAS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sá
 const HOURS = [8,9,10,11,12,13,14,15,16,17,18,19,20,21];
 
 // Los datos se leen desde Laravel. Tauri no se conecta directo a la base.
-import { laravelFetch } from '../laravel.js';
-
-const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
-const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
-
-function currentLaravelOrigin() {
-  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
-  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
-  if (window.location.port && window.location.port !== '8000') return '';
-  return window.location.origin;
-}
-
-function isLocalLaravelUrl(value) {
-  try {
-    const url = new URL(value);
-    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
-  } catch (_) {
-    return false;
-  }
-}
-
-function apiBaseUrl() {
-  const saved = (localStorage.getItem('enclaii-api-url') || '').replace(/\/+$/, '');
-  const currentOrigin = currentLaravelOrigin();
-  if (saved) return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
-  return currentOrigin || DEFAULT_API_BASE_URL;
-}
+import { apiBaseUrl, laravelFetch } from '../laravel.js';
+import { authHeader, clearAuthToken, getAuthToken, setAuthToken } from '../auth.js';
+import { escapeHtml } from '../html.js';
+import {
+  AGENDAR_PREFILL_STORAGE_KEY,
+  OPEN_PATIENT_ID_STORAGE_KEY,
+} from '../storage-keys.js';
 
 const API_BASE_URL = apiBaseUrl();
 const AGENDA_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda`;
@@ -41,30 +21,15 @@ const CITAS_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda/citas`;
 const BLOQUEOS_ENDPOINT = `${API_BASE_URL}/api/tauri/agenda/bloqueos`;
 const PATIENTS_ENDPOINT = `${API_BASE_URL}/api/tauri/pacientes`;
 const LOGIN_ENDPOINT = `${API_BASE_URL}/api/tauri/login`;
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
-const AGENDAR_PREFILL_STORAGE_KEY = 'enclaii-agendar-prefill';
 
 let EVENTS = {};
 let BLOCKS = {};
+let agendaRefreshTimer = null;
 let visibleDate = new Date();
 let curView = 'mes';
 let agendaTemplate = '';
 let popupAnchoredEl = null;
 let popupCloseTimer = null;
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function authHeader() {
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
-  return token ? `Bearer ${token}` : '';
-}
 
 async function loginToLaravel(email, password) {
   const response = await laravelFetch(LOGIN_ENDPOINT, {
@@ -610,10 +575,10 @@ function showPopupForData(d, e, dateKey) {
       ev.stopPropagation();
       hidePopup();
       if (b.label === 'Datos del paciente') {
-        sessionStorage.setItem('enclaii-open-patient-id', d.pacienteId || '');
+        sessionStorage.setItem(OPEN_PATIENT_ID_STORAGE_KEY, d.pacienteId || '');
         navigateHash('pacientes');
       } else if (b.label === 'Iniciar Estudio') {
-        sessionStorage.setItem('enclaii-open-patient-id', d.pacienteId || '');
+        sessionStorage.setItem(OPEN_PATIENT_ID_STORAGE_KEY, d.pacienteId || '');
         navigateHash('pacientes');
       } else if (b.label === 'Ver Informe') {
         navigateHash('ia-reportes');
@@ -846,7 +811,7 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
     if (!email || !password) return;
     try {
       const token = await loginToLaravel(email, password);
-      sessionStorage.setItem('enclaii-tauri-basic-auth', token);
+      setAuthToken(token);
       restoreAgendaShell(root);
       await loadAgendaFromLaravel(root);
     } catch (error) {
@@ -905,7 +870,7 @@ async function loadAgendaFromLaravel(root) {
   } catch (error) {
     console.error(error);
     if (error.code === 'UNAUTHORIZED') {
-      sessionStorage.removeItem('enclaii-tauri-basic-auth');
+      clearAuthToken();
     }
     renderAgendaError(root, error);
   }
@@ -1169,11 +1134,11 @@ function bindAgendaEvents(root) {
   });
 }
 
-export async function initAgenda() {
+export async function initAgenda({ signal } = {}) {
   const root = document.getElementById('pageContent');
   if (!root) return;
 
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  const token = getAuthToken();
   if (!token) {
     renderLaravelLogin(root, 'Inicia sesión para acceder a la agenda.');
     return;
@@ -1188,8 +1153,19 @@ export async function initAgenda() {
   initPopupEvents();
   await loadAgendaFromLaravel(root);
 
-  setInterval(() => {
+  if (agendaRefreshTimer) {
+    clearInterval(agendaRefreshTimer);
+  }
+
+  agendaRefreshTimer = setInterval(() => {
     if (!document.getElementById('calBody')) return;
     rebuildCurrentView();
   }, 30000);
+
+  signal?.addEventListener('abort', () => {
+    if (agendaRefreshTimer) {
+      clearInterval(agendaRefreshTimer);
+      agendaRefreshTimer = null;
+    }
+  });
 }

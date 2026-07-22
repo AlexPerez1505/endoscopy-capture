@@ -1,14 +1,26 @@
 import { apiBaseUrl, laravelFetch } from './js/laravel.js';
+import { authHeader as userAuthHeader } from './js/auth.js';
+import { createDoubleClickCalibrator } from './js/double-click-calibrator.js';
+import {
+  DEVICE_TOKEN_STORAGE_KEY as DEVICE_TOKEN_KEY,
+  DEVICE_SESSION_STORAGE_KEY as DEVICE_SESSION_KEY,
+  DEVICE_UID_STORAGE_KEY as DEVICE_UID_KEY,
+  CONFIG_PANEL_COLLAPSED_STORAGE_KEY,
+  FOCUS_MODE_ENABLED_STORAGE_KEY,
+  FOCUS_MODE_CROP_STORAGE_KEY,
+  DOUBLE_CLICK_WINDOW_STORAGE_KEY,
+  STUDY_PATIENT_ID_STORAGE_KEY,
+  STUDY_PATIENT_NAME_STORAGE_KEY,
+  STUDY_ID_STORAGE_KEY,
+  STUDY_LABEL_STORAGE_KEY,
+  OPEN_GALLERY_PATIENT_STORAGE_KEY,
+} from './js/storage-keys.js';
 
 const PAIR_ENDPOINT = `${apiBaseUrl()}/api/tauri/pair/redeem`;
 const START_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/estudios/iniciar`;
 const IMAGES_ENDPOINT = `${apiBaseUrl()}/api/tauri/images`;
 const VIDEOS_ENDPOINT = `${apiBaseUrl()}/api/tauri/videos`;
 const FINISH_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/finish-session`;
-const DEVICE_TOKEN_KEY = 'enclaii-device-token';
-const DEVICE_SESSION_KEY = 'enclaii-device-session-id';
-const DEVICE_UID_KEY = 'enclaii-device-uid';
-const USER_TOKEN_KEY = 'enclaii-tauri-basic-auth';
 
 // El boton fisico del capturador puede generar clics repetidos/rebotados al
 // conectarse (rebote de contacto). Sin un limite, cada uno de esos clics
@@ -94,12 +106,11 @@ const DEFAULT_CAMERA_VALUE = '__default_camera__';
 function goBackToApp() {
   finishActiveSession();
 
-  if (window.history.length > 1) {
-    window.history.back();
-    return;
-  }
-
-  window.location.href = './app.html#dashboard';
+  // Navegacion explicita en vez de history.back(): en el WebView de Tauri
+  // el boton regresar no siempre responde con back() tras un location.href
+  // desde app.html (data-nav="nuevo-estudio" -> index.html). replace()
+  // evita dejar index.html como entrada muerta en el historial.
+  window.location.replace('./app.html#dashboard');
 }
 
 function addLog(message, type = 'info') {
@@ -236,11 +247,6 @@ function deviceAuthHeader() {
   return token ? `Bearer ${token}` : '';
 }
 
-function userAuthHeader() {
-  const token = sessionStorage.getItem(USER_TOKEN_KEY);
-  return token ? `Bearer ${token}` : '';
-}
-
 function activeCaptureAuthHeader() {
   return captureAuthMode === 'device' ? deviceAuthHeader() : userAuthHeader();
 }
@@ -249,10 +255,10 @@ function persistPairing(data) {
   sessionStorage.setItem(DEVICE_TOKEN_KEY, data.token);
   sessionStorage.setItem(DEVICE_SESSION_KEY, String(data.session_id));
 
-  if (data.paciente_id) sessionStorage.setItem('enclaii-patient_id', String(data.paciente_id));
-  if (data.paciente_nombre) sessionStorage.setItem('enclaii-patient_name', data.paciente_nombre);
-  if (data.estudio_id || data.study_id) sessionStorage.setItem('enclaii-study_id', String(data.estudio_id || data.study_id));
-  if (data.estudio_tipo) sessionStorage.setItem('enclaii-study_label', data.estudio_tipo);
+  if (data.paciente_id) sessionStorage.setItem(STUDY_PATIENT_ID_STORAGE_KEY, String(data.paciente_id));
+  if (data.paciente_nombre) sessionStorage.setItem(STUDY_PATIENT_NAME_STORAGE_KEY, data.paciente_nombre);
+  if (data.estudio_id || data.study_id) sessionStorage.setItem(STUDY_ID_STORAGE_KEY, String(data.estudio_id || data.study_id));
+  if (data.estudio_tipo) sessionStorage.setItem(STUDY_LABEL_STORAGE_KEY, data.estudio_tipo);
 
   activeStudyContext = {
     patientId: firstText(data.paciente_id, activeStudyContext.patientId),
@@ -743,18 +749,16 @@ async function startVideo() {
 // corriendo (ver setConfigPanelCollapsed(true) en startVideo), dejando mas
 // espacio visible para el log de capturas y las miniaturas del estudio. El
 // doctor puede reabrirlo en cualquier momento con la flecha del encabezado.
-const CONFIG_PANEL_STORAGE_KEY = 'enclaii-config-panel-collapsed';
-
 function setConfigPanelCollapsed(collapsed) {
   configPanel.classList.toggle('is-collapsed', collapsed);
-  localStorage.setItem(CONFIG_PANEL_STORAGE_KEY, String(collapsed));
+  localStorage.setItem(CONFIG_PANEL_COLLAPSED_STORAGE_KEY, String(collapsed));
 }
 
 configPanelToggle.addEventListener('click', () => {
   setConfigPanelCollapsed(!configPanel.classList.contains('is-collapsed'));
 });
 
-setConfigPanelCollapsed(localStorage.getItem(CONFIG_PANEL_STORAGE_KEY) === 'true');
+setConfigPanelCollapsed(localStorage.getItem(CONFIG_PANEL_COLLAPSED_STORAGE_KEY) === 'true');
 
 function applyFilters() {
   const brightness = brightnessInput.value;
@@ -780,11 +784,8 @@ function resetFilters() {
 // se usa el mismo porcentaje al tomar fotos (recortando el canvas de origen)
 // y al grabar video (ver startRecording, que en este modo dibuja en un
 // canvas intermedio en vez de grabar el stream crudo).
-const FOCUS_MODE_STORAGE_KEY = 'enclaii-focus-mode-enabled';
-const FOCUS_CROP_STORAGE_KEY = 'enclaii-focus-mode-crop-percent';
-
-let focusModeEnabled = localStorage.getItem(FOCUS_MODE_STORAGE_KEY) === 'true';
-let focusCropPercent = Number(localStorage.getItem(FOCUS_CROP_STORAGE_KEY)) || 28;
+let focusModeEnabled = localStorage.getItem(FOCUS_MODE_ENABLED_STORAGE_KEY) === 'true';
+let focusCropPercent = Number(localStorage.getItem(FOCUS_MODE_CROP_STORAGE_KEY)) || 28;
 
 function focusCropRatio() {
   return Math.min(Math.max(focusCropPercent, 0), 50) / 100;
@@ -816,14 +817,14 @@ function updateFocusModeUI(enabled) {
 
 function setFocusModeEnabled(enabled) {
   focusModeEnabled = enabled;
-  localStorage.setItem(FOCUS_MODE_STORAGE_KEY, String(enabled));
+  localStorage.setItem(FOCUS_MODE_ENABLED_STORAGE_KEY, String(enabled));
   updateFocusModeUI(enabled);
   addLog(enabled ? 'Modo enfoque activado: se ocultará el panel derecho.' : 'Modo enfoque desactivado.');
 }
 
 function setFocusCropPercent(percent) {
   focusCropPercent = Math.min(Math.max(Number(percent) || 0, 0), 50);
-  localStorage.setItem(FOCUS_CROP_STORAGE_KEY, String(focusCropPercent));
+  localStorage.setItem(FOCUS_MODE_CROP_STORAGE_KEY, String(focusCropPercent));
   focusCropValue.textContent = String(focusCropPercent);
   applyFocusModeVisual();
 }
@@ -1305,7 +1306,7 @@ fullscreenFinishStudyBtn?.addEventListener('click', async () => {
 finishStudyGalleryBtn?.addEventListener('click', () => {
   finishStudyModal?.classList.add('is-hidden');
   if (activeStudyContext.patientId) {
-    sessionStorage.setItem('enclaii-open-gallery-patient', String(activeStudyContext.patientId));
+    sessionStorage.setItem(OPEN_GALLERY_PATIENT_STORAGE_KEY, String(activeStudyContext.patientId));
   }
   window.location.href = './app.html#galeria';
 });
@@ -1339,39 +1340,32 @@ finishStudyGalleryBtn?.addEventListener('click', () => {
 // intervalo real entre los dos clics de un "doble clic" deliberado se ha
 // observado que se va corriendo con el uso (desgaste/oxidacion del contacto),
 // por lo que una ventana fija se queda corta con el tiempo. Para no tener que
-// re-ajustar esto a mano cada vez, la ventana se auto-calibra:
-//   - Si un "doble clic" cae dentro de la ventana actual, esta se ajusta para
-//     ceñirse al intervalo real observado (+ colchon), tanto para achicarse
-//     si el switch responde mas rapido como para agrandarse si responde mas
-//     lento.
-//   - Si un clic llega un poco tarde (justo fuera de la ventana pero dentro
-//     de un margen de "casi doble clic"), se interpreta como una foto normal
-//     (no se adivina la intencion retroactivamente) pero se ensancha la
-//     ventana para que el siguiente intento si sea reconocido.
-// El valor aprendido se persiste en localStorage para no perderlo al
-// reiniciar la app.
+// re-ajustar esto a mano cada vez, la ventana se auto-calibra usando la
+// mediana de los ultimos intervalos observados (con rechazo de valores
+// atipicos): ver double-click-calibrator.js para el detalle del algoritmo.
+//   - Si un "doble clic" (o un clic "casi doble clic", justo fuera de la
+//     ventana pero dentro de un margen razonable) cae dentro de rango, su
+//     intervalo se registra en el calibrador para ajustar la ventana.
+//   - Un clic "casi doble clic" se sigue interpretando como una foto normal
+//     (no se adivina la intencion retroactivamente), pero ayuda a ensanchar
+//     la ventana para que el siguiente intento si sea reconocido.
+// El valor aprendido (y el historial usado para la mediana) se persiste en
+// localStorage para no perderlo al reiniciar la app.
 const DOUBLE_CLICK_WINDOW_DEFAULT_MS = 2000;
 const DOUBLE_CLICK_WINDOW_MIN_MS = 1200;
 const DOUBLE_CLICK_WINDOW_MAX_MS = 6000;
 const DOUBLE_CLICK_NEAR_MISS_MARGIN_MS = 1500;
-const DOUBLE_CLICK_WINDOW_STORAGE_KEY = 'enclaii-double-click-window-ms';
 // Rebote de contacto del switch: muy por debajo de DOUBLE_CLICK_WINDOW_MIN_MS,
 // asi que nunca se confunde con un doble clic deliberado.
 const CLICK_BOUNCE_IGNORE_MS = 250;
 
-function clampDoubleClickWindow(value) {
-  return Math.min(DOUBLE_CLICK_WINDOW_MAX_MS, Math.max(DOUBLE_CLICK_WINDOW_MIN_MS, Math.round(value)));
-}
-
-let doubleClickWindowMs = (() => {
-  const stored = Number(localStorage.getItem(DOUBLE_CLICK_WINDOW_STORAGE_KEY));
-  return Number.isFinite(stored) && stored > 0 ? clampDoubleClickWindow(stored) : DOUBLE_CLICK_WINDOW_DEFAULT_MS;
-})();
-
-function setDoubleClickWindow(value) {
-  doubleClickWindowMs = clampDoubleClickWindow(value);
-  localStorage.setItem(DOUBLE_CLICK_WINDOW_STORAGE_KEY, String(doubleClickWindowMs));
-}
+const doubleClickCalibrator = createDoubleClickCalibrator({
+  min: DOUBLE_CLICK_WINDOW_MIN_MS,
+  max: DOUBLE_CLICK_WINDOW_MAX_MS,
+  defaultWindowMs: DOUBLE_CLICK_WINDOW_DEFAULT_MS,
+  storage: localStorage,
+  storageKey: DOUBLE_CLICK_WINDOW_STORAGE_KEY,
+});
 
 let lastCaptureClickAt = 0;
 
@@ -1399,36 +1393,43 @@ function handleCaptureClick(event) {
 
   const isRecording = mediaRecorder && mediaRecorder.state !== 'inactive';
 
-  const isDoubleClick = elapsedSinceLastClick !== null && elapsedSinceLastClick <= doubleClickWindowMs;
+  const isDoubleClick = elapsedSinceLastClick !== null && doubleClickCalibrator.isDoubleClick(elapsedSinceLastClick);
 
   if (isDoubleClick) {
     lastCaptureClickAt = 0;
-    const previousWindow = doubleClickWindowMs;
-    setDoubleClickWindow(elapsedSinceLastClick + 300);
+    const previousWindow = doubleClickCalibrator.getWindow();
+    const { windowMs, rejectedAsOutlier } = doubleClickCalibrator.recordInterval(elapsedSinceLastClick);
+    const windowLog = rejectedAsOutlier
+      ? `ventana sin cambios en ${windowMs}ms (intervalo descartado como valor atípico)`
+      : `ventana ${previousWindow}ms → ${windowMs}ms`;
 
     if (isRecording) {
-      addLog(
-        `Doble clic detectado (${elapsedSinceLastClick}ms, ventana ${previousWindow}ms → ${doubleClickWindowMs}ms): deteniendo grabación...`
-      );
+      addLog(`Doble clic detectado (${elapsedSinceLastClick}ms, ${windowLog}): deteniendo grabación...`);
       stopRecording();
     } else {
-      addLog(
-        `Doble clic detectado (${elapsedSinceLastClick}ms, ventana ${previousWindow}ms → ${doubleClickWindowMs}ms): iniciando grabación...`
-      );
+      addLog(`Doble clic detectado (${elapsedSinceLastClick}ms, ${windowLog}): iniciando grabación...`);
       startRecording();
     }
     return;
   }
 
   const isNearMissDoubleClick =
-    elapsedSinceLastClick !== null && elapsedSinceLastClick <= doubleClickWindowMs + DOUBLE_CLICK_NEAR_MISS_MARGIN_MS;
+    elapsedSinceLastClick !== null &&
+    doubleClickCalibrator.isNearMiss(elapsedSinceLastClick, DOUBLE_CLICK_NEAR_MISS_MARGIN_MS);
 
   if (isNearMissDoubleClick) {
-    const previousWindow = doubleClickWindowMs;
-    setDoubleClickWindow(elapsedSinceLastClick + 300);
-    addLog(
-      `Clic un poco lento para doble clic (${elapsedSinceLastClick}ms): ventana ampliada de ${previousWindow}ms a ${doubleClickWindowMs}ms para el próximo intento.`
-    );
+    const previousWindow = doubleClickCalibrator.getWindow();
+    const { windowMs, rejectedAsOutlier } = doubleClickCalibrator.recordInterval(elapsedSinceLastClick);
+
+    if (rejectedAsOutlier) {
+      addLog(
+        `Clic un poco lento para doble clic (${elapsedSinceLastClick}ms): descartado como valor atípico, ventana sin cambios (${windowMs}ms).`
+      );
+    } else {
+      addLog(
+        `Clic un poco lento para doble clic (${elapsedSinceLastClick}ms): ventana ampliada de ${previousWindow}ms a ${windowMs}ms para el próximo intento.`
+      );
+    }
   }
 
   lastCaptureClickAt = now;
