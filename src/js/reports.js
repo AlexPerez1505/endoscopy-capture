@@ -7,14 +7,24 @@ import { escapeHtml } from './html.js';
 
 const REPORTS_BASE = `${apiBaseUrl()}/api/tauri/reportes`;
 const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
+const REPORT_DRAFT_KEY = 'enclaii.reportes.editor.draft';
 
 let reportsTemplate = '';
 let editorState = {
   studies: [],
   templates: [],
+  templatesByKey: {},
   findings: [],
+  images: [],
+  report: null,
   selectedStudy: null,
   selectedTemplate: null,
+  imageState: new Map(),
+  imageEnabled: true,
+  imageCols: 4,
+  currentTemplateKey: 'colonoscopia',
+  mode: 'normal',
+  settings: {},
   saving: false,
   generating: false,
   chatting: false,
@@ -96,6 +106,19 @@ function pick(value, fallback = '') {
   return value === undefined || value === null || value === '' ? fallback : value;
 }
 
+function currentEditorMode() {
+  const hashQuery = window.location.hash.includes('?')
+    ? window.location.hash.slice(window.location.hash.indexOf('?') + 1)
+    : '';
+  const mode = new URLSearchParams(hashQuery).get('mode');
+  return mode === 'ia' || mode === 'ai' || mode === 'generar' ? 'ia' : 'normal';
+}
+
+function draftKey() {
+  const studyId = editorState.selectedStudy?.id || 'nuevo';
+  return `${REPORT_DRAFT_KEY}.${studyId}`;
+}
+
 function normalizeReportsPayload(payload) {
   const reports = payload?.reportes || payload?.reports || payload?.data?.reportes || payload?.data?.reports || [];
   const kpis = payload?.kpis || payload?.summary || payload?.data?.kpis || {};
@@ -124,6 +147,8 @@ function normalizeReport(item) {
     viewUrl: item?.view_url || item?.ver_url || '',
     downloadUrl: item?.download_url || item?.descargar_url || '',
     editUrl: item?.edit_url || item?.editar_url || '',
+    reporteId: item?.reporte_id || item?.report_id || item?.id || '',
+    estudioId: item?.estudio_id || item?.study_id || '',
   };
 }
 
@@ -289,7 +314,8 @@ function restoreReportsShell(root) {
 function reportRowHTML(report) {
   const viewUrl = report.viewUrl || '#';
   const downloadUrl = report.downloadUrl || viewUrl;
-  const editUrl = report.editUrl || '#ia-reportes/redactar';
+  const editRoute = `#ia-reportes-redactar?mode=normal${report.reporteId ? `&reporte_id=${encodeURIComponent(report.reporteId)}` : ''}${report.estudioId ? `&estudio_id=${encodeURIComponent(report.estudioId)}` : ''}`;
+  const editUrl = report.editUrl || editRoute;
 
   return `
     <tr>
@@ -301,7 +327,7 @@ function reportRowHTML(report) {
         <div class="row-actions">
           <a href="${escapeHtml(viewUrl)}" title="Ver" ${report.viewUrl ? 'target="_blank" rel="noreferrer"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>
           <a href="${escapeHtml(downloadUrl)}" title="Descargar" ${report.downloadUrl ? 'target="_blank" rel="noreferrer"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>
-          <a href="${escapeHtml(editUrl)}" ${report.editUrl ? 'target="_blank" rel="noreferrer"' : 'data-nav="ia-reportes-redactar"'} title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></a>
+          <a href="${escapeHtml(editUrl)}" ${report.editUrl ? 'target="_blank" rel="noreferrer"' : `data-nav="${escapeHtml(editRoute.replace(/^#/, ''))}"`} title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></a>
         </div>
       </td>
     </tr>`;
@@ -390,16 +416,986 @@ function setEditorAlert(root, message, type = 'info') {
 function setButtonBusy(button, busy, label) {
   if (!button) return;
   if (!button.dataset.originalText) button.dataset.originalText = button.textContent.trim();
+  const setButtonLabel = (value) => {
+    const textNode = Array.from(button.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+    if (textNode) {
+      textNode.textContent = ` ${value} `;
+      return;
+    }
+    button.append(` ${value} `);
+  };
   button.disabled = busy;
   if (label) {
-    const span = button.querySelector('span');
-    if (span) span.lastChild.textContent = label;
-    else button.textContent = label;
+    setButtonLabel(label);
   } else if (!busy && button.dataset.originalText) {
-    const span = button.querySelector('span');
-    if (span) span.lastChild.textContent = button.dataset.originalText;
-    else button.textContent = button.dataset.originalText;
+    setButtonLabel(button.dataset.originalText);
   }
+}
+
+function execEditorCommand(root, command, value = null) {
+  root.querySelector('#reportDocument')?.focus();
+  document.execCommand(command, false, value);
+}
+
+function setEditorMode(root, mode) {
+  editorState.mode = mode === 'ia' ? 'ia' : 'normal';
+  root.dataset.reportMode = editorState.mode;
+  root.querySelectorAll('[data-report-mode]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.reportMode === editorState.mode);
+  });
+  const status = root.querySelector('#edStatus');
+  if (status) status.textContent = editorState.mode === 'ia' ? 'IA en borrador' : 'Borrador';
+  const aiButton = root.querySelector('#generateAiReportBtn');
+  if (aiButton) {
+    const label = editorState.mode === 'ia' ? 'Regenerar IA' : 'Generar IA';
+    const textNode = Array.from(aiButton.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+    if (textNode) textNode.textContent = ` ${label}`;
+  }
+}
+
+function applyReportSettings(root) {
+  const settings = {
+    clinicName: root.querySelector('#clinicNameInput')?.value || 'Nombre de la clinica',
+    doctorName: root.querySelector('#doctorNameInput')?.value || 'Dr. Nombre del medico',
+    signature: root.querySelector('#signatureInput')?.value || 'firma',
+    logoText: root.querySelector('#logoTextInput')?.value || 'Logo de la clinica',
+    includeAiNote: Boolean(root.querySelector('#includeAiNoteInput')?.checked),
+    includeImages: Boolean(root.querySelector('#includeImagesInput')?.checked),
+    autosave: Boolean(root.querySelector('#autosaveInput')?.checked),
+  };
+
+  editorState.settings = settings;
+  setText(root, '.clinic-name', settings.clinicName);
+  setText(root, '.clinic-logo', settings.logoText);
+  setText(root, '.signature-mark', settings.signature);
+  setText(root, '.doctor-signature strong', settings.doctorName);
+  root.querySelector('#reportDocument')?.classList.toggle('without-evidence', !settings.includeImages);
+
+  return settings;
+}
+
+function saveDraft(root, showMessage = true) {
+  const payload = collectReportPayload(root);
+  localStorage.setItem(draftKey(), JSON.stringify({
+    savedAt: new Date().toISOString(),
+    payload,
+    currentTemplateKey: editorState.currentTemplateKey,
+    imagesConfig: imageConfigPayload(),
+    mode: editorState.mode,
+  }));
+  if (showMessage) setEditorAlert(root, 'Borrador guardado en este equipo.', 'ok');
+}
+
+function restoreDraft(root) {
+  const raw = localStorage.getItem(draftKey());
+  if (!raw) return false;
+
+  try {
+    const draft = JSON.parse(raw);
+    const sectionsEl = root.querySelector('#docSections');
+    if (draft?.currentTemplateKey) {
+      applyTemplateByKey(root, draft.currentTemplateKey, true);
+    }
+    if (sectionsEl && draft?.payload?.contenido_html) {
+      sectionsEl.innerHTML = draft.payload.contenido_html;
+    }
+
+    if (draft?.mode) setEditorMode(root, draft.mode);
+    renderReportImages(root);
+    setEditorAlert(root, 'Se recupero el borrador local.', 'ok');
+    return true;
+  } catch {
+    localStorage.removeItem(draftKey());
+    return false;
+  }
+}
+
+function openPreview(root) {
+  applyReportSettings(root);
+  const modal = root.querySelector('#reportPreviewModal');
+  const content = root.querySelector('#reportPreviewContent');
+  const documentEl = root.querySelector('#reportDocument');
+  if (!modal || !content || !documentEl) return;
+  content.innerHTML = documentEl.innerHTML;
+  modal.classList.remove('is-hidden');
+}
+
+function closePreview(root) {
+  root.querySelector('#reportPreviewModal')?.classList.add('is-hidden');
+}
+
+function printReport(root) {
+  openPreview(root);
+  window.print();
+}
+
+const STUDY_IMAGES = {
+  Colonoscopia: new URL('../assets/Colonoscopia.png', import.meta.url).href,
+  Gastroscopia: new URL('../assets/Gastroscopia.png', import.meta.url).href,
+  Duodenoscopia: new URL('../assets/Duodenoscopia.png', import.meta.url).href,
+  Broncoscopia: new URL('../assets/Broncoscopia.png', import.meta.url).href,
+};
+
+function studyImageForType(type) {
+  const text = String(type || '').toLowerCase();
+  if (text.includes('colono')) return STUDY_IMAGES.Colonoscopia;
+  if (text.includes('gastro') || text.includes('endoscopia')) return STUDY_IMAGES.Gastroscopia;
+  if (text.includes('duodeno')) return STUDY_IMAGES.Duodenoscopia;
+  if (text.includes('bronco')) return STUDY_IMAGES.Broncoscopia;
+  return '';
+}
+
+const PAGE_W = 760;
+
+function clampInt(value, min, max, fallback) {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function defaultTemplateConfig() {
+  return {
+    logoImg: null,
+    anatImg: null,
+    clinic: '',
+    signName: '',
+    signPos: 'center',
+    headH: 121,
+    logo: { x: 0, y: 17, w: 86, h: 86 },
+    name: { x: 100, y: 28, w: 466, h: 64, fontSize: 21 },
+    anat: { x: 672, y: 5, w: 88, h: 110 },
+  };
+}
+
+function builtInTemplates() {
+  return {
+    colonoscopia: {
+      key: 'colonoscopia',
+      name: 'Colonoscopia',
+      description: 'Preparacion, hallazgos por segmento...',
+      title: 'INFORME DE COLONOSCOPIA',
+      subtitle: 'COLONOSCOPIA',
+      type: 'Colonoscopia',
+      sections: [
+        { h: 'INDICACION', type: 'p', ph: 'Motivo del estudio...' },
+        { h: 'PREPARACION', type: 'p', ph: 'Calidad de la preparacion...' },
+        { h: 'SEDACION', type: 'p', ph: 'Tipo y nivel de sedacion...' },
+        { h: 'HALLAZGOS', type: 'ul', ph: 'Hallazgo por segmento (recto, sigmoides, colon...)' },
+        { h: 'IMPRESION DIAGNOSTICA', type: 'p', ph: 'Diagnostico...' },
+        { h: 'PLAN Y RECOMENDACIONES', type: 'ul', ph: 'Recomendacion...' },
+        { h: 'OBSERVACIONES', type: 'p', ph: 'Observaciones adicionales...' },
+      ],
+    },
+    gastroscopia: {
+      key: 'gastroscopia',
+      name: 'Gastroscopia',
+      description: 'Esofago, estomago, duodeno...',
+      title: 'INFORME DE GASTROSCOPIA',
+      subtitle: 'GASTROSCOPIA',
+      type: 'Gastroscopia',
+      sections: [
+        { h: 'INDICACION', type: 'p', ph: 'Motivo del estudio...' },
+        { h: 'SEDACION', type: 'p', ph: 'Tipo y nivel de sedacion...' },
+        { h: 'HALLAZGOS', type: 'ul', ph: 'Esofago / estomago / duodeno...' },
+        { h: 'IMPRESION DIAGNOSTICA', type: 'p', ph: 'Diagnostico...' },
+        { h: 'PLAN Y RECOMENDACIONES', type: 'ul', ph: 'Recomendacion...' },
+        { h: 'OBSERVACIONES', type: 'p', ph: 'Observaciones adicionales...' },
+      ],
+    },
+    duodenoscopia: {
+      key: 'duodenoscopia',
+      name: 'Duodenoscopia',
+      description: 'Duodeno, papila, via biliar...',
+      title: 'INFORME DE DUODENOSCOPIA',
+      subtitle: 'DUODENOSCOPIA',
+      type: 'Duodenoscopia',
+      sections: [
+        { h: 'INDICACION', type: 'p', ph: 'Motivo del estudio...' },
+        { h: 'SEDACION', type: 'p', ph: 'Tipo y nivel de sedacion...' },
+        { h: 'HALLAZGOS', type: 'ul', ph: 'Duodeno / papila / via biliar...' },
+        { h: 'IMPRESION DIAGNOSTICA', type: 'p', ph: 'Diagnostico...' },
+        { h: 'PLAN Y RECOMENDACIONES', type: 'ul', ph: 'Recomendacion...' },
+        { h: 'OBSERVACIONES', type: 'p', ph: 'Observaciones adicionales...' },
+      ],
+    },
+    broncoscopia: {
+      key: 'broncoscopia',
+      name: 'Broncoscopia',
+      description: 'Arbol bronquial, traquea, carina...',
+      title: 'INFORME DE BRONCOSCOPIA',
+      subtitle: 'BRONCOSCOPIA',
+      type: 'Broncoscopia',
+      sections: [
+        { h: 'INDICACION', type: 'p', ph: 'Motivo del estudio...' },
+        { h: 'SEDACION', type: 'p', ph: 'Tipo y nivel de sedacion...' },
+        { h: 'HALLAZGOS', type: 'ul', ph: 'Arbol bronquial / traquea / carina...' },
+        { h: 'IMPRESION DIAGNOSTICA', type: 'p', ph: 'Diagnostico...' },
+        { h: 'PLAN Y RECOMENDACIONES', type: 'ul', ph: 'Recomendacion...' },
+        { h: 'OBSERVACIONES', type: 'p', ph: 'Observaciones adicionales...' },
+      ],
+    },
+    blanco: {
+      key: 'blanco',
+      name: 'En blanco',
+      description: 'Empieza desde cero',
+      title: 'NUEVO REPORTE',
+      subtitle: '',
+      type: '',
+      sections: [
+        { h: 'INTRODUCCION', type: 'p', ph: 'Escribe aqui...' },
+        { h: 'DESARROLLO', type: 'p', ph: 'Escribe aqui...' },
+        { h: 'CONCLUSION', type: 'p', ph: 'Escribe aqui...' },
+      ],
+    },
+    img2: { key: 'img2', name: '2 columnas', imgOnly: true, cols: 2, count: 4 },
+    img3: { key: 'img3', name: '3 columnas', imgOnly: true, cols: 3, count: 6 },
+    img4: { key: 'img4', name: '4 columnas', imgOnly: true, cols: 4, count: 8 },
+    imgNone: { key: 'imgNone', name: 'Sin imagenes', imgOnly: true, cols: 0, count: 0 },
+  };
+}
+
+function templateKeyFromType(type) {
+  const text = String(type || '').toLowerCase();
+  if (text.includes('colono')) return 'colonoscopia';
+  if (text.includes('gastro')) return 'gastroscopia';
+  if (text.includes('duodeno')) return 'duodenoscopia';
+  if (text.includes('bronco')) return 'broncoscopia';
+  return 'blanco';
+}
+
+function imageKey(img, index) {
+  return String(img?.id ?? index);
+}
+
+function imageConfigPayload() {
+  const items = {};
+  editorState.images.forEach((img, index) => {
+    const key = imageKey(img, index);
+    const state = editorState.imageState.get(key) || { visible: true, size: 1 };
+    items[key] = {
+      visible: state.visible !== false,
+      size: clampInt(state.size, 1, editorState.imageCols || 8, 1),
+    };
+  });
+  return {
+    version: 1,
+    enabled: editorState.imageEnabled !== false,
+    cols: editorState.imageEnabled !== false ? editorState.imageCols : 0,
+    items,
+  };
+}
+
+function mergeTemplateData(rawTemplates = {}) {
+  const templates = builtInTemplates();
+  Object.values(templates).forEach((template) => {
+    template.cfg = defaultTemplateConfig();
+  });
+
+  const entries = Array.isArray(rawTemplates)
+    ? rawTemplates.map(item => [item.clave || item.key || item.id, item])
+    : Object.entries(rawTemplates || {});
+
+  entries.forEach(([key, data]) => {
+    if (!key || !templates[key]) return;
+    templates[key].id = data.id ?? templates[key].id;
+    templates[key].title = data.titulo || templates[key].title;
+    templates[key].subtitle = data.subtitulo || templates[key].subtitle;
+    if (data.configuracion && typeof data.configuracion === 'object') {
+      templates[key].cfg = { ...defaultTemplateConfig(), ...data.configuracion };
+    }
+    if (templates[key].imgOnly) {
+      if (data.columnas !== undefined && data.columnas !== null) templates[key].cols = data.columnas;
+      if (data.num_imagenes !== undefined && data.num_imagenes !== null) templates[key].count = data.num_imagenes;
+    }
+  });
+
+  return templates;
+}
+
+function setEditorStatus(root, text, saved = false) {
+  const status = root.querySelector('#edStatus');
+  if (!status) return;
+  status.textContent = text;
+  status.classList.toggle('guardado', saved);
+  status.classList.toggle('borrador', !saved);
+}
+
+function markReportDirty(root) {
+  setEditorStatus(root, editorState.mode === 'ia' ? 'IA en borrador' : 'Borrador', false);
+}
+
+function showToast(root, message, isError = false) {
+  const toast = root.querySelector('#edToast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.toggle('err', isError);
+  toast.classList.add('show');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove('show'), 2600);
+}
+
+function renderTemplateLists(root) {
+  const list = root.querySelector('#tplList');
+  const imgGrid = root.querySelector('#imgTplGrid');
+  if (list) {
+    const fileIcon = templateIcon();
+    const gear = gearIcon();
+    list.innerHTML = ['colonoscopia', 'gastroscopia', 'duodenoscopia', 'broncoscopia', 'blanco']
+      .map((key) => {
+        const tpl = editorState.templatesByKey[key];
+        return `
+          <div class="tpl-item">
+            <button type="button" class="tpl-main" data-tpl="${escapeHtml(key)}">
+              <span class="tpl-ico">${key === 'blanco' ? '+' : fileIcon}</span>
+              <span class="tpl-tx"><span class="tpl-t">${escapeHtml(tpl.name)}</span><span class="tpl-d">${escapeHtml(tpl.description)}</span></span>
+            </button>
+            <button type="button" class="tpl-cfg" data-tpl-cfg="${escapeHtml(key)}" aria-label="Editar plantilla" title="Editar plantilla">${gear}</button>
+          </div>`;
+      }).join('');
+  }
+
+  if (imgGrid) {
+    const gear = gearIcon();
+    imgGrid.innerHTML = ['img2', 'img3', 'img4', 'imgNone']
+      .map((key, index) => {
+        const tpl = editorState.templatesByKey[key];
+        const spans = tpl.count ? Array.from({ length: tpl.count }, () => '<span></span>').join('') : '<span style="background:none;border:1px dashed var(--stroke-strong)"></span>';
+        const cols = tpl.count ? tpl.cols : 1;
+        return `
+          <div class="img-item">
+            <button type="button" class="img-tpl ${index === 0 ? 'active' : ''}" data-tpl="${escapeHtml(key)}">
+              <span class="img-prev" style="grid-template-columns:repeat(${cols},1fr)">${spans}</span>
+              <span class="img-t">${escapeHtml(tpl.name)}</span>
+            </button>
+            ${key === 'imgNone' ? '' : `<button type="button" class="img-cfg" data-tpl-cfg="${escapeHtml(key)}" aria-label="Editar plantilla" title="Editar plantilla">${gear}</button>`}
+          </div>`;
+      }).join('');
+  }
+}
+
+function renderStudyOptionsLaravel(root) {
+  const select = root.querySelector('#edEstudioSel');
+  if (!select) return;
+  select.innerHTML = '<option value="">Selecciona un estudio sin reporte...</option>';
+  editorState.studies.forEach((study) => {
+    const option = document.createElement('option');
+    option.value = study.id;
+    option.textContent = study.label;
+    select.appendChild(option);
+  });
+  if (editorState.selectedStudy?.id) select.value = editorState.selectedStudy.id;
+}
+
+function applyStudyLaravel(root, study) {
+  editorState.selectedStudy = study || editorState.selectedStudy || null;
+  const today = new Date().toLocaleDateString('es-MX');
+  setText(root, '#reportDateText', today);
+  setText(root, '[data-bind="doc-patient"]', study?.patientName || 'Nombre del paciente');
+  setText(root, '[data-bind="doc-age"]', study?.patientAge || '');
+  setText(root, '[data-bind="doc-gender"]', study?.patientGender || '');
+  setText(root, '[data-bind="doc-birth-date"]', study?.patientBirthDate || '');
+  setText(root, '[data-bind="doc-study-date"]', study?.date || today);
+  setText(root, '[data-bind="doc-procedure"]', study?.procedure || 'Tipo de procedimiento');
+  const typeSelect = root.querySelector('#edTipo');
+  if (typeSelect && study?.type) {
+    const hasOption = Array.from(typeSelect.options).some(option => option.value === study.type);
+    if (!hasOption) typeSelect.append(new Option(study.type, study.type));
+    typeSelect.value = study.type;
+  }
+}
+
+function applyHeaderConfig(root, cfg) {
+  const header = root.querySelector('.ed-doc .rep-header');
+  if (!cfg || !header) return;
+  const scale = (header.clientWidth || PAGE_W) / PAGE_W;
+  header.style.height = `${(cfg.headH || 121) * scale}px`;
+  const place = (selector, box) => {
+    const el = root.querySelector(selector);
+    if (!el || !box) return;
+    el.style.left = `${box.x * scale}px`;
+    el.style.top = `${box.y * scale}px`;
+    el.style.width = `${box.w * scale}px`;
+    el.style.height = `${box.h * scale}px`;
+  };
+  place('#repLogo', cfg.logo);
+  place('#repClinicBox', cfg.name);
+  place('#repAnat', cfg.anat);
+
+  const logo = root.querySelector('#repLogo');
+  if (logo) logo.innerHTML = cfg.logoImg ? `<img src="${escapeHtml(cfg.logoImg)}" alt="Logo de la clinica">` : '<span class="logo-ph">Logo de<br>la clinica</span>';
+
+  const anat = root.querySelector('#repAnat');
+  const studyImage = studyImageForType(root.querySelector('#edTipo')?.value || '');
+  const anatSrc = cfg.anatImg || studyImage;
+  if (anat) {
+    anat.innerHTML = anatSrc
+      ? `<img src="${escapeHtml(anatSrc)}" alt="Imagen lateral">`
+      : '<svg viewBox="0 0 80 110" fill="none" stroke="currentColor" stroke-width="2"><path d="M30 8c-6 6-10 14-10 22 0 6 2 11 6 16 4 5 6 9 6 15 0 10-8 14-8 24 0 8 6 13 14 13s14-6 14-15c0-12-12-16-12-26 0-7 5-11 9-17 3-5 5-10 5-16C58 22 50 12 42 8"/><path d="M30 8c4-3 8-3 12 0"/></svg>';
+  }
+
+  const clinic = root.querySelector('#repClinicName');
+  if (clinic) {
+    if (cfg.clinic) clinic.textContent = cfg.clinic;
+    clinic.style.fontSize = `${(cfg.name?.fontSize || 21) * scale}px`;
+  }
+  if (cfg.signName) setText(root, '#repSignName', cfg.signName);
+  root.querySelector('#repSign')?.setAttribute('data-pos', cfg.signPos || 'center');
+}
+
+function renderSections(root, template, preserveContent = false) {
+  const title = root.querySelector('#docTitle');
+  const subtitle = root.querySelector('#docSubtitle');
+  const sections = root.querySelector('#docSections');
+  if (title) title.textContent = template.title || 'NUEVO REPORTE';
+  if (subtitle) subtitle.textContent = template.subtitle || '';
+  if (!sections || preserveContent) return;
+
+  const cfg = template.cfg || {};
+  const hidden = cfg.secciones_ocultas || [];
+  const deleted = cfg.secciones_borradas || [];
+  const custom = cfg.secciones_nuevas || [];
+  const sectionList = [...(template.sections || []).filter(section => !hidden.includes(section.h) && !deleted.includes(section.h)), ...custom];
+  sections.innerHTML = sectionList.map((section) => {
+    const head = `<h4 data-section="${escapeHtml(section.h)}">${escapeHtml(section.h)}<button type="button" class="sec-hide" title="Ocultar seccion">x</button><button type="button" class="sec-delete" title="Borrar seccion">Borrar</button></h4>`;
+    if (section.type === 'ul' || section.tipo === 'ul') {
+      return `${head}<ul><li contenteditable="true" data-ph="${escapeHtml(section.ph || 'Escribe aqui...')}"></li></ul>`;
+    }
+    return `${head}<p contenteditable="true" data-ph="${escapeHtml(section.ph || 'Escribe aqui...')}"></p>`;
+  }).join('') + '<button type="button" class="sec-add" id="secAddBtn">+ Anadir seccion</button>';
+}
+
+function visibleImages() {
+  return editorState.images
+    .map((img, index) => ({ img, index }))
+    .filter((entry) => {
+      const state = editorState.imageState.get(imageKey(entry.img, entry.index));
+      return !state || state.visible !== false;
+    });
+}
+
+function renderReportImages(root) {
+  const repImgs = root.querySelector('#repImgs');
+  if (!repImgs) return;
+  if (editorState.imageEnabled === false || editorState.imageCols <= 0) {
+    repImgs.style.display = 'none';
+    repImgs.innerHTML = '';
+    syncCaptureThumbs(root);
+    return;
+  }
+  const cols = clampInt(editorState.imageCols, 1, 8, 4);
+  const entries = visibleImages();
+  repImgs.style.display = entries.length ? 'grid' : 'none';
+  repImgs.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  repImgs.innerHTML = entries.map(({ img, index }) => {
+    const key = imageKey(img, index);
+    const state = editorState.imageState.get(key) || { visible: true, size: 1 };
+    const span = clampInt(state.size, 1, cols, 1);
+    return `
+      <span class="cell" data-img-index="${index}" style="grid-column:span ${span}">
+        <img src="${escapeHtml(img.url)}" alt="" title="${escapeHtml(img.titulo || 'Captura')}" loading="lazy">
+        <span class="rep-img-tools">
+          <button type="button" data-img-action="smaller" aria-label="Reducir captura" title="Reducir">-</button>
+          <button type="button" data-img-action="larger" aria-label="Agrandar captura" title="Agrandar">+</button>
+          <button type="button" data-img-action="remove" aria-label="Quitar captura" title="Quitar">x</button>
+        </span>
+        <span class="rep-img-size">${span}x</span>
+      </span>`;
+  }).join('');
+  syncCaptureThumbs(root);
+}
+
+function syncCaptureThumbs(root) {
+  const count = visibleImages().length;
+  setText(root, '#capIncludedCount', `${count}/${editorState.images.length}`);
+  root.querySelectorAll('.cap-thumb[data-img-index]').forEach((button) => {
+    const index = Number(button.dataset.imgIndex);
+    const img = editorState.images[index];
+    const state = editorState.imageState.get(imageKey(img, index)) || { visible: true, size: 1 };
+    const visible = state.visible !== false;
+    button.classList.toggle('off', !visible);
+    button.setAttribute('aria-pressed', visible ? 'true' : 'false');
+    setText(button, '.cap-state', visible ? 'En reporte' : 'Oculta');
+  });
+}
+
+function renderCapturePanel(root) {
+  const host = root.querySelector('#capGridHost');
+  if (!host) return;
+  if (!editorState.images.length) {
+    host.innerHTML = '<p class="cap-empty">Sin capturas asociadas.</p>';
+    syncCaptureThumbs(root);
+    return;
+  }
+  host.innerHTML = `<div class="cap-grid">${editorState.images.map((img, index) => `
+    <div class="cap-thumb-wrap">
+      <button type="button" class="cap-thumb" data-img-index="${index}" title="Agregar o quitar del reporte">
+        <img src="${escapeHtml(img.url)}" alt="" loading="lazy">
+        <span class="cap-state">En reporte</span>
+      </button>
+      <a class="cap-open" href="${escapeHtml(img.show_url || img.url)}" target="_blank" rel="noopener" aria-label="Abrir captura completa" title="Abrir captura completa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+      </a>
+    </div>`).join('')}</div>`;
+  syncCaptureThumbs(root);
+}
+
+function applyTemplateByKey(root, key, preserveContent = false) {
+  const template = editorState.templatesByKey[key] || editorState.templatesByKey.blanco;
+  if (!template) return;
+  editorState.currentTemplateKey = key;
+  editorState.selectedTemplate = template;
+  if (template.type) {
+    const typeSelect = root.querySelector('#edTipo');
+    if (typeSelect) typeSelect.value = template.type;
+    setText(root, '[data-bind="doc-procedure"]', template.type);
+  }
+  if (template.imgOnly) {
+    root.querySelector('#docSections').innerHTML = '';
+    editorState.imageEnabled = template.cols > 0 && template.count > 0;
+    editorState.imageCols = template.cols || 0;
+  } else {
+    editorState.imageEnabled = true;
+    editorState.imageCols = 4;
+    renderSections(root, template, preserveContent);
+  }
+  applyHeaderConfig(root, template.cfg || defaultTemplateConfig());
+  renderReportImages(root);
+  markReportDirty(root);
+}
+
+function selectedFindingTexts(root) {
+  const headings = root.querySelectorAll('#docSections h4');
+  const hallazgoHeading = Array.from(headings).find((heading) => (
+    heading.textContent || ''
+  ).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().includes('HALLAZGO'));
+  let next = hallazgoHeading?.nextElementSibling || null;
+  while (next && next.tagName !== 'H4') {
+    if (next.tagName === 'UL') {
+      return Array.from(next.querySelectorAll('li'))
+        .map(li => li.textContent.trim())
+        .filter(Boolean);
+    }
+    next = next.nextElementSibling;
+  }
+  return [];
+}
+
+function findFindingsList(root) {
+  const headings = root.querySelectorAll('#docSections h4');
+  const heading = Array.from(headings).find((item) => (
+    item.textContent || ''
+  ).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().includes('HALLAZGO'));
+  let next = heading?.nextElementSibling || null;
+  while (next && next.tagName !== 'H4') {
+    if (next.tagName === 'UL') return next;
+    next = next.nextElementSibling;
+  }
+  return null;
+}
+
+function insertFinding(root, name) {
+  const list = findFindingsList(root);
+  if (!list || !String(name || '').trim()) return;
+  const text = String(name).trim();
+  const existing = Array.from(list.querySelectorAll('li')).map(li => li.textContent.trim());
+  if (existing.includes(text)) return;
+  const placeholder = list.querySelector('li[data-ph]');
+  if (placeholder && !placeholder.textContent.trim()) {
+    placeholder.textContent = text;
+  } else {
+    const item = document.createElement('li');
+    item.contentEditable = 'true';
+    item.textContent = text;
+    list.appendChild(item);
+  }
+  updateFindingsCount(root);
+  markReportDirty(root);
+}
+
+function updateFindingsCount(root) {
+  const strong = root.querySelector('#hzCount strong');
+  if (strong) strong.textContent = String(selectedFindingTexts(root).length);
+}
+
+function renderFindingsChips(root) {
+  const host = root.querySelector('#hzChips');
+  if (!host) return;
+  const findings = editorState.findings.length ? editorState.findings : [
+    { id: 'gastritis', name: 'Gastritis', critical: false },
+    { id: 'polipo', name: 'Polipo', critical: false },
+    { id: 'sangrado', name: 'Sangrado activo', critical: true },
+    { id: 'ulcera', name: 'Ulcera', critical: true },
+  ];
+  host.innerHTML = findings.map(item => `
+    <span class="hz-chip ${item.critical ? 'critico' : ''}" data-finding-name="${escapeHtml(item.name)}">
+      <span class="hz-dot"></span>${escapeHtml(item.name)}
+    </span>`).join('');
+}
+
+function cleanPreviewClone(clone) {
+  clone.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+  clone.querySelectorAll('.sec-add,.sec-hide,.sec-delete,.rep-img-tools,.rep-img-size').forEach(el => el.remove());
+  return clone;
+}
+
+function openReportPreview(root) {
+  const doc = root.querySelector('#reportDocument');
+  const modal = root.querySelector('#previewModal');
+  const paper = root.querySelector('#pvPaper');
+  if (!doc || !modal || !paper) return;
+  const clone = cleanPreviewClone(doc.cloneNode(true));
+  paper.innerHTML = '';
+  paper.appendChild(clone);
+  modal.classList.add('open');
+}
+
+function closeReportPreview(root) {
+  root.querySelector('#previewModal')?.classList.remove('open');
+}
+
+function setupLaravelEditorInteractions(root) {
+  root.querySelector('#capPanelToggle')?.addEventListener('click', () => {
+    const panel = root.querySelector('.cap-panel');
+    const collapsed = panel?.classList.toggle('is-collapsed');
+    root.querySelector('#capPanelToggle')?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  });
+
+  root.querySelector('#repImgs')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-img-action]');
+    if (!button) return;
+    const cell = button.closest('[data-img-index]');
+    const index = Number(cell?.dataset.imgIndex);
+    const img = editorState.images[index];
+    const key = imageKey(img, index);
+    const state = editorState.imageState.get(key) || { visible: true, size: 1 };
+    if (button.dataset.imgAction === 'remove') state.visible = false;
+    if (button.dataset.imgAction === 'larger') state.size = clampInt((state.size || 1) + 1, 1, editorState.imageCols || 1, 1);
+    if (button.dataset.imgAction === 'smaller') state.size = clampInt((state.size || 1) - 1, 1, editorState.imageCols || 1, 1);
+    editorState.imageState.set(key, state);
+    renderReportImages(root);
+    markReportDirty(root);
+  });
+
+  root.querySelector('#capGridHost')?.addEventListener('click', (event) => {
+    const button = event.target.closest('.cap-thumb[data-img-index]');
+    if (!button) return;
+    const index = Number(button.dataset.imgIndex);
+    const img = editorState.images[index];
+    const key = imageKey(img, index);
+    const state = editorState.imageState.get(key) || { visible: true, size: 1 };
+    state.visible = state.visible === false;
+    editorState.imageState.set(key, state);
+    renderReportImages(root);
+    markReportDirty(root);
+  });
+
+  root.querySelector('#imgRestoreAll')?.addEventListener('click', () => {
+    editorState.images.forEach((img, index) => {
+      const key = imageKey(img, index);
+      const state = editorState.imageState.get(key) || { visible: true, size: 1 };
+      state.visible = true;
+      editorState.imageState.set(key, state);
+    });
+    renderReportImages(root);
+    markReportDirty(root);
+  });
+
+  root.querySelectorAll('.tpl-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      root.querySelectorAll('.tpl-tab').forEach(item => item.classList.remove('active'));
+      tab.classList.add('active');
+      root.querySelectorAll('.tpl-pane').forEach(item => item.classList.remove('active'));
+      root.querySelector(`#pane${tab.dataset.tab === 'imagenes' ? 'Imagenes' : 'Informe'}`)?.classList.add('active');
+    });
+  });
+
+  root.querySelector('#tplList')?.addEventListener('click', (event) => {
+    const cfg = event.target.closest('[data-tpl-cfg]');
+    if (cfg) {
+      openTemplateConfig(root, cfg.dataset.tplCfg);
+      return;
+    }
+    const main = event.target.closest('[data-tpl]');
+    if (main) applyTemplateByKey(root, main.dataset.tpl);
+  });
+
+  root.querySelector('#imgTplGrid')?.addEventListener('click', (event) => {
+    const cfg = event.target.closest('[data-tpl-cfg]');
+    if (cfg) {
+      openTemplateConfig(root, cfg.dataset.tplCfg);
+      return;
+    }
+    const main = event.target.closest('[data-tpl]');
+    if (!main) return;
+    root.querySelectorAll('.img-tpl').forEach(item => item.classList.remove('active'));
+    main.classList.add('active');
+    applyTemplateByKey(root, main.dataset.tpl);
+  });
+
+  root.querySelector('#docSections')?.addEventListener('click', (event) => {
+    const hide = event.target.closest('.sec-hide');
+    const remove = event.target.closest('.sec-delete');
+    const add = event.target.closest('.sec-add');
+    const template = editorState.templatesByKey[editorState.currentTemplateKey];
+    if (!template) return;
+    if (hide || remove) {
+      const section = event.target.closest('h4')?.dataset.section;
+      if (!section) return;
+      const field = hide ? 'secciones_ocultas' : 'secciones_borradas';
+      template.cfg[field] = template.cfg[field] || [];
+      if (!template.cfg[field].includes(section)) template.cfg[field].push(section);
+      applyTemplateByKey(root, editorState.currentTemplateKey);
+    }
+    if (add) {
+      const sectionName = window.prompt('Nombre de la nueva seccion:');
+      if (!sectionName?.trim()) return;
+      template.cfg.secciones_nuevas = template.cfg.secciones_nuevas || [];
+      template.cfg.secciones_nuevas.push({ h: sectionName.trim(), ph: 'Escribe aqui...', type: 'p' });
+      applyTemplateByKey(root, editorState.currentTemplateKey);
+    }
+  });
+
+  root.querySelector('#hzChips')?.addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-finding-name]');
+    if (chip) insertFinding(root, chip.dataset.findingName);
+  });
+  root.querySelector('#hzAddBtn')?.addEventListener('click', () => {
+    const input = root.querySelector('#hzNewInput');
+    insertFinding(root, input?.value || '');
+    if (input) input.value = '';
+  });
+  root.querySelector('#hzNewInput')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    root.querySelector('#hzAddBtn')?.click();
+  });
+
+  root.querySelector('#btnPreview')?.addEventListener('click', () => openReportPreview(root));
+  root.querySelector('#pvClose')?.addEventListener('click', () => closeReportPreview(root));
+  root.querySelector('#pvPrint')?.addEventListener('click', () => {
+    openReportPreview(root);
+    setTimeout(() => window.print(), 80);
+  });
+
+  root.querySelector('#reportDocument')?.addEventListener('input', () => {
+    markReportDirty(root);
+    if (root.querySelector('#autosaveInput')?.checked !== false) saveDraft(root, false);
+  });
+}
+
+function openTemplateConfig(root, key) {
+  const template = editorState.templatesByKey[key];
+  const modal = root.querySelector('#cfgModal');
+  if (!template || !modal) return;
+  modal.dataset.editingKey = key;
+  const work = JSON.parse(JSON.stringify(template.cfg || defaultTemplateConfig()));
+  modal._work = work;
+  root.querySelector('#cfgSub').textContent = template.imgOnly ? 'Plantilla de imagenes' : `Plantilla: ${template.name}`;
+  root.querySelector('#imgCfgFields').style.display = template.imgOnly ? 'block' : 'none';
+  root.querySelector('#cfgClinic').value = work.clinic || root.querySelector('#repClinicName')?.textContent || '';
+  root.querySelector('#cfgSignName').value = work.signName || root.querySelector('#repSignName')?.textContent || '';
+  root.querySelector('#cfgSignPos').value = work.signPos || 'center';
+  root.querySelector('#cfgImgCols').value = template.cols || 2;
+  root.querySelector('#cfgImgCount').value = template.count || 4;
+  modal.classList.add('open');
+  drawTemplateConfig(root);
+}
+
+function closeTemplateConfig(root) {
+  root.querySelector('#cfgModal')?.classList.remove('open');
+}
+
+function drawTemplateConfig(root) {
+  const modal = root.querySelector('#cfgModal');
+  const work = modal?._work;
+  const sheet = root.querySelector('#cfgSheet');
+  const head = root.querySelector('#cfgHead');
+  if (!work || !sheet || !head) return;
+  const maxBottom = Math.max(work.logo.y + work.logo.h, work.name.y + work.name.h, work.anat.y + work.anat.h);
+  work.headH = Math.max(96, Math.ceil(maxBottom) + 6);
+  const scale = (sheet.clientWidth || PAGE_W) / PAGE_W;
+  head.style.height = `${work.headH * scale}px`;
+  const place = (id, box) => {
+    const el = root.querySelector(id);
+    if (!el) return;
+    el.style.left = `${box.x * scale}px`;
+    el.style.top = `${box.y * scale}px`;
+    el.style.width = `${box.w * scale}px`;
+    el.style.height = `${box.h * scale}px`;
+  };
+  place('#elLogo', work.logo);
+  place('#elName', work.name);
+  place('#elAnat', work.anat);
+  root.querySelector('#elLogoIn').innerHTML = work.logoImg ? `<img src="${escapeHtml(work.logoImg)}" alt="Logo">` : 'Logo de<br>la clinica';
+  root.querySelector('#elNameTx').textContent = work.clinic || 'Nombre de la clinica';
+  root.querySelector('#elNameTx').style.fontSize = `${(work.name.fontSize || 21) * scale}px`;
+  const anatSrc = work.anatImg || studyImageForType(root.querySelector('#edTipo')?.value || '');
+  root.querySelector('#elAnatIn').innerHTML = anatSrc
+    ? `<img src="${escapeHtml(anatSrc)}" alt="">`
+    : '<svg viewBox="0 0 80 110" fill="none" stroke="currentColor" stroke-width="2"><path d="M30 8c-6 6-10 14-10 22 0 6 2 11 6 16 4 5 6 9 6 15 0 10-8 14-8 24 0 8 6 13 14 13s14-6 14-15c0-12-12-16-12-26 0-7 5-11 9-17 3-5 5-10 5-16C58 22 50 12 42 8"/><path d="M30 8c4-3 8-3 12 0"/></svg>';
+  root.querySelector('#cfgSignPv')?.setAttribute('data-pos', work.signPos || 'center');
+  root.querySelector('#cfgSignPvTx').textContent = work.signName || 'Dr. Nombre del medico';
+}
+
+function setupTemplateConfig(root) {
+  const modal = root.querySelector('#cfgModal');
+  if (!modal) return;
+  const readImage = (input, setter) => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setter(String(reader.result || ''));
+      drawTemplateConfig(root);
+    };
+    reader.readAsDataURL(file);
+  };
+  root.querySelector('#cfgLogoInput')?.addEventListener('change', (event) => readImage(event.target, value => { modal._work.logoImg = value; }));
+  root.querySelector('#cfgAnatInput')?.addEventListener('change', (event) => readImage(event.target, value => { modal._work.anatImg = value; }));
+  root.querySelector('#cfgClinic')?.addEventListener('input', (event) => { modal._work.clinic = event.target.value; drawTemplateConfig(root); });
+  root.querySelector('#cfgSignName')?.addEventListener('input', (event) => { modal._work.signName = event.target.value; drawTemplateConfig(root); });
+  root.querySelector('#cfgSignPos')?.addEventListener('change', (event) => { modal._work.signPos = event.target.value; drawTemplateConfig(root); });
+  root.querySelector('#cfgCancel')?.addEventListener('click', () => closeTemplateConfig(root));
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeTemplateConfig(root);
+  });
+  root.querySelector('#cfgApply')?.addEventListener('click', () => {
+    const key = modal.dataset.editingKey;
+    const template = editorState.templatesByKey[key];
+    if (!template || !modal._work) return;
+    template.cfg = modal._work;
+    if (template.imgOnly) {
+      template.cols = clampInt(root.querySelector('#cfgImgCols')?.value, 1, 6, template.cols || 2);
+      template.count = clampInt(root.querySelector('#cfgImgCount')?.value, 1, 24, template.count || 4);
+      renderTemplateLists(root);
+    }
+    if (editorState.currentTemplateKey === key) applyTemplateByKey(root, key, true);
+    closeTemplateConfig(root);
+    showToast(root, 'Plantilla aplicada');
+  });
+
+  let drag = null;
+  const elements = { logo: '#elLogo', name: '#elName', anat: '#elAnat' };
+  Object.entries(elements).forEach(([key, selector]) => {
+    root.querySelector(selector)?.addEventListener('pointerdown', (event) => {
+      const work = modal._work;
+      if (!work) return;
+      event.preventDefault();
+      const mode = event.target.classList.contains('rz') ? 'resize' : 'move';
+      const box = work[key];
+      drag = { key, mode, sx: event.clientX, sy: event.clientY, box: { ...box } };
+      root.querySelectorAll('.cfg-el').forEach(el => el.classList.remove('sel'));
+      root.querySelector(selector)?.classList.add('sel');
+    });
+  });
+  window.addEventListener('pointermove', (event) => {
+    if (!drag || !modal._work) return;
+    const sheet = root.querySelector('#cfgSheet');
+    const scale = (sheet?.clientWidth || PAGE_W) / PAGE_W;
+    const dx = (event.clientX - drag.sx) / scale;
+    const dy = (event.clientY - drag.sy) / scale;
+    const box = modal._work[drag.key];
+    if (drag.mode === 'move') {
+      box.x = Math.max(0, Math.min(PAGE_W - box.w, drag.box.x + dx));
+      box.y = Math.max(0, drag.box.y + dy);
+    } else {
+      box.w = Math.max(24, Math.min(PAGE_W - box.x, drag.box.w + dx));
+      box.h = Math.max(20, drag.box.h + dy);
+      if (drag.key === 'name') box.fontSize = Math.max(10, Math.round(box.h * 0.32));
+    }
+    drawTemplateConfig(root);
+  });
+  window.addEventListener('pointerup', () => { drag = null; });
+}
+
+function setupToolbar(root) {
+  const docEl = root.querySelector('#reportDocument');
+  const buttons = Array.from(root.querySelectorAll('.ed-tb[data-cmd]'));
+  const stateCmds = ['bold', 'italic', 'underline', 'strikeThrough', 'justifyLeft', 'justifyCenter', 'justifyFull', 'insertUnorderedList', 'insertOrderedList'];
+  let savedRange = null;
+  const selectionInsideDoc = () => {
+    const selection = document.getSelection();
+    return Boolean(selection?.rangeCount && docEl?.contains(selection.getRangeAt(0).commonAncestorContainer));
+  };
+  const saveSelection = () => {
+    const selection = document.getSelection();
+    if (selection?.rangeCount && selectionInsideDoc()) savedRange = selection.getRangeAt(0).cloneRange();
+  };
+  const restoreSelection = () => {
+    if (!savedRange) return;
+    const selection = document.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(savedRange);
+  };
+  const refresh = () => {
+    buttons.forEach((button) => {
+      const cmd = button.dataset.cmd;
+      if (!stateCmds.includes(cmd)) return;
+      try {
+        button.classList.toggle('active', document.queryCommandState(cmd));
+      } catch {
+        button.classList.remove('active');
+      }
+    });
+  };
+  buttons.forEach(button => {
+    button.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      restoreSelection();
+      document.execCommand(button.dataset.cmd, false, null);
+      saveSelection();
+      refresh();
+      markReportDirty(root);
+    });
+  });
+  document.addEventListener('selectionchange', () => {
+    if (selectionInsideDoc()) {
+      saveSelection();
+      refresh();
+    }
+  });
+  docEl?.addEventListener('keyup', () => {
+    saveSelection();
+    refresh();
+    updateFindingsCount(root);
+  });
+  docEl?.addEventListener('mouseup', () => {
+    saveSelection();
+    refresh();
+  });
+  root.querySelector('#textColorBtn')?.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    saveSelection();
+    root.querySelector('#textColorInput')?.click();
+  });
+  root.querySelector('#textColorInput')?.addEventListener('input', (event) => {
+    restoreSelection();
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('foreColor', false, event.target.value);
+    root.querySelector('#textColorSwatch').style.backgroundColor = event.target.value;
+    saveSelection();
+    markReportDirty(root);
+  });
+  root.querySelector('#underlineColorBtn')?.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    restoreSelection();
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('hiliteColor', false, '#ffff00');
+    saveSelection();
+    markReportDirty(root);
+  });
+  root.querySelector('#fontSizeInput')?.addEventListener('change', (event) => {
+    const size = clampInt(event.target.value, 8, 72, 14);
+    restoreSelection();
+    document.execCommand('fontSize', false, '3');
+    const font = docEl?.querySelector('font[size="3"]');
+    if (font) {
+      font.removeAttribute('size');
+      font.style.fontSize = `${size}px`;
+    }
+    saveSelection();
+    markReportDirty(root);
+  });
 }
 
 function renderStudyOptions(root) {
@@ -509,15 +1505,22 @@ function appendMessage(root, text, role = 'me') {
 
 function collectReportPayload(root) {
   const documentEl = root.querySelector('#reportDocument');
-  const typeSelect = root.querySelector('#reportTypeSelect');
+  const sections = root.querySelector('#docSections');
+  const typeSelect = root.querySelector('#edTipo');
+  const existingReporteId = root.querySelector('#existingReporteId')?.value || null;
   return {
-    estudio_id: editorState.selectedStudy?.id || root.querySelector('#reportStudySelect')?.value || null,
+    estudio_id: editorState.selectedStudy?.id || root.querySelector('#edEstudioSel')?.value || null,
     paciente_id: editorState.selectedStudy?.patientId || null,
+    reporte_id: existingReporteId,
     plantilla_id: editorState.selectedTemplate?.id && editorState.selectedTemplate.id !== 'blank' ? editorState.selectedTemplate.id : null,
     tipo_estudio: typeSelect?.value || editorState.selectedStudy?.type || '',
+    tipo_reporte: editorState.mode,
+    usar_ia: editorState.mode === 'ia',
     fecha_reporte: new Date().toISOString().slice(0, 10),
-    contenido_html: documentEl?.innerHTML || '',
-    contenido_texto: documentEl?.innerText || '',
+    contenido_html: sections?.innerHTML || documentEl?.innerHTML || '',
+    contenido_texto: sections?.innerText || documentEl?.innerText || '',
+    imagenes_config: imageConfigPayload(),
+    hallazgos: selectedFindingTexts(root),
   };
 }
 
@@ -527,22 +1530,92 @@ function responseContent(payload) {
 
 async function loadEditorData(root) {
   setEditorAlert(root, 'Cargando estudios, plantillas y hallazgos desde Laravel...');
-  const payload = await reportsRequest('editor');
-  const data = normalizeEditorPayload(payload);
+  const hashQuery = window.location.hash.includes('?')
+    ? window.location.hash.slice(window.location.hash.indexOf('?') + 1)
+    : '';
+  const params = new URLSearchParams(hashQuery);
+  const query = new URLSearchParams();
+  ['paciente_id', 'estudio_id', 'reporte_id'].forEach((key) => {
+    const value = params.get(key) || params.get(key.replace('_id', ''));
+    if (value) query.set(key, value);
+  });
+
+  const [editorResult, studiesResult, templatesResult] = await Promise.allSettled([
+    reportsRequest(`editor${query.toString() ? `?${query}` : ''}`),
+    reportsRequest(`estudios-sin-reporte${query.get('estudio_id') ? `?estudio_id=${encodeURIComponent(query.get('estudio_id'))}` : ''}`),
+    reportsRequest('plantillas'),
+  ]);
+
+  if (editorResult.status === 'rejected') throw editorResult.reason;
+
+  const payload = editorResult.value;
+  const editorData = payload?.data || payload || {};
+  const data = normalizeEditorPayload({
+    data: {
+      studies: studiesResult.status === 'fulfilled' ? studiesResult.value?.estudios : [],
+      templates: [],
+      findings: editorData.hallazgos || [],
+    },
+  });
+  const preloadStudy = normalizeStudy({
+    id: editorData.estudio_id,
+    paciente_id: editorData.paciente_id,
+    paciente: editorData.paciente,
+    edad: editorData.edad,
+    sexo: editorData.sexo,
+    fecha_nacimiento: editorData.nacimiento,
+    fecha: editorData.fecha_estudio,
+    procedimiento: editorData.procedimiento,
+    tipo: editorData.tipo,
+    label: `${editorData.paciente || 'Paciente'} - ${editorData.procedimiento || 'Estudio'}${editorData.fecha_estudio ? ` - ${editorData.fecha_estudio}` : ''}`,
+  }, 0);
+
+  const studies = data.studies.length ? data.studies : (preloadStudy.id && preloadStudy.id !== 'undefined' ? [preloadStudy] : []);
+  const templatesByKey = mergeTemplateData(templatesResult.status === 'fulfilled' ? templatesResult.value?.plantillas : {});
+  const savedImageConfig = editorData.reporte?.imagenes_config || {};
+
   editorState = {
     ...editorState,
-    studies: data.studies,
-    templates: data.templates,
+    studies,
+    templates: Object.values(templatesByKey),
+    templatesByKey,
     findings: data.findings,
-    selectedStudy: null,
+    images: Array.isArray(editorData.imagenes) ? editorData.imagenes : [],
+    report: editorData.reporte || null,
+    selectedStudy: preloadStudy.id && preloadStudy.id !== 'undefined' ? preloadStudy : studies[0] || null,
     selectedTemplate: null,
+    imageState: new Map(),
+    imageEnabled: savedImageConfig.enabled !== false,
+    imageCols: clampInt(savedImageConfig.cols, 1, 8, 4),
   };
-  renderStudyOptions(root);
-  renderTypeOptions(root);
-  renderTemplates(root);
+
+  editorState.images.forEach((img, index) => {
+    const key = imageKey(img, index);
+    const saved = savedImageConfig.items?.[key] || {};
+    editorState.imageState.set(key, {
+      visible: saved.visible !== false,
+      size: clampInt(saved.size, 1, editorState.imageCols || 8, 1),
+    });
+  });
+
+  renderStudyOptionsLaravel(root);
+  renderTemplateLists(root);
+  renderCapturePanel(root);
+  applyStudyLaravel(root, editorState.selectedStudy);
+
+  const initialKey = templateKeyFromType(editorState.selectedStudy?.type || editorData.tipo);
+  applyTemplateByKey(root, initialKey, Boolean(editorData.reporte?.contenido_html));
+  if (editorData.reporte?.contenido_html) {
+    root.querySelector('#docSections').innerHTML = editorData.reporte.contenido_html;
+    root.querySelector('#existingReporteId').value = editorData.reporte.id || '';
+  } else if (editorData.reporte?.contenido_texto) {
+    root.querySelector('#docSections').innerHTML = `<div contenteditable="true">${escapeHtml(editorData.reporte.contenido_texto)}</div>`;
+    root.querySelector('#existingReporteId').value = editorData.reporte.id || '';
+  }
+
   setEditorAlert(root, '');
 
-  if (!data.studies.length) {
+  if (!editorState.studies.length) {
     setEditorAlert(root, 'No hay estudios sin reporte disponibles.', 'warn');
   }
 }
@@ -550,6 +1623,7 @@ async function loadEditorData(root) {
 async function generateReport(root) {
   if (editorState.generating) return;
   const button = root.querySelector('#generateAiReportBtn');
+  setEditorMode(root, 'ia');
   editorState.generating = true;
   setButtonBusy(button, true, 'Generando...');
   setEditorAlert(root, 'Generando reporte con IA...');
@@ -560,7 +1634,7 @@ async function generateReport(root) {
       body: JSON.stringify(collectReportPayload(root)),
     });
     const content = responseContent(payload);
-    if (content) root.querySelector('#reportDocument').innerHTML = content;
+    if (content) root.querySelector('#docSections').innerHTML = content;
     appendMessage(root, payload?.message || 'Reporte generado con IA.', 'ai');
     setEditorAlert(root, 'Reporte generado. Revisa el contenido antes de guardar.', 'ok');
   } catch (error) {
@@ -574,18 +1648,20 @@ async function generateReport(root) {
 
 async function saveReport(root) {
   if (editorState.saving) return;
-  const button = root.querySelector('#saveReportBtn');
+  const button = root.querySelector('#btnGuardar');
   editorState.saving = true;
   setButtonBusy(button, true, 'Guardando...');
   setEditorAlert(root, 'Guardando reporte en Laravel...');
 
   try {
-    await reportsRequest('', {
+    const payload = await reportsRequest('guardar', {
       method: 'POST',
       body: JSON.stringify(collectReportPayload(root)),
     });
+    if (payload?.reporte_id) root.querySelector('#existingReporteId').value = payload.reporte_id;
+    localStorage.removeItem(draftKey());
     setEditorAlert(root, 'Reporte guardado correctamente.', 'ok');
-    setText(root, '.status-pill', 'Guardado');
+    setEditorStatus(root, 'Guardado', true);
   } catch (error) {
     console.error(error);
     setEditorAlert(root, error.message || 'No se pudo guardar el reporte.', 'error');
@@ -616,7 +1692,7 @@ async function sendChat(root, text) {
     const answer = payload?.respuesta || payload?.answer || payload?.message || payload?.data?.respuesta || 'Listo.';
     appendMessage(root, answer, 'ai');
     const content = responseContent(payload);
-    if (content) root.querySelector('#reportDocument').innerHTML = content;
+    if (content) root.querySelector('#docSections').innerHTML = content;
   } catch (error) {
     console.error(error);
     appendMessage(root, error.message || 'No pude conectar con la IA.', 'ai');
@@ -642,59 +1718,62 @@ export async function initReportEditor() {
   const root = document.getElementById('pageContent');
   if (!root) return;
   reportsTemplate = root.innerHTML;
+  setEditorMode(root, currentEditorMode());
 
   if (!getAuthToken()) {
     renderLaravelLogin(root, 'Inicia sesion para redactar reportes.');
     return;
   }
 
-  root.querySelectorAll('[data-command]').forEach((button) => {
-    button.addEventListener('click', () => {
-      root.querySelector('#reportDocument')?.focus();
-      document.execCommand(button.dataset.command, false, null);
-      button.classList.toggle('active', ['bold', 'italic', 'underline', 'strikeThrough'].includes(button.dataset.command));
-    });
+  root.querySelectorAll('[data-report-mode]').forEach((button) => {
+    button.addEventListener('click', () => setEditorMode(root, button.dataset.reportMode));
   });
 
-  root.querySelector('#reportStudySelect')?.addEventListener('change', (event) => {
+  root.querySelector('#edEstudioSel')?.addEventListener('change', async (event) => {
     const study = editorState.studies.find(item => item.id === event.target.value);
-    applyStudy(root, study);
+    applyStudyLaravel(root, study);
+    if (study?.id) {
+      const params = new URLSearchParams();
+      params.set('mode', editorState.mode);
+      params.set('estudio_id', study.id);
+      window.location.hash = `ia-reportes-redactar?${params}`;
+      return;
+    }
+    restoreDraft(root);
   });
 
-  root.querySelector('#reportTypeSelect')?.addEventListener('change', (event) => {
+  root.querySelector('#edTipo')?.addEventListener('change', (event) => {
     setText(root, '[data-bind="doc-procedure"]', event.target.value);
-  });
+    applyHeaderConfig(root, editorState.templatesByKey[editorState.currentTemplateKey]?.cfg || defaultTemplateConfig());
+    });
 
-  root.querySelector('#templateList')?.addEventListener('click', (event) => {
-    const button = event.target.closest('.template-item');
-    if (!button) return;
-    const template = editorState.templates.find(item => item.id === button.dataset.templateId) || {
-      id: 'blank',
-      name: 'En blanco',
-      content: '',
-    };
-    applyTemplate(root, template);
-  });
-
-  root.querySelectorAll('.quick-prompts button').forEach((button) => {
-    button.addEventListener('click', () => sendChat(root, button.textContent || ''));
-  });
-
-  root.querySelector('.chat-input button')?.addEventListener('click', () => {
-    sendChat(root, root.querySelector('.chat-input input')?.value || '');
-  });
-
-  root.querySelector('.chat-input input')?.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
+  root.querySelector('#chatForm')?.addEventListener('submit', (event) => {
     event.preventDefault();
-    root.querySelector('.chat-input button')?.click();
+    const input = root.querySelector('#chatText');
+    const text = input?.value || '';
+    if (input) input.value = '';
+    sendChat(root, text);
+  });
+
+  root.querySelector('#chatChips')?.addEventListener('click', (event) => {
+    const button = event.target.closest('.chat-chip');
+    if (button) sendChat(root, button.textContent || '');
   });
 
   root.querySelector('#generateAiReportBtn')?.addEventListener('click', () => generateReport(root));
-  root.querySelector('#saveReportBtn')?.addEventListener('click', () => saveReport(root));
+  root.querySelector('#btnGuardar')?.addEventListener('click', () => saveReport(root));
+  root.querySelector('#btnDraft')?.addEventListener('click', () => saveDraft(root));
+  setupToolbar(root);
+  setupTemplateConfig(root);
+  setupLaravelEditorInteractions(root);
 
   try {
     await loadEditorData(root);
+    restoreDraft(root);
+    renderFindingsChips(root);
+    updateFindingsCount(root);
+    const greeting = 'Hola, soy ENCLAII. Tu redactas el reporte y yo te ayudo: puedo proponer hallazgos, recomendaciones o mejorar la redaccion de cualquier seccion. ¿Empezamos?';
+    appendMessage(root, greeting, 'ai');
   } catch (error) {
     console.error(error);
     if (error.code === 'UNAUTHORIZED') {

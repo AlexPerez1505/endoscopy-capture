@@ -701,11 +701,23 @@ async function loadPage(route) {
 ========================================================= */
 
 function navigate(route) {
+  const requestedRoute =
+    String(route || 'dashboard')
+      .replace(/^#/, '')
+      .trim() ||
+    'dashboard';
+
   const normalizedRoute =
-    normalizeRoute(route);
+    normalizeRoute(requestedRoute);
+
+  const currentHash =
+    String(window.location.hash || '')
+      .replace(/^#/, '');
 
   if (
-    currentRoute() === normalizedRoute
+    currentHash === requestedRoute ||
+    (!requestedRoute.includes('?') &&
+      currentRoute() === normalizedRoute)
   ) {
     loadPage(
       normalizedRoute
@@ -715,7 +727,7 @@ function navigate(route) {
   }
 
   window.location.hash =
-    normalizedRoute;
+    requestedRoute;
 }
 
 /* =========================================================
