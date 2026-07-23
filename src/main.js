@@ -395,8 +395,8 @@ function closeCaptureMediaModal() {
 captureMediaModalClose?.addEventListener('click', closeCaptureMediaModal);
 captureMediaModalBackdrop?.addEventListener('click', closeCaptureMediaModal);
 
-function addCaptureThumbnail(url, label, type) {
-  capturedItems.push({ url, label, type });
+function addCaptureThumbnail(url, label, type, remoteUrl = '') {
+  capturedItems.push({ url, remoteUrl, label, type });
 
   if (!captureThumbnails || !url) return;
 
@@ -413,9 +413,22 @@ function addCaptureThumbnail(url, label, type) {
   button.addEventListener('click', () => openCaptureMediaModal(url, type));
 
   if (type === 'video') {
-    button.textContent = `Video: ${label}`;
-    button.style.padding = '8px';
-    button.style.fontSize = '12px';
+    const video = document.createElement('video');
+    video.src = url;
+    video.muted = true;
+    video.preload = 'metadata';
+    video.style.width = '100%';
+    video.style.borderRadius = '8px';
+    video.style.aspectRatio = '1 / 1';
+    video.style.objectFit = 'cover';
+    button.appendChild(video);
+
+    const caption = document.createElement('span');
+    caption.textContent = `Video: ${label}`;
+    caption.style.display = 'block';
+    caption.style.padding = '8px';
+    caption.style.fontSize = '12px';
+    button.appendChild(caption);
   } else {
     const img = document.createElement('img');
     img.src = url;
@@ -497,9 +510,12 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
     throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al guardar la captura.`);
   }
 
-  if (payload.data?.url) {
-    addCaptureThumbnail(payload.data.url, filename, captureType);
-  }
+  addCaptureThumbnail(
+    URL.createObjectURL(blob),
+    filename,
+    captureType,
+    payload.data?.url || ''
+  );
 
   return payload;
 }
@@ -947,7 +963,7 @@ async function captureImage() {
     }
 
     const blob = await captureFrameBlob(0.95, 1920);
-    const filename = makeFileName('endoscopy-capture', 'jpg');
+    const filename = makeFileName('enclaii-captura', 'jpg');
 
     await uploadCaptureToLaravel(blob, filename, 'image');
 
@@ -1272,8 +1288,21 @@ async function finishStudy() {
       button.addEventListener('click', () => openCaptureMediaModal(item.url, item.type));
 
       if (item.type === 'video') {
-        button.textContent = `Video: ${item.label}`;
-        button.style.padding = '10px';
+        const video = document.createElement('video');
+        video.src = item.url;
+        video.muted = true;
+        video.preload = 'metadata';
+        video.style.width = '100%';
+        video.style.aspectRatio = '1 / 1';
+        video.style.objectFit = 'cover';
+        video.style.borderRadius = '8px';
+        button.appendChild(video);
+
+        const caption = document.createElement('span');
+        caption.textContent = `Video: ${item.label}`;
+        caption.style.display = 'block';
+        caption.style.padding = '10px';
+        button.appendChild(caption);
       } else {
         const img = document.createElement('img');
         img.src = item.url;

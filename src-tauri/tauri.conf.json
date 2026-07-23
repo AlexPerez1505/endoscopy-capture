@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "endoscopy-capture",
+  "productName": "ENCLAII",
   "version": "0.1.0",
-  "identifier": "endoscopy-capture",
+  "identifier": "com.enclaii.desktop",
   "build": {
     "frontendDist": "../src"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "ENCLAII — Endoscopy Capture",
+        "title": "ENCLAII",
         "url": "app.html",
         "width": 1400,
         "height": 900,
@@ -19,11 +19,17 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://sistema.enclaii.com; media-src 'self' blob: https://sistema.enclaii.com; connect-src 'self' ipc: http://ipc.localhost https://sistema.enclaii.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-src 'self'"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:* http://127.0.0.1:* https://sistema.enclaii.com; media-src 'self' blob: https://sistema.enclaii.com; connect-src 'self' ipc: http://ipc.localhost https://sistema.enclaii.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-src 'self'"
     }
   },
   "bundle": {
     "active": true,
+    "publisher": "Grupo MediBuy",
+    "category": "Medical",
+    "shortDescription": "Captura local de endoscopia para ENCLAII.",
+    "longDescription": "Aplicacion de escritorio para conectar camaras de endoscopia, capturar imagenes, grabar videos y sincronizar estudios con ENCLAII.",
+    "copyright": "Copyright (c) 2026 ENCLAII",
+    "licenseFile": "installer/terminos-privacidad.rtf",
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -31,6 +37,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "wix": {
+        "language": {
+          "es-ES": {
+            "localePath": "installer/es-ES.wxl"
+          }
+        },
+        "upgradeCode": "cd40ff0e-2313-59cf-8a27-e0d53599fdf2",
+        "bannerPath": "installer/banner.bmp",
+        "dialogImagePath": "installer/dialog.bmp"
+      }
+    }
   }
 }

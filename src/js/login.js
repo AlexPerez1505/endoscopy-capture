@@ -1,6 +1,14 @@
-import { apiBaseUrl, laravelFetch } from './laravel.js';
+import {
+  apiBaseUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
 import { getAuthToken, setAuthToken } from './auth.js';
-import { ACCOUNT_NAME_STORAGE_KEY, API_URL_STORAGE_KEY } from './storage-keys.js';
+import {
+  ACCOUNT_NAME_STORAGE_KEY,
+  ACCOUNT_PHOTO_URL_STORAGE_KEY,
+  API_URL_STORAGE_KEY,
+} from './storage-keys.js';
 
 // TODO: ELIMINAR — apiUrlInput es temporal para pruebas locales de Laravel.
 const apiUrlInput = document.getElementById('api-url');
@@ -48,6 +56,22 @@ async function loginToLaravel(email, password) {
   return {
     token: payload.token,
     accountName: payload.user?.account_name || payload.user?.name || 'Doctor',
+    accountPhotoUrl: firstLaravelAssetUrl(
+      payload.user || {},
+      [
+        'photo_url',
+        'avatar_url',
+        'profile_photo_url',
+        'foto_url',
+        'image_url',
+        'photo',
+        'avatar',
+        'profile_photo',
+        'profile_photo_path',
+        'foto',
+        'imagen',
+      ]
+    ),
   };
 }
 
@@ -124,9 +148,10 @@ form?.addEventListener('submit', async (event) => {
   btnLogin?.setAttribute('data-loading', 'true');
 
   try {
-    const { token, accountName } = await loginToLaravel(email, password);
+    const { token, accountName, accountPhotoUrl } = await loginToLaravel(email, password);
     setAuthToken(token);
     if (accountName) sessionStorage.setItem(ACCOUNT_NAME_STORAGE_KEY, accountName);
+    if (accountPhotoUrl) sessionStorage.setItem(ACCOUNT_PHOTO_URL_STORAGE_KEY, accountPhotoUrl);
     redirectAfterLogin();
   } catch (error) {
     console.error(error);

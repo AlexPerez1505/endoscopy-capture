@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -8,6 +9,25 @@ use base64::{
 };
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
+
+fn apply_window_icon(app: &tauri::App) -> tauri::Result<()> {
+    if let Some(window) =
+        app.get_webview_window("main")
+    {
+        let icon = tauri::image::Image::new(
+            include_bytes!(
+                "../icons/taskbar-icon.rgba"
+            ),
+            512,
+            512,
+        );
+
+        window.set_icon(icon)?;
+    }
+
+    Ok(())
+}
 
 /*
  * Host de producción permitido para el proxy HTTP hacia Laravel.
@@ -65,6 +85,68 @@ fn validate_request_url(raw_url: &str) -> Result<reqwest::Url, String> {
     Ok(parsed)
 }
 
+fn is_blocked_asset_host(host: &str) -> bool {
+    let normalized = host
+        .trim()
+        .trim_matches(['[', ']'])
+        .to_ascii_lowercase();
+
+    if normalized == "localhost" || normalized.ends_with(".localhost") {
+        return true;
+    }
+
+    if let Ok(ip) = normalized.parse::<IpAddr>() {
+        return match ip {
+            IpAddr::V4(value) => {
+                value.is_private()
+                    || value.is_loopback()
+                    || value.is_link_local()
+                    || value.is_broadcast()
+                    || value.is_documentation()
+                    || value.is_unspecified()
+            }
+            IpAddr::V6(value) => {
+                value.is_loopback()
+                    || value.is_unspecified()
+                    || value.is_unique_local()
+                    || value.is_unicast_link_local()
+            }
+        };
+    }
+
+    false
+}
+
+fn validate_asset_url(raw_url: &str) -> Result<reqwest::Url, String> {
+    let parsed = reqwest::Url::parse(raw_url)
+        .map_err(|error| format!("URL de archivo invalida: {error}"))?;
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "La URL del archivo no tiene un host valido.".to_string())?
+        .to_ascii_lowercase();
+
+    if is_allowed_host(&host) {
+        if host == PRODUCTION_HOST && parsed.scheme() != "https" {
+            return Err(
+                "Solo se permiten archivos HTTPS del servidor de produccion.".to_string(),
+            );
+        }
+
+        return Ok(parsed);
+    }
+
+    if parsed.scheme() != "https" {
+        return Err("Solo se permiten archivos externos por HTTPS.".to_string());
+    }
+
+    if is_blocked_asset_host(&host) {
+        return Err(format!("Host de archivo no permitido: {host}"));
+    }
+
+    Ok(parsed)
+}
+
 /*
  * Cliente HTTP único y reutilizado (no se crea uno nuevo por cada petición),
  * con timeout explícito: sin esto, si Laravel se cuelga o hay un problema de
@@ -97,6 +179,21 @@ struct LaravelResponse {
     ok: bool,
     headers: HashMap<String, String>,
     body: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LaravelAssetRequest {
+    url: String,
+    headers: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Serialize)]
+struct LaravelAssetResponse {
+    status: u16,
+    ok: bool,
+    headers: HashMap<String, String>,
+    content_type: String,
+    body_base64: String,
 }
 
 #[tauri::command]
@@ -251,18 +348,105 @@ async fn laravel_request(
     })
 }
 
+#[tauri::command]
+async fn laravel_asset(
+    request: LaravelAssetRequest,
+) -> Result<LaravelAssetResponse, String> {
+    let validated_url = validate_asset_url(&request.url)?;
+    let client = http_client();
+
+    let mut builder = client.get(validated_url);
+
+    if let Some(headers) = request.headers {
+        for (key, value) in headers {
+            let normalized =
+                key.to_ascii_lowercase();
+
+            if matches!(
+                normalized.as_str(),
+                "host"
+                    | "connection"
+                    | "content-length"
+            ) {
+                continue;
+            }
+
+            builder = builder.header(
+                key,
+                value,
+            );
+        }
+    }
+
+    let response = builder
+        .send()
+        .await
+        .map_err(|error| {
+            if error.is_timeout() {
+                "Laravel no respondiÃ³ a tiempo (timeout).".to_string()
+            } else {
+                format!(
+                    "No se pudo alcanzar Laravel: {error}"
+                )
+            }
+        })?;
+
+    let status = response.status();
+
+    let mut response_headers =
+        HashMap::new();
+
+    for (key, value) in response.headers() {
+        if let Ok(value) = value.to_str() {
+            response_headers.insert(
+                key.as_str()
+                    .to_ascii_lowercase(),
+                value.to_string(),
+            );
+        }
+    }
+
+    let content_type = response_headers
+        .get("content-type")
+        .cloned()
+        .unwrap_or_else(|| "application/octet-stream".to_string());
+
+    let body = response
+        .bytes()
+        .await
+        .map_err(|error| {
+            format!(
+                "Laravel respondiÃ³, pero no se pudo leer el archivo: {error}"
+            )
+        })?;
+
+    Ok(LaravelAssetResponse {
+        status: status.as_u16(),
+        ok: status.is_success(),
+        headers: response_headers,
+        content_type,
+        body_base64: BASE64_STANDARD.encode(body),
+    })
+}
+
 #[cfg_attr(
     mobile,
     tauri::mobile_entry_point
 )]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            apply_window_icon(app)?;
+
+            Ok(())
+        })
         .plugin(
             tauri_plugin_opener::init()
         )
         .invoke_handler(
             tauri::generate_handler![
-                laravel_request
+                laravel_request,
+                laravel_asset
             ]
         )
         .run(

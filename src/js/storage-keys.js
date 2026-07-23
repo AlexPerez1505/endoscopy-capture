@@ -13,6 +13,7 @@
 export const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 export const ACCOUNT_NAME_STORAGE_KEY = 'enclaii-account-name';
 export const ACCOUNT_ROLE_STORAGE_KEY = 'enclaii-account-role';
+export const ACCOUNT_PHOTO_URL_STORAGE_KEY = 'enclaii-account-photo-url';
 
 /* ---- Configuración / conexión con Laravel ---- */
 export const API_URL_STORAGE_KEY = 'enclaii-api-url';

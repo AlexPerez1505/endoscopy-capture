@@ -1,10 +1,16 @@
-import { apiBaseUrl, laravelFetch } from './laravel.js';
+import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
 import { getAuthToken } from './auth.js';
 import { escapeHtml } from './html.js';
 import {
   READING_MODE_STORAGE_KEY,
   ANIMATIONS_STORAGE_KEY,
   COMPACT_MODE_STORAGE_KEY,
+  ACCOUNT_PHOTO_URL_STORAGE_KEY,
 } from './storage-keys.js';
 
 /* =========================================================
@@ -535,6 +541,113 @@ function applyStateToView(root) {
    USUARIO Y PERFIL
 ========================================================= */
 
+function profilePhotoUrl(user = {}, profile = {}) {
+  return firstLaravelAssetUrl(
+    {
+      user,
+      profile,
+    },
+    [
+      'profile.photo_url',
+      'profile.avatar_url',
+      'profile.profile_photo_url',
+      'profile.foto_url',
+      'profile.image_url',
+      'profile.photo',
+      'profile.avatar',
+      'profile.profile_photo',
+      'profile.profile_photo_path',
+      'profile.foto',
+      'profile.imagen',
+      'user.photo_url',
+      'user.avatar_url',
+      'user.profile_photo_url',
+      'user.foto_url',
+      'user.image_url',
+      'user.photo',
+      'user.avatar',
+      'user.profile_photo',
+      'user.profile_photo_path',
+      'user.foto',
+      'user.imagen',
+    ]
+  );
+}
+
+async function renderProfilePhoto(
+  avatar,
+  empty,
+  photoUrl,
+  name
+) {
+  if (!avatar || !photoUrl) {
+    if (avatar) {
+      avatar.removeAttribute('src');
+      avatar.style.display = 'none';
+    }
+
+    if (empty) {
+      empty.style.display = 'grid';
+
+      if (!empty.querySelector('svg')) {
+        empty.textContent = initials(name);
+      }
+    }
+
+    return;
+  }
+
+  const requestId =
+    `${Date.now()}-${Math.random()}`;
+
+  avatar.dataset.photoRequestId =
+    requestId;
+
+  try {
+    const localUrl =
+      await authenticatedLaravelAssetUrl(
+        photoUrl,
+        {
+          accept: 'image/*,*/*',
+        }
+      );
+
+    if (
+      avatar.dataset.photoRequestId !==
+      requestId
+    ) {
+      return;
+    }
+
+    avatar.src = localUrl;
+    avatar.style.display = 'block';
+
+    if (empty) {
+      empty.style.display = 'none';
+    }
+  } catch (error) {
+    console.warn(
+      'No se pudo cargar la foto de perfil:',
+      error
+    );
+
+    if (
+      avatar.dataset.photoRequestId !==
+      requestId
+    ) {
+      return;
+    }
+
+    avatar.removeAttribute('src');
+    avatar.style.display = 'none';
+
+    if (empty) {
+      empty.style.display = 'grid';
+      empty.textContent = initials(name);
+    }
+  }
+}
+
 function renderUser() {
   const user = state.user || {};
   const profile = state.profile || {};
@@ -586,34 +699,25 @@ function renderUser() {
     document.getElementById('pfEmpty');
 
   const photoUrl =
-    profile.photo_url ||
-    user.photo_url ||
-    '';
+    profilePhotoUrl(user, profile);
 
-  if (avatar && photoUrl) {
-    avatar.src = `${photoUrl}${
-      photoUrl.includes('?') ? '&' : '?'
-    }v=${Date.now()}`;
-
-    avatar.style.display = 'block';
-
-    if (empty) {
-      empty.style.display = 'none';
-    }
+  if (photoUrl) {
+    sessionStorage.setItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY,
+      photoUrl
+    );
   } else {
-    if (avatar) {
-      avatar.removeAttribute('src');
-      avatar.style.display = 'none';
-    }
-
-    if (empty) {
-      empty.style.display = 'grid';
-
-      if (!empty.querySelector('svg')) {
-        empty.textContent = initials(name);
-      }
-    }
+    sessionStorage.removeItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY
+    );
   }
+
+  renderProfilePhoto(
+    avatar,
+    empty,
+    photoUrl,
+    name
+  );
 }
 
 function renderProfileFiles() {
@@ -1703,10 +1807,35 @@ async function uploadPhoto(file) {
     });
 
   state.profile.photo_url =
-    response.url ||
-    response.photo_url;
+    firstLaravelAssetUrl(
+      response,
+      [
+        'url',
+        'photo_url',
+        'avatar_url',
+        'profile_photo_url',
+        'foto_url',
+        'image_url',
+        'data.url',
+        'data.photo_url',
+        'data.avatar_url',
+        'data.profile_photo_url',
+        'data.foto_url',
+        'data.image_url',
+        'profile.photo_url',
+        'user.photo_url',
+      ]
+    );
 
   renderUser();
+  document.dispatchEvent(
+    new CustomEvent('enclaiiConfigurationUpdated', {
+      detail: {
+        state,
+        source: 'profile-photo',
+      },
+    })
+  );
 
   toast(
     response.message ||
@@ -1721,8 +1850,19 @@ async function deletePhoto() {
     });
 
   state.profile.photo_url = null;
+  sessionStorage.removeItem(
+    ACCOUNT_PHOTO_URL_STORAGE_KEY
+  );
 
   renderUser();
+  document.dispatchEvent(
+    new CustomEvent('enclaiiConfigurationUpdated', {
+      detail: {
+        state,
+        source: 'profile-photo',
+      },
+    })
+  );
 
   toast(
     response.message ||

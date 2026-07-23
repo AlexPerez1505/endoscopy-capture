@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    endoscopy_capture_lib::run()
+    enclaii_desktop_lib::run()
 }

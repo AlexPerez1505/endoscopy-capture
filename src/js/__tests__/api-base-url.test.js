@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { apiBaseUrl, isValidApiBaseUrl } from '../laravel.js';
+import { apiBaseUrl, isValidApiBaseUrl, laravelAssetUrl } from '../laravel.js';
 import { API_URL_STORAGE_KEY as STORAGE_KEY } from '../storage-keys.js';
 
 // vitest.config.js arranca jsdom en http://localhost/, así que
@@ -64,5 +64,37 @@ describe('apiBaseUrl', () => {
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
     expect(isValidApiBaseUrl(result)).toBe(true);
+  });
+});
+
+describe('laravelAssetUrl', () => {
+  it('mantiene URLs absolutas y data/blob intactas', () => {
+    expect(laravelAssetUrl(`${REMOTE_URL}/storage/pacientes/a.jpg`)).toBe(
+      `${REMOTE_URL}/storage/pacientes/a.jpg`
+    );
+
+    expect(laravelAssetUrl('data:image/png;base64,abc')).toBe(
+      'data:image/png;base64,abc'
+    );
+  });
+
+  it('resuelve rutas relativas contra el servidor Laravel', () => {
+    localStorage.setItem(STORAGE_KEY, REMOTE_URL);
+
+    expect(laravelAssetUrl('/storage/pacientes/a.jpg')).toBe(
+      `${REMOTE_URL}/storage/pacientes/a.jpg`
+    );
+
+    expect(laravelAssetUrl('public/pacientes/a.jpg')).toBe(
+      `${REMOTE_URL}/storage/pacientes/a.jpg`
+    );
+
+    expect(laravelAssetUrl('pacientes/a.jpg')).toBe(
+      `${REMOTE_URL}/storage/pacientes/a.jpg`
+    );
+  });
+
+  it('rechaza protocolos que no deben usarse como assets', () => {
+    expect(laravelAssetUrl('javascript:alert(1)')).toBe('');
   });
 });

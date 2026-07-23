@@ -153,6 +153,328 @@ export function apiBaseUrl() {
   );
 }
 
+const PASSTHROUGH_ASSET_PROTOCOLS =
+  new Set([
+    'data:',
+    'blob:',
+  ]);
+
+const PUBLIC_STORAGE_PATH_PREFIXES = [
+  'storage/app/public/',
+  'app/public/',
+  'public/',
+];
+
+const DIRECT_PUBLIC_PATH_PREFIXES = [
+  'storage/',
+  'uploads/',
+  'images/',
+  'img/',
+  'media/',
+];
+
+const NESTED_ASSET_VALUE_KEYS = [
+  'url',
+  'src',
+  'href',
+  'path',
+  'ruta',
+  'file',
+  'archivo',
+  'public_url',
+  'temporary_url',
+  'signed_url',
+  'full_url',
+  'original_url',
+  'preview_url',
+  'thumb_url',
+  'thumbnail_url',
+];
+
+function readFieldPath(source, field) {
+  if (!source || !field) {
+    return undefined;
+  }
+
+  return String(field)
+    .split('.')
+    .reduce(
+      (value, key) =>
+        value &&
+        typeof value === 'object'
+          ? value[key]
+          : undefined,
+      source
+    );
+}
+
+function assetCandidates(value, depth = 0) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
+    return [];
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number'
+  ) {
+    return [String(value)];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) =>
+      assetCandidates(item, depth + 1)
+    );
+  }
+
+  if (
+    typeof value !== 'object' ||
+    depth > 2
+  ) {
+    return [];
+  }
+
+  return NESTED_ASSET_VALUE_KEYS.flatMap((key) =>
+    assetCandidates(value[key], depth + 1)
+  );
+}
+
+export function firstLaravelAssetUrl(
+  source,
+  fields = []
+) {
+  const values =
+    fields.length
+      ? fields.flatMap((field) =>
+          assetCandidates(
+            readFieldPath(source, field)
+          )
+        )
+      : assetCandidates(source);
+
+  for (const value of values) {
+    const url =
+      laravelAssetUrl(value);
+
+    if (url) {
+      return url;
+    }
+  }
+
+  return '';
+}
+
+function normalizeLaravelAssetPath(
+  value
+) {
+  let path =
+    String(value || '')
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/^\/+/, '');
+
+  for (const prefix of PUBLIC_STORAGE_PATH_PREFIXES) {
+    if (path.startsWith(prefix)) {
+      path =
+        `storage/${path.slice(prefix.length)}`;
+
+      break;
+    }
+  }
+
+  if (
+    !DIRECT_PUBLIC_PATH_PREFIXES.some(
+      (prefix) => path.startsWith(prefix)
+    ) &&
+    /\.(avif|bmp|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(path)
+  ) {
+    path = `storage/${path}`;
+  }
+
+  return path;
+}
+
+export function laravelAssetUrl(
+  value
+) {
+  const raw =
+    String(value || '').trim();
+
+  if (!raw) {
+    return '';
+  }
+
+  try {
+    const parsed =
+      new URL(raw);
+
+    if (
+      parsed.protocol === 'http:' ||
+      parsed.protocol === 'https:' ||
+      PASSTHROUGH_ASSET_PROTOCOLS.has(parsed.protocol)
+    ) {
+      return raw;
+    }
+
+    return '';
+  } catch {
+    // Relative path; resolve it against the configured Laravel origin below.
+  }
+
+  try {
+    const base =
+      new URL(`${apiBaseUrl()}/`);
+
+    if (raw.startsWith('//')) {
+      return `${base.protocol}${raw}`;
+    }
+
+    const path =
+      normalizeLaravelAssetPath(raw);
+
+    if (!path) {
+      return '';
+    }
+
+    return new URL(
+      path.startsWith('/')
+        ? path
+        : `/${path}`,
+      base
+    ).toString();
+  } catch {
+    return '';
+  }
+}
+
+function base64ToBlob(
+  value,
+  contentType = 'application/octet-stream'
+) {
+  const binary =
+    atob(String(value || ''));
+
+  const bytes =
+    new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] =
+      binary.charCodeAt(index);
+  }
+
+  return new Blob(
+    [bytes],
+    {
+      type:
+        contentType ||
+        'application/octet-stream',
+    }
+  );
+}
+
+function shouldSendAuthorizationToAsset(
+  url
+) {
+  try {
+    const assetOrigin =
+      new URL(url).origin;
+
+    const apiOrigin =
+      new URL(apiBaseUrl()).origin;
+
+    return assetOrigin === apiOrigin;
+  } catch {
+    return true;
+  }
+}
+
+export async function authenticatedLaravelAssetUrl(
+  value,
+  options = {}
+) {
+  const url =
+    laravelAssetUrl(value);
+
+  if (!url) {
+    return '';
+  }
+
+  if (
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+
+  const authorization =
+    shouldSendAuthorizationToAsset(url)
+      ? authHeader()
+      : '';
+
+  const headers =
+    normalizeHeaders({
+      Accept:
+        options.accept ||
+        'image/*,video/*,*/*',
+      ...(authorization
+        ? { Authorization: authorization }
+        : {}),
+      ...(options.headers || {}),
+    });
+
+  const invoke =
+    window.__TAURI__?.core?.invoke;
+
+  if (!invoke) {
+    const response =
+      await fetch(url, {
+        headers,
+        credentials: 'include',
+      });
+
+    if (!response.ok) {
+      throw new Error(
+        `Laravel respondiÃ³ HTTP ${response.status} al cargar el archivo.`
+      );
+    }
+
+    return URL.createObjectURL(
+      await response.blob()
+    );
+  }
+
+  const result =
+    await invoke(
+      'laravel_asset',
+      {
+        request: {
+          url,
+          headers,
+        },
+      }
+    );
+
+  if (
+    !result?.ok ||
+    Number(result.status || 0) < 200 ||
+    Number(result.status || 0) >= 300
+  ) {
+    throw new Error(
+      `Laravel respondiÃ³ HTTP ${result?.status || 0} al cargar el archivo.`
+    );
+  }
+
+  return URL.createObjectURL(
+    base64ToBlob(
+      result.body_base64,
+      result.content_type
+    )
+  );
+}
+
 /* =========================================================
    NORMALIZAR HEADERS
 ========================================================= */

@@ -18,9 +18,16 @@ import { initConfiguracion } from './configuracion.js';
 import { clearAuthToken, getAuthToken } from './auth.js';
 import { escapeHtml } from './html.js';
 import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
+import {
   THEME_STORAGE_KEY,
   ACCOUNT_NAME_STORAGE_KEY,
   ACCOUNT_ROLE_STORAGE_KEY,
+  ACCOUNT_PHOTO_URL_STORAGE_KEY,
   DEVICE_TOKEN_STORAGE_KEY,
   DEVICE_SESSION_STORAGE_KEY,
   EDIT_PATIENT_ID_STORAGE_KEY,
@@ -1035,6 +1042,133 @@ if (profileMenu) {
    RESTAURAR PERFIL
 ========================================================= */
 
+const ACCOUNT_PHOTO_FIELDS = [
+  'profile.photo_url',
+  'profile.avatar_url',
+  'profile.profile_photo_url',
+  'profile.foto_url',
+  'profile.image_url',
+  'profile.photo',
+  'profile.avatar',
+  'profile.profile_photo',
+  'profile.profile_photo_path',
+  'profile.foto',
+  'profile.imagen',
+  'user.photo_url',
+  'user.avatar_url',
+  'user.profile_photo_url',
+  'user.foto_url',
+  'user.image_url',
+  'user.photo',
+  'user.avatar',
+  'user.profile_photo',
+  'user.profile_photo_path',
+  'user.foto',
+  'user.imagen',
+];
+
+function initialsForAccount(name) {
+  const parts =
+    String(name || 'Doctor')
+      .split(/\s+/)
+      .filter(Boolean);
+
+  if (parts.length > 1) {
+    return `${parts[0][0]}${parts[1][0]}`
+      .toUpperCase();
+  }
+
+  return String(name || 'DR')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function accountPhotoUrlFromState(state = {}) {
+  return firstLaravelAssetUrl(
+    state,
+    ACCOUNT_PHOTO_FIELDS
+  );
+}
+
+function setHeaderAvatarInitials(avatar, accountName) {
+  if (!avatar) {
+    return;
+  }
+
+  avatar.textContent =
+    initialsForAccount(accountName);
+}
+
+async function setHeaderAvatarPhoto(
+  avatar,
+  photoUrl,
+  accountName
+) {
+  if (!avatar || !photoUrl) {
+    setHeaderAvatarInitials(
+      avatar,
+      accountName
+    );
+    return;
+  }
+
+  const requestId =
+    `${Date.now()}-${Math.random()}`;
+
+  avatar.dataset.photoRequestId =
+    requestId;
+
+  setHeaderAvatarInitials(
+    avatar,
+    accountName
+  );
+
+  try {
+    const localUrl =
+      await authenticatedLaravelAssetUrl(
+        photoUrl,
+        {
+          accept: 'image/*,*/*',
+        }
+      );
+
+    if (
+      avatar.dataset.photoRequestId !==
+      requestId
+    ) {
+      return;
+    }
+
+    if (!localUrl) {
+      throw new Error(
+        'Laravel no devolvio una imagen de perfil usable.'
+      );
+    }
+
+    avatar.innerHTML = `
+      <img
+        src="${escapeHtml(localUrl)}"
+        alt="${escapeHtml(accountName)}"
+      >
+    `;
+  } catch (error) {
+    console.warn(
+      'No se pudo cargar la foto de la cuenta:',
+      error
+    );
+
+    if (
+      avatar.dataset.photoRequestId ===
+      requestId
+    ) {
+      setHeaderAvatarInitials(
+        avatar,
+        accountName
+      );
+    }
+  }
+}
+
 function restoreHeaderProfile() {
   if (!profileMenu) {
     return;
@@ -1063,6 +1197,15 @@ function restoreHeaderProfile() {
       'strong'
     );
 
+  const accountPhotoUrl =
+    sessionStorage.getItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY
+    ) ||
+    localStorage.getItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY
+    ) ||
+    '';
+
   const roleElement =
     profileMenu.querySelector(
       '.profile > div > span'
@@ -1087,27 +1230,125 @@ function restoreHeaderProfile() {
   }
 
   if (avatar) {
-    const parts =
+    setHeaderAvatarPhoto(
+      avatar,
+      accountPhotoUrl,
       accountName
-        .split(/\s+/)
-        .filter(Boolean);
-
-    if (parts.length > 1) {
-      avatar.textContent =
-        `${parts[0][0]}${parts[1][0]}`
-          .toUpperCase();
-    } else {
-      avatar.textContent =
-        accountName
-          .slice(0, 2)
-          .toUpperCase();
-    }
+    );
   }
 }
 
 /* =========================================================
    CERRAR SESIÓN
 ========================================================= */
+
+function storeHeaderProfileFromState(state = {}) {
+  const user =
+    state.user || {};
+
+  const profile =
+    state.profile || {};
+
+  const accountName =
+    user.account_name ||
+    user.name ||
+    profile.name ||
+    '';
+
+  const accountRole =
+    user.role ||
+    user.clinica_rol ||
+    profile.role ||
+    profile.clinica_rol ||
+    '';
+
+  const accountPhotoUrl =
+    accountPhotoUrlFromState({
+      user,
+      profile,
+    });
+
+  if (accountName) {
+    sessionStorage.setItem(
+      ACCOUNT_NAME_STORAGE_KEY,
+      accountName
+    );
+  }
+
+  if (accountRole) {
+    sessionStorage.setItem(
+      ACCOUNT_ROLE_STORAGE_KEY,
+      accountRole
+    );
+  }
+
+  if (accountPhotoUrl) {
+    sessionStorage.setItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY,
+      accountPhotoUrl
+    );
+  } else {
+    sessionStorage.removeItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY
+    );
+  }
+}
+
+async function refreshHeaderProfileFromLaravel() {
+  const token =
+    getAuthToken();
+
+  if (!token) {
+    return;
+  }
+
+  try {
+    const response =
+      await laravelFetch(
+        `${apiBaseUrl()}/api/tauri/configuracion`,
+        {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: 'include',
+        }
+      );
+
+    const contentType =
+      response.headers.get('content-type') || '';
+
+    if (
+      !response.ok ||
+      !contentType.includes('application/json')
+    ) {
+      return;
+    }
+
+    const payload =
+      await response.json();
+
+    storeHeaderProfileFromState(
+      payload?.data || payload || {}
+    );
+    restoreHeaderProfile();
+  } catch (error) {
+    console.warn(
+      'No se pudo actualizar el perfil del encabezado:',
+      error
+    );
+  }
+}
+
+document.addEventListener(
+  'enclaiiConfigurationUpdated',
+  (event) => {
+    storeHeaderProfileFromState(
+      event.detail?.state || {}
+    );
+    restoreHeaderProfile();
+  }
+);
 
 if (logoutBtn) {
   logoutBtn.addEventListener(
@@ -1138,6 +1379,14 @@ if (logoutBtn) {
 
       localStorage.removeItem(
         ACCOUNT_ROLE_STORAGE_KEY
+      );
+
+      sessionStorage.removeItem(
+        ACCOUNT_PHOTO_URL_STORAGE_KEY
+      );
+
+      localStorage.removeItem(
+        ACCOUNT_PHOTO_URL_STORAGE_KEY
       );
 
       sessionStorage.removeItem(
@@ -1181,6 +1430,7 @@ window.enclaiiReloadCurrentRoute =
 ========================================================= */
 
 restoreHeaderProfile();
+refreshHeaderProfileFromLaravel();
 
 loadPage(
   currentRoute()
