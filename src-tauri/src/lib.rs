@@ -6,6 +6,25 @@ use base64::{
 };
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
+
+fn apply_window_icon(app: &tauri::App) -> tauri::Result<()> {
+    if let Some(window) =
+        app.get_webview_window("main")
+    {
+        let icon = tauri::image::Image::new(
+            include_bytes!(
+                "../icons/taskbar-icon.rgba"
+            ),
+            512,
+            512,
+        );
+
+        window.set_icon(icon)?;
+    }
+
+    Ok(())
+}
 
 #[derive(Debug, Deserialize)]
 struct LaravelRequest {
@@ -175,6 +194,11 @@ async fn laravel_request(
 )]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            apply_window_icon(app)?;
+
+            Ok(())
+        })
         .plugin(
             tauri_plugin_opener::init()
         )

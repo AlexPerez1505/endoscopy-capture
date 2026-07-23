@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ENCLAII Desktop",
+  "productName": "ENCLAII",
   "version": "0.1.0",
   "identifier": "com.enclaii.desktop",
   "build": {
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "ENCLAII Desktop",
+        "title": "ENCLAII",
         "url": "app.html",
         "width": 1400,
         "height": 900,
@@ -29,6 +29,7 @@
     "shortDescription": "Captura local de endoscopia para ENCLAII.",
     "longDescription": "Aplicacion de escritorio para conectar camaras de endoscopia, capturar imagenes, grabar videos y sincronizar estudios con ENCLAII.",
     "copyright": "Copyright (c) 2026 ENCLAII",
+    "licenseFile": "installer/terminos-privacidad.rtf",
     "targets": "all",
     "icon": [
       "icons/32x32.png",
