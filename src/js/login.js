@@ -1,8 +1,10 @@
 import { apiBaseUrl, laravelFetch } from './laravel.js';
 import { getAuthToken, setAuthToken } from './auth.js';
-import { ACCOUNT_NAME_STORAGE_KEY } from './storage-keys.js';
+import { ACCOUNT_NAME_STORAGE_KEY, API_URL_STORAGE_KEY } from './storage-keys.js';
 
-const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
+// TODO: ELIMINAR — apiUrlInput es temporal para pruebas locales de Laravel.
+const apiUrlInput = document.getElementById('api-url');
+// /TODO: ELIMINAR
 
 const form = document.getElementById('loginForm');
 const emailInput = document.getElementById('email');
@@ -22,8 +24,12 @@ function hideError() {
   alertBox?.classList.add('is-hidden');
 }
 
+function getLoginEndpoint() {
+  return `${apiBaseUrl()}/api/tauri/login`;
+}
+
 async function loginToLaravel(email, password) {
-  const response = await laravelFetch(LOGIN_ENDPOINT, {
+  const response = await laravelFetch(getLoginEndpoint(), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -50,6 +56,36 @@ function redirectAfterLogin() {
   const redirectTo = params.get('redirect');
   window.location.href = redirectTo || './app.html#dashboard';
 }
+
+// TODO: ELIMINAR — Inicio de lógica temporal para pruebas locales de Laravel.
+function loadApiUrlInput() {
+  if (!apiUrlInput) return;
+
+  const saved =
+    localStorage.getItem(API_URL_STORAGE_KEY) ||
+    apiBaseUrl();
+
+  apiUrlInput.value = saved.replace(/\/$/, '');
+}
+
+function saveApiUrlFromInput() {
+  if (!apiUrlInput) return;
+
+  const value = apiUrlInput.value.trim().replace(/\/+$/, '');
+
+  if (value) {
+    localStorage.setItem(API_URL_STORAGE_KEY, value);
+  } else {
+    localStorage.removeItem(API_URL_STORAGE_KEY);
+  }
+}
+
+if (apiUrlInput) {
+  loadApiUrlInput();
+  apiUrlInput.addEventListener('change', saveApiUrlFromInput);
+  apiUrlInput.addEventListener('blur', saveApiUrlFromInput);
+}
+// /TODO: ELIMINAR — Fin de lógica temporal para pruebas locales de Laravel.
 
 // Si ya hay una sesion activa, no mostrar el login de nuevo.
 if (getAuthToken()) {

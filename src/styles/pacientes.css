@@ -446,13 +446,58 @@
     }
 
     .select-with-add {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .select-with-add input {
+    .select-with-add input,
+    .select-with-add select {
       flex: 1;
+    }
+
+    .patient-suggestions {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 44px;
+      max-height: 220px;
+      overflow-y: auto;
+      margin: 0;
+      padding: 6px 0;
+      list-style: none;
+      background: var(--panel-2);
+      border: 1px solid var(--stroke-strong);
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      z-index: 100;
+      display: none;
+    }
+
+    .patient-suggestions.open {
+      display: block;
+    }
+
+    .patient-suggestion-item {
+      padding: 8px 12px;
+      font-size: 13.5px;
+      color: var(--txt);
+      cursor: pointer;
+    }
+
+    .patient-suggestion-item:hover,
+    .patient-suggestion-item.active {
+      background: rgba(22, 139, 217, 0.18);
+    }
+
+    html[data-theme="light"] .patient-suggestions {
+      background: #F0F5FF;
+      border-color: rgba(20, 50, 120, 0.15);
+    }
+
+    html[data-theme="light"] .patient-suggestion-item {
+      color: #0E1530;
     }
 
     .btn-add-procedimiento {

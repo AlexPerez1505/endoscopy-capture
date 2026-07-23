@@ -75,6 +75,26 @@
           </div>
         </div>
 
+        <!-- TODO: ELIMINAR — Campo temporal para pruebas locales de Laravel.
+             No dejar en producción. Usar la configuración de la app. -->
+        <div class="ec-field ec-stagger">
+          <label class="ec-label" for="api-url">Endpoint Laravel</label>
+          <div class="ec-input-wrap">
+            <input
+              id="api-url"
+              name="api_url"
+              type="url"
+              placeholder="https://sistema.enclaii.com"
+              class="ec-input"
+              style="font-size:.85rem"
+            >
+          </div>
+          <small style="display:block;margin-top:.4rem;color:var(--muted);font-size:.75rem">
+            Ejemplo local: <code>http://localhost:8000</code>. Deja vacío para usar la URL por defecto.
+          </small>
+        </div>
+        <!-- /TODO: ELIMINAR — fin del campo temporal Laravel -->
+
         <div class="ec-stagger">
           <button type="submit" class="ec-btn" id="btnLogin" data-loading="false">
             <span class="ec-btn-content">

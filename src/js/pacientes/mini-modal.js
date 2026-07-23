@@ -95,6 +95,28 @@ function confirmMiniModal() {
     );
 
   if (target) {
+    if (
+      target.tagName ===
+        'SELECT' &&
+      !Array.from(
+        target.options
+      ).some(
+        (option) =>
+          option.value === value
+      )
+    ) {
+      const option =
+        document.createElement(
+          'option'
+        );
+
+      option.value = value;
+      option.textContent = value;
+      target.appendChild(
+        option
+      );
+    }
+
     target.value = value;
 
     target.dispatchEvent(

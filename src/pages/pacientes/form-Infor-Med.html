@@ -10,13 +10,14 @@
           </label>
 
           <div class="select-with-add">
-            <input
-              type="text"
+            <select
               id="medicoSelectMed"
               name="medico"
-              placeholder="Ej. Dr. Víctor"
-              maxlength="255"
             >
+              <option value="" disabled selected>
+                Selecciona un médico
+              </option>
+            </select>
 
             <button
               type="button"
@@ -46,13 +47,14 @@
           </label>
 
           <div class="select-with-add">
-            <input
-              type="text"
+            <select
               id="procedimientoSelect"
               name="procedimiento"
-              placeholder="Ej. Colonoscopia"
-              maxlength="255"
             >
+              <option value="" disabled selected>
+                Selecciona un procedimiento
+              </option>
+            </select>
 
             <button
               type="button"
@@ -82,13 +84,14 @@
           </label>
 
           <div class="select-with-add">
-            <input
-              type="text"
+            <select
               id="anestesiologoSelect"
               name="anestesiologo"
-              placeholder="Ej. Dr. Ricardo"
-              maxlength="255"
             >
+              <option value="" disabled selected>
+                Selecciona un anestesiólogo
+              </option>
+            </select>
 
             <button
               type="button"
@@ -112,78 +115,13 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="referidoSelectMed">
-            Referido por
-          </label>
 
-          <div class="select-with-add">
-            <input
-              type="text"
-              id="referidoSelectMed"
-              name="referido_por"
-              placeholder="Ej. Externo"
-              maxlength="255"
-            >
-
-            <button
-              type="button"
-              class="btn-add-procedimiento"
-              data-mini-field="referidoSelectMed"
-              data-mini-title="Agregar referido"
-              data-mini-description="Escribe el nombre de la referencia"
-              aria-label="Agregar referido"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-              >
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="equipoSelect">
-            Equipo utilizado
-          </label>
-
-          <div class="select-with-add">
-            <input
-              type="text"
-              id="equipoSelect"
-              name="equipo_utilizado"
-              placeholder="Ej. Endoscopio Olympus"
-              maxlength="255"
-            >
-
-            <button
-              type="button"
-              class="btn-add-procedimiento"
-              data-mini-field="equipoSelect"
-              data-mini-title="Agregar equipo"
-              data-mini-description="Escribe el nombre del equipo"
-              aria-label="Agregar equipo"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-              >
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
+        
       </div>
+
+      <datalist id="datalistMedicos"></datalist>
+      <datalist id="datalistProcedimientos"></datalist>
+      <datalist id="datalistAnestesiologos"></datalist>
 
       <div class="form-group patient-diagnosis">
         <label for="patientDiagnosis">

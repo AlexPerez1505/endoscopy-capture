@@ -23,6 +23,7 @@ import {
 } from './archivos.js';
 import { loadCreate, loadEdit } from './paciente-data.js';
 import { submitForm, deleteExistingDocument } from './submit.js';
+import { loadSuggestions } from './suggestions.js';
 
 function bindEvents() {
   state.patientFormAbortController
@@ -611,6 +612,8 @@ export async function initPacienteForm() {
         );
 
         medicalPlaceholder.remove();
+
+        loadSuggestions();
       } else {
         console.error(
           'No se pudo cargar form-Infor-Med.html.'
