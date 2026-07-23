@@ -27,6 +27,10 @@ function fillPatient(
   setField(
     'fechaNacimiento',
     patient.fecha_nacimiento
+      ? String(
+          patient.fecha_nacimiento
+        ).slice(0, 10)
+      : ''
   );
 
   setField(

@@ -3,8 +3,13 @@ function calculateAge(value) {
     return '';
   }
 
+  const str =
+    String(value);
+
   const birth = new Date(
-    `${value}T00:00:00`
+    str.length === 10
+      ? `${str}T00:00:00`
+      : str
   );
 
   const today = new Date();

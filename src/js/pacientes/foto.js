@@ -143,10 +143,6 @@ async function selectPhotoFile(file) {
   state.currentPhotoDataUrl =
     await fileToDataUrl(file);
 
-  showMainPhoto(
-    state.currentPhotoDataUrl
-  );
-
   showModalPhoto(
     state.currentPhotoDataUrl
   );
@@ -157,6 +153,11 @@ function openPhotoModal() {
     document.getElementById(
       'patientPhotoModal'
     );
+
+  state.photoModalSnapshot = {
+    file: state.currentPhotoFile,
+    dataUrl: state.currentPhotoDataUrl,
+  };
 
   modal?.classList.add('active');
 
@@ -174,6 +175,19 @@ function openPhotoModal() {
 
 function closePhotoModal() {
   stopCamera();
+
+  if (state.photoModalSnapshot) {
+    state.currentPhotoFile =
+      state.photoModalSnapshot.file;
+    state.currentPhotoDataUrl =
+      state.photoModalSnapshot.dataUrl;
+
+    state.photoModalSnapshot = null;
+
+    showMainPhoto(
+      state.currentPhotoDataUrl
+    );
+  }
 
   const modal =
     document.getElementById(
@@ -347,10 +361,6 @@ async function captureCameraPhoto() {
     canvas.toDataURL(
       'image/png'
     );
-
-  showMainPhoto(
-    state.currentPhotoDataUrl
-  );
 
   showModalPhoto(
     state.currentPhotoDataUrl

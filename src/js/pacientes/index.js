@@ -624,6 +624,80 @@ export async function initPacienteForm() {
     }
   }
 
+  const photoColPlaceholder =
+    root.querySelector(
+      '#photoColPlaceholder'
+    );
+
+  const photoModalPlaceholder =
+    root.querySelector(
+      '#photoModalPlaceholder'
+    );
+
+  if (
+    photoColPlaceholder ||
+    photoModalPlaceholder
+  ) {
+    try {
+      const response =
+        await fetch(
+          './pages/pacientes/form-cap-pac.html',
+          {
+            cache: 'no-store',
+          }
+        );
+
+      if (response.ok) {
+        const html =
+          await response.text();
+
+        const temp =
+          document.createElement(
+            'div'
+          );
+
+        temp.innerHTML = html;
+
+        const photoCol =
+          temp.querySelector(
+            '.personal-photo-col'
+          );
+
+        const photoModal =
+          temp.querySelector(
+            '#patientPhotoModal'
+          );
+
+        if (
+          photoCol &&
+          photoColPlaceholder
+        ) {
+          photoColPlaceholder.replaceWith(
+            photoCol
+          );
+        }
+
+        if (
+          photoModal &&
+          photoModalPlaceholder
+        ) {
+          photoModalPlaceholder.replaceWith(
+            photoModal
+          );
+        }
+      } else {
+        console.error(
+          'No se pudo cargar form-cap-pac.html.'
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Error cargando form-cap-pac.html:',
+        error
+      );
+    }
+  }
+
   state.currentMode =
     routeMode();
 

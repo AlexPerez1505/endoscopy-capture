@@ -1,0 +1,222 @@
+<div class="personal-photo-col">
+  <div
+    class="patient-photo-container"
+    id="patientPhotoContainer"
+  >
+    <div
+      class="patient-photo-placeholder"
+      id="patientPhotoPlaceholder"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+        ></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    </div>
+
+    <img
+      id="patientPhoto"
+      hidden
+      alt="Foto del paciente"
+    >
+  </div>
+
+  <input
+    type="file"
+    name="foto"
+    id="inputFileFoto"
+    accept="image/jpeg,image/png,image/webp"
+    hidden
+  >
+
+  <button
+    type="button"
+    class="btn-photo"
+    id="btnAgregarFoto"
+  >
+    Agregar foto
+  </button>
+
+  <button
+    type="button"
+    class="btn-photo remove"
+    id="btnEliminarFoto"
+  >
+    Eliminar foto
+  </button>
+</div>
+
+<div
+  class="photo-modal-overlay"
+  id="patientPhotoModal"
+  aria-hidden="true"
+>
+  <div class="photo-modal">
+    <div class="photo-modal-header">
+      <h2>
+        Inserta foto del paciente
+      </h2>
+
+      <p>
+        Captura una fotografía o selecciona una imagen para el expediente.
+      </p>
+    </div>
+
+    <div class="photo-modal-body">
+      <div class="photo-preview-panel">
+        <h3>
+          Vista previa
+        </h3>
+
+        <div
+          class="camera-frame"
+          id="patientCameraFrame"
+        >
+          <div
+            class="camera-placeholder"
+            id="patientCameraPlaceholder"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path
+                d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+              ></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+
+          <video
+            id="patientCameraVideo"
+            autoplay
+            muted
+            playsinline
+            hidden
+          ></video>
+
+          <canvas
+            id="patientCameraCanvas"
+            hidden
+          ></canvas>
+
+          <img
+            id="patientModalPhotoPreview"
+            hidden
+            alt="Vista previa"
+          >
+        </div>
+      </div>
+
+      <div class="photo-options-panel">
+        <div>
+          <div
+            class="photo-option"
+            id="patientStartCamera"
+          >
+            <div class="photo-option-icon">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                ></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </div>
+
+            <div>
+              <strong>
+                Cámara en vivo
+              </strong>
+              <span>
+                Usar cámara del dispositivo
+              </span>
+            </div>
+          </div>
+
+          <div
+            class="photo-option"
+            id="patientChooseGallery"
+            style="margin-top:10px"
+          >
+            <div class="photo-option-icon">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <path d="m21 15-5-5L5 21"></path>
+              </svg>
+            </div>
+
+            <div>
+              <strong>
+                Subir imagen
+              </strong>
+              <span>
+                Seleccionar desde archivos
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="btn-save"
+          id="patientTakePhoto"
+        >
+          Tomar fotografía
+        </button>
+
+        <div class="photo-recommendations">
+          <strong>
+            Recomendaciones
+          </strong>
+
+          <div>
+            Asegúrate de que el rostro esté centrado, exista buena iluminación y no haya reflejos.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="photo-modal-footer">
+      <button
+        type="button"
+        class="btn-cancel"
+        id="patientPhotoCancel"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="btn-save"
+        id="patientPhotoUse"
+      >
+        Usar esta foto
+      </button>
+    </div>
+  </div>
+</div>
