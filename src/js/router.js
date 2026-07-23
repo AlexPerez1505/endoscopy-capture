@@ -4,7 +4,7 @@
 
 import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
-import { initPacienteForm } from './pacientes-form.js';
+import { initPacienteForm } from './pacientes/index.js';
 import { initAgenda } from './agenda/index.js';
 import { initAgendar } from './agenda/agendar/index.js';
 import {

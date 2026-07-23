@@ -1,0 +1,339 @@
+    <h2 class="section-title">
+      Información médica
+    </h2>
+
+    <div class="patient-medical-layout">
+      <div class="patient-medical-fields">
+        <div class="form-group">
+          <label for="medicoSelectMed">
+            Médico
+          </label>
+
+          <div class="select-with-add">
+            <input
+              type="text"
+              id="medicoSelectMed"
+              name="medico"
+              placeholder="Ej. Dr. Víctor"
+              maxlength="255"
+            >
+
+            <button
+              type="button"
+              class="btn-add-procedimiento"
+              data-mini-field="medicoSelectMed"
+              data-mini-title="Agregar médico"
+              data-mini-description="Escribe el nombre del médico"
+              aria-label="Agregar médico"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="procedimientoSelect">
+            Procedimiento
+          </label>
+
+          <div class="select-with-add">
+            <input
+              type="text"
+              id="procedimientoSelect"
+              name="procedimiento"
+              placeholder="Ej. Colonoscopia"
+              maxlength="255"
+            >
+
+            <button
+              type="button"
+              class="btn-add-procedimiento"
+              data-mini-field="procedimientoSelect"
+              data-mini-title="Agregar procedimiento"
+              data-mini-description="Escribe el nombre del procedimiento"
+              aria-label="Agregar procedimiento"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="anestesiologoSelect">
+            Anestesiólogo
+          </label>
+
+          <div class="select-with-add">
+            <input
+              type="text"
+              id="anestesiologoSelect"
+              name="anestesiologo"
+              placeholder="Ej. Dr. Ricardo"
+              maxlength="255"
+            >
+
+            <button
+              type="button"
+              class="btn-add-procedimiento"
+              data-mini-field="anestesiologoSelect"
+              data-mini-title="Agregar anestesiólogo"
+              data-mini-description="Escribe el nombre del anestesiólogo"
+              aria-label="Agregar anestesiólogo"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="referidoSelectMed">
+            Referido por
+          </label>
+
+          <div class="select-with-add">
+            <input
+              type="text"
+              id="referidoSelectMed"
+              name="referido_por"
+              placeholder="Ej. Externo"
+              maxlength="255"
+            >
+
+            <button
+              type="button"
+              class="btn-add-procedimiento"
+              data-mini-field="referidoSelectMed"
+              data-mini-title="Agregar referido"
+              data-mini-description="Escribe el nombre de la referencia"
+              aria-label="Agregar referido"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="equipoSelect">
+            Equipo utilizado
+          </label>
+
+          <div class="select-with-add">
+            <input
+              type="text"
+              id="equipoSelect"
+              name="equipo_utilizado"
+              placeholder="Ej. Endoscopio Olympus"
+              maxlength="255"
+            >
+
+            <button
+              type="button"
+              class="btn-add-procedimiento"
+              data-mini-field="equipoSelect"
+              data-mini-title="Agregar equipo"
+              data-mini-description="Escribe el nombre del equipo"
+              aria-label="Agregar equipo"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group patient-diagnosis">
+        <label for="patientDiagnosis">
+          Diagnóstico preliminar
+        </label>
+
+        <textarea
+          name="diagnostico_preliminar"
+          id="patientDiagnosis"
+          placeholder="Define lo que podría tener"
+        ></textarea>
+      </div>
+    </div>
+
+    <hr class="patient-form-divider">
+
+    <div class="patient-textareas-grid">
+      <div class="form-group">
+        <label for="patientDisease">
+          Enfermedad
+        </label>
+
+        <textarea
+          name="enfermedad"
+          id="patientDisease"
+          placeholder="Describe la enfermedad o padecimiento"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="patientAllergies">
+          Alergias
+        </label>
+
+        <textarea
+          name="alergias"
+          id="patientAllergies"
+          placeholder="Medicamentos, alimentos u otras alergias"
+        ></textarea>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="estudiosArchivos">
+        Estudios y documentos
+      </label>
+
+      <div class="patient-files-box">
+        <input
+          type="file"
+          name="estudios_archivos[]"
+          id="estudiosArchivos"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.mp4,.mov,.avi,.webm"
+          hidden
+        >
+
+        <div class="patient-files-head">
+          <button
+            type="button"
+            class="patient-upload-button"
+            id="patientUploadFiles"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+
+            Subir archivos
+          </button>
+
+          <span class="patient-files-helper">
+            PDF, imágenes, Word y videos. Se permiten múltiples archivos.
+          </span>
+        </div>
+
+        <div
+          class="patient-files-section"
+          id="patientPendingFilesSection"
+        >
+          <p class="patient-files-section-title">
+            Por subir
+          </p>
+
+          <div
+            id="estudiosArchivosGrid"
+            class="patient-files-grid"
+          ></div>
+        </div>
+
+        <div
+          class="patient-files-section"
+          id="patientExistingFilesSection"
+        >
+          <p class="patient-files-section-title">
+            Archivos guardados
+          </p>
+
+          <div
+            id="patientExistingFiles"
+            class="patient-files-grid"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="patientFormError"
+      class="patient-form-error"
+    ></div>
+
+    <div class="form-footer">
+      <button
+        type="button"
+        class="btn-cancel"
+        data-patient-back
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="submit"
+        class="btn-save"
+        id="btnGuardarPaciente"
+      >
+        <span id="patientSubmitText">
+          Guardar paciente
+        </span>
+
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </button>
+    </div>
+  </form>
