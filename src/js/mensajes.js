@@ -1,34 +1,9 @@
-import { laravelFetch } from './laravel.js';
-
-const DEFAULT_API_BASE_URL = 'https://sistema.enclaii.com';
-const LOCAL_LARAVEL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
-
-function currentLaravelOrigin() {
-  if (!['http:', 'https:'].includes(window.location.protocol)) return '';
-  if (!LOCAL_LARAVEL_HOSTS.has(window.location.hostname)) return '';
-  if (window.location.port && window.location.port !== '8000') return '';
-  return window.location.origin;
-}
-
-function isLocalLaravelUrl(value) {
-  try {
-    const url = new URL(value);
-    return LOCAL_LARAVEL_HOSTS.has(url.hostname) && (!url.port || url.port === '8000');
-  } catch (_) {
-    return false;
-  }
-}
-
-function apiBaseUrl() {
-  const saved = (localStorage.getItem('enclaii-api-url') || '').replace(/\/+$/, '');
-  const currentOrigin = currentLaravelOrigin();
-  if (saved) return currentOrigin && isLocalLaravelUrl(saved) ? currentOrigin : saved;
-  return currentOrigin || DEFAULT_API_BASE_URL;
-}
+import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { authHeader, getAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
 
 const API_BASE_URL = apiBaseUrl();
 const PATIENTS_ENDPOINT = `${API_BASE_URL}/tauri/pacientes`;
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 
 const FALLBACK_MESSAGE_PATIENTS = [
   { id: 'kevin', initials: 'KM', name: 'Kevin Martinez', tone: 'avatar-blue', message: 'Sin mensajes todavia', online: true },
@@ -48,20 +23,6 @@ const draftMessages = new Map();
 
 function normalizeText(value) {
   return String(value || '').toLowerCase().trim();
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function authHeader() {
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
-  return token ? `Bearer ${token}` : '';
 }
 
 function normalizePatientsPayload(payload) {
@@ -242,7 +203,7 @@ function sendMessage(event) {
 
 export function initMensajes() {
   // Check if user is already logged in
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  const token = getAuthToken();
   if (!token) {
     const root = document.getElementById('pageContent');
     if (root) {

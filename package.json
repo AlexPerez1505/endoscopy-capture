@@ -4,9 +4,22 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:duplicated-helpers": "node scripts/check-duplicated-helpers.js",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "husky": "^9.1.7",
+    "jsdom": "^29.1.1",
+    "lint-staged": "^17.1.1",
+    "vitest": "^4.1.10"
+  },
+  "lint-staged": {
+    "src/**/*.js": [
+      "vitest related --run"
+    ]
   }
 }

@@ -1,7 +1,8 @@
 import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { authHeader, getAuthToken, setAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
+import { OPEN_GALLERY_PATIENT_STORAGE_KEY as OPEN_PATIENT_STORAGE_KEY } from './storage-keys.js';
 
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
-const OPEN_PATIENT_STORAGE_KEY = 'enclaii-open-gallery-patient';
 const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
 const GALLERY_ENDPOINT = `${apiBaseUrl()}/api/tauri/galeria`;
 
@@ -30,16 +31,6 @@ let defaultGallerySub = '';
 let pendingImageFilter = 'none';
 let appliedImageFilter = 'none';
 let galleryTemplate = '';
-
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, character => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[character]);
-}
 
 function safeCssToken(value, fallback) {
   const token = String(value || '');
@@ -97,11 +88,6 @@ function setGalleryEmptyText(message) {
   if (empty) empty.textContent = message;
 }
 
-function authHeader() {
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
-  return token ? `Bearer ${token}` : '';
-}
-
 async function loginToLaravel(email, password) {
   const response = await laravelFetch(LOGIN_ENDPOINT, {
     method: 'POST',
@@ -146,7 +132,7 @@ function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Lar
 
     try {
       const token = await loginToLaravel(email, password);
-      sessionStorage.setItem(AUTH_STORAGE_KEY, token);
+      setAuthToken(token);
       if (galleryTemplate) root.innerHTML = galleryTemplate;
       initGaleria();
     } catch (error) {
@@ -863,7 +849,7 @@ export function initGaleria() {
   if (root && !galleryTemplate) galleryTemplate = root.innerHTML;
 
   // Check if user is already logged in
-  const token = sessionStorage.getItem('enclaii-tauri-basic-auth');
+  const token = getAuthToken();
   if (!token) {
     renderLaravelLogin(root, 'Inicia sesión para acceder a la galería.');
     return;

@@ -1,6 +1,7 @@
 import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { getAuthToken, setAuthToken } from './auth.js';
+import { ACCOUNT_NAME_STORAGE_KEY } from './storage-keys.js';
 
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
 const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
 
 const form = document.getElementById('loginForm');
@@ -51,7 +52,7 @@ function redirectAfterLogin() {
 }
 
 // Si ya hay una sesion activa, no mostrar el login de nuevo.
-if (sessionStorage.getItem(AUTH_STORAGE_KEY)) {
+if (getAuthToken()) {
   redirectAfterLogin();
 }
 
@@ -88,8 +89,8 @@ form?.addEventListener('submit', async (event) => {
 
   try {
     const { token, accountName } = await loginToLaravel(email, password);
-    sessionStorage.setItem(AUTH_STORAGE_KEY, token);
-    if (accountName) sessionStorage.setItem('enclaii-account-name', accountName);
+    setAuthToken(token);
+    if (accountName) sessionStorage.setItem(ACCOUNT_NAME_STORAGE_KEY, accountName);
     redirectAfterLogin();
   } catch (error) {
     console.error(error);

@@ -1,12 +1,16 @@
 import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { getAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
+import {
+  READING_MODE_STORAGE_KEY,
+  ANIMATIONS_STORAGE_KEY,
+  COMPACT_MODE_STORAGE_KEY,
+} from './storage-keys.js';
 
 /* =========================================================
    CONFIGURACIÓN TAURI
    Laravel es la fuente principal de todos los datos.
 ========================================================= */
-
-const AUTH_STORAGE_KEY = 'enclaii-tauri-basic-auth';
-const API_URL_STORAGE_KEY = 'enclaii-api-url';
 
 const SYNC_INTERVAL_MS = 3000;
 
@@ -35,34 +39,16 @@ let eventsBound = false;
    URL Y AUTENTICACIÓN
 ========================================================= */
 
-function getApiBaseUrl() {
-  return String(
-    localStorage.getItem(API_URL_STORAGE_KEY) ||
-    apiBaseUrl() ||
-    'https://sistema.enclaii.com'
-  ).replace(/\/+$/, '');
-}
-
 function endpoint(path = '') {
   const cleanPath = String(path || '').replace(/^\/+/, '');
 
-  return `${getApiBaseUrl()}/api/tauri/configuracion${
+  return `${apiBaseUrl()}/api/tauri/configuracion${
     cleanPath ? `/${cleanPath}` : ''
   }`;
 }
 
-function getToken() {
-  return String(
-    sessionStorage.getItem(AUTH_STORAGE_KEY) ||
-    localStorage.getItem(AUTH_STORAGE_KEY) ||
-    ''
-  )
-    .replace(/^Bearer\s+/i, '')
-    .trim();
-}
-
 async function apiRequest(path = '', options = {}) {
-  const token = getToken();
+  const token = getAuthToken();
 
   if (!token) {
     const error = new Error(
@@ -130,15 +116,6 @@ async function apiRequest(path = '', options = {}) {
 /* =========================================================
    UTILIDADES
 ========================================================= */
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
 
 function boolValue(value) {
   return (
@@ -351,17 +328,17 @@ function applyVisualEffects(settings = {}) {
     compactMode ? 'on' : 'off';
 
   localStorage.setItem(
-    'enclaii-pref-reading_mode',
+    READING_MODE_STORAGE_KEY,
     readingMode ? '1' : '0'
   );
 
   localStorage.setItem(
-    'enclaii-pref-animations',
+    ANIMATIONS_STORAGE_KEY,
     animationsEnabled ? '1' : '0'
   );
 
   localStorage.setItem(
-    'enclaii-pref-compact',
+    COMPACT_MODE_STORAGE_KEY,
     compactMode ? '1' : '0'
   );
 }
@@ -369,21 +346,21 @@ function applyVisualEffects(settings = {}) {
 export function applyEarlyVisualPreferences() {
   document.documentElement.dataset.reading =
     localStorage.getItem(
-      'enclaii-pref-reading_mode'
+      READING_MODE_STORAGE_KEY
     ) === '1'
       ? 'on'
       : 'off';
 
   document.documentElement.dataset.animations =
     localStorage.getItem(
-      'enclaii-pref-animations'
+      ANIMATIONS_STORAGE_KEY
     ) === '0'
       ? 'off'
       : 'on';
 
   document.documentElement.dataset.compact =
     localStorage.getItem(
-      'enclaii-pref-compact'
+      COMPACT_MODE_STORAGE_KEY
     ) === '1'
       ? 'on'
       : 'off';
@@ -1501,10 +1478,10 @@ function renderConnection() {
 
   if (api) {
     api.textContent =
-      getApiBaseUrl();
+      apiBaseUrl();
 
     api.title =
-      getApiBaseUrl();
+      apiBaseUrl();
   }
 }
 
@@ -2070,7 +2047,7 @@ async function downloadBackup(id) {
             'application/octet-stream',
 
           Authorization:
-            `Bearer ${getToken()}`,
+            `Bearer ${getAuthToken()}`,
         },
       }
     );
@@ -2776,7 +2753,7 @@ function bindRealtimeEvents() {
    INICIALIZACIÓN
 ========================================================= */
 
-export async function initConfiguracion() {
+export async function initConfiguracion({ signal } = {}) {
   const root =
     document.getElementById(
       'settingsAppRoot'
@@ -2799,6 +2776,8 @@ export async function initConfiguracion() {
   });
 
   startRealtimeSync();
+
+  signal?.addEventListener('abort', stopRealtimeSync);
 }
 
 applyEarlyVisualPreferences();

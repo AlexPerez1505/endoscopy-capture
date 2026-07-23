@@ -1,10 +1,10 @@
-import { laravelFetch } from './laravel.js';
-
-const AUTH_STORAGE_KEY =
-  'enclaii-tauri-basic-auth';
-
-const DEFAULT_API_BASE_URL =
-  'https://sistema.enclaii.com';
+import { apiBaseUrl, laravelFetch } from './laravel.js';
+import { getAuthToken } from './auth.js';
+import { escapeHtml } from './html.js';
+import {
+  EDIT_PATIENT_ID_STORAGE_KEY,
+  PATIENTS_REFRESH_STORAGE_KEY,
+} from './storage-keys.js';
 
 let currentPatient = null;
 let currentMode = 'create';
@@ -22,29 +22,6 @@ let patientFormAbortController = null;
 /* =========================================================
    API
 ========================================================= */
-
-function apiBaseUrl() {
-  return String(
-    localStorage.getItem(
-      'enclaii-api-url'
-    ) ||
-    DEFAULT_API_BASE_URL
-  ).replace(/\/+$/, '');
-}
-
-function token() {
-  return String(
-    sessionStorage.getItem(
-      AUTH_STORAGE_KEY
-    ) ||
-    localStorage.getItem(
-      AUTH_STORAGE_KEY
-    ) ||
-    ''
-  )
-    .replace(/^Bearer\s+/i, '')
-    .trim();
-}
 
 function endpoint(path = '') {
   const cleanPath =
@@ -65,7 +42,7 @@ async function request(
   path = '',
   options = {}
 ) {
-  const authToken = token();
+  const authToken = getAuthToken();
 
   if (!authToken) {
     const error = new Error(
@@ -162,15 +139,6 @@ async function request(
    UTILIDADES
 ========================================================= */
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
 function setError(message = '') {
   const element =
     document.getElementById(
@@ -217,7 +185,7 @@ function navigateBack(event) {
   stopCamera();
 
   sessionStorage.removeItem(
-    'enclaii-edit-patient-id'
+    EDIT_PATIENT_ID_STORAGE_KEY
   );
 
   window.location.hash = 'pacientes';
@@ -1405,7 +1373,7 @@ async function loadCreate() {
 async function loadEdit() {
   currentPatientId =
     sessionStorage.getItem(
-      'enclaii-edit-patient-id'
+      EDIT_PATIENT_ID_STORAGE_KEY
     );
 
   if (!currentPatientId) {
@@ -1853,12 +1821,12 @@ async function submitForm(event) {
       null;
 
     sessionStorage.setItem(
-      'enclaii-patients-refresh',
+      PATIENTS_REFRESH_STORAGE_KEY,
       String(Date.now())
     );
 
     sessionStorage.removeItem(
-      'enclaii-edit-patient-id'
+      EDIT_PATIENT_ID_STORAGE_KEY
     );
 
     document.dispatchEvent(

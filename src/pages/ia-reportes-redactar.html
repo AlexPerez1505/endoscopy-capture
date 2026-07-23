@@ -1,189 +1,255 @@
 <div class="report-editor-page">
-  <div class="ed-actions rise d2">
+  <section class="ed-mode" aria-label="Tipo de reporte">
+    <button class="mode-chip active" type="button" data-report-mode="normal">Reporte normal</button>
+    <button class="mode-chip" type="button" data-report-mode="ia">Reporte IA</button>
+  </section>
+
+  <div class="ed-actions">
     <button class="ed-btn" data-nav="ia-reportes" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       Salir
     </button>
-    <button class="ed-btn" id="generateAiReportBtn" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.1 14.5a6 6 0 1 1 7.8 0c-.8.6-.9 1.5-.9 2.5H9c0-1-.1-1.9-.9-2.5Z"/></svg>
+    <button class="ed-btn" type="button" id="generateAiReportBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
       Generar IA
     </button>
-    <button class="ed-btn" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <button class="ed-btn" type="button" id="btnPreview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       Vista Previa
     </button>
-    <button class="ed-btn primary split" id="saveReportBtn" type="button">
-      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar reporte</span>
-      <i></i>
-      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    <button class="ed-btn" type="button" id="btnDraft">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Borrador
+    </button>
+    <button class="ed-btn primary" type="button" id="btnGuardar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Guardar reporte
+      <span class="div"></span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
   </div>
 
   <div class="report-editor-alert" id="reportEditorAlert" hidden></div>
 
-  <section class="ed-meta rise d3">
-    <label class="ed-field grow">
-      <span>Estudio</span>
-      <select class="ed-ctrl" id="reportStudySelect">
-        <option>Selecciona un estudio sin reporte...</option>
-        <option>Ricardo Prueba3 · Endoscopia · 30/06/2026</option>
-        <option>María González · Colonoscopia · 08/05/2025</option>
+  <div class="ed-meta">
+    <div class="f grow">
+      <label>Estudio</label>
+      <select class="ed-ctrl" id="edEstudioSel">
+        <option value="">Selecciona un estudio sin reporte...</option>
       </select>
-    </label>
-    <label class="ed-field type-field">
-      <span>Tipo de estudio</span>
-      <select class="ed-ctrl" id="reportTypeSelect">
+    </div>
+    <div class="f grow">
+      <label>Tipo de estudio</label>
+      <select class="ed-ctrl" id="edTipo">
         <option>Colonoscopia</option>
         <option>Gastroscopia</option>
         <option>Duodenoscopia</option>
         <option>Broncoscopia</option>
       </select>
-    </label>
-    <label class="ed-field date-field">
-      <span>Fecha del reporte</span>
-      <div class="ed-ctrl date-ctrl">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span id="reportDateText">11/07/2026</span>
-      </div>
-    </label>
-    <div class="ed-field status-field">
-      <span>Estado</span>
-      <div class="status-pill">En borrador</div>
     </div>
-  </section>
-
-  <div class="ed-toolbar rise d4" role="toolbar" aria-label="Herramientas de formato">
-    <button class="format-select" type="button">Párrafo <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-    <span class="tool-sep"></span>
-    <button class="ed-tb" type="button" data-command="undo" title="Deshacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v1"/></svg></button>
-    <button class="ed-tb" type="button" data-command="redo" title="Rehacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0-6 6v1"/></svg></button>
-    <span class="tool-sep"></span>
-    <button class="ed-tb" type="button" data-command="bold" title="Negrita"><b>B</b></button>
-    <button class="ed-tb" type="button" data-command="italic" title="Cursiva"><i>I</i></button>
-    <button class="ed-tb" type="button" data-command="underline" title="Subrayado"><u>U</u></button>
-    <button class="ed-tb" type="button" data-command="strikeThrough" title="Tachado"><s>S</s></button>
-    <span class="tool-sep"></span>
-    <button class="ed-tb" type="button" data-command="justifyLeft" title="Alinear izquierda"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/></svg></button>
-    <button class="ed-tb" type="button" data-command="justifyCenter" title="Centrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><line x1="5" y1="6" x2="19" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="6" y1="18" x2="18" y2="18"/></svg></button>
-    <button class="ed-tb" type="button" data-command="justifyRight" title="Alinear derecha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="6" y1="18" x2="20" y2="18"/></svg></button>
-    <span class="tool-sep"></span>
-    <button class="ed-tb" type="button" data-command="insertUnorderedList" title="Lista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r=".8"/><circle cx="4" cy="12" r=".8"/><circle cx="4" cy="18" r=".8"/></svg></button>
-    <button class="ed-tb" type="button" data-command="insertOrderedList" title="Lista numerada"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M4 14h2l-2 4h2"/></svg></button>
+    <div class="f">
+      <label>Fecha del reporte</label>
+      <div class="ed-ctrl date-ctrl">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="reportDateText" contenteditable="true" data-ph="dd/mm/aaaa"></span>
+      </div>
+    </div>
+    <div class="f">
+      <label>Estado</label>
+      <span class="ed-status borrador" id="edStatus">Borrador</span>
+    </div>
+    <div class="f">
+      <label>Ajuste de página</label>
+      <span class="ed-status" id="pageFitIndicator">Verificando...</span>
+    </div>
   </div>
 
-  <section class="ed-body">
-    <article class="ed-doc rise d5" id="reportDocument" contenteditable="true">
-      <header class="report-letterhead">
-        <div class="clinic-logo">Logo de<br>la clínica</div>
-        <div class="clinic-name">Nombre de la clínica</div>
-        <div class="procedure-icon" aria-hidden="true">
-          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M24 8c-7 6-8 16-4 23 3 5 8 7 13 7 7 0 13-5 13-12 0-5-3-9-8-9-4 0-7 3-7 7v24"/>
-            <path d="M43 11c7 5 9 14 6 22-3 8-11 14-21 14"/>
-            <path d="M18 53h26"/>
-          </svg>
-        </div>
-      </header>
+  <div class="ed-toolbar" role="toolbar" aria-label="Herramientas de formato">
+    <span class="sep"></span>
+    <button class="ed-tb" type="button" data-cmd="undo" aria-label="Deshacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>
+    <button class="ed-tb" type="button" data-cmd="redo" aria-label="Rehacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg></button>
+    <span class="sep"></span>
+    <button class="ed-tb" type="button" data-cmd="bold"><b>B</b></button>
+    <button class="ed-tb" type="button" data-cmd="italic"><i>I</i></button>
+    <button class="ed-tb" type="button" data-cmd="underline"><u>U</u></button>
+    <button class="ed-tb" type="button" data-cmd="strikeThrough"><s>S</s></button>
+    <span class="sep"></span>
+    <input type="text" class="ed-tb font-size-input" id="fontSizeInput" aria-label="Tamaño de letra" inputmode="numeric" pattern="[0-9]*" value="14">
+    <span class="ed-color-wrap">
+      <button type="button" class="ed-tb ed-color-btn" id="textColorBtn" aria-label="Color de letra" title="Color de letra">
+        <span class="ed-color-letter">A</span>
+        <span class="ed-color-swatch" id="textColorSwatch"></span>
+      </button>
+      <input type="color" class="ed-color-input" id="textColorInput" aria-label="Elegir color de letra" value="#111827">
+    </span>
+    <button class="ed-tb" type="button" id="underlineColorBtn" aria-label="Resaltar" title="Resaltar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17c4 0 7-2 7-5V4H5v8c0 3 3 5 7 5z"/><line x1="7" y1="21" x2="17" y2="21"/></svg>
+    </button>
+    <button class="ed-tb" type="button" data-cmd="removeFormat" aria-label="Quitar formato" title="Quitar formato">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <span class="sep"></span>
+    <button class="ed-tb" type="button" data-cmd="justifyLeft" aria-label="Alinear izquierda"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></button>
+    <button class="ed-tb" type="button" data-cmd="justifyCenter" aria-label="Centrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg></button>
+    <button class="ed-tb" type="button" data-cmd="justifyFull" aria-label="Justificar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg></button>
+    <span class="sep"></span>
+    <button class="ed-tb" type="button" data-cmd="insertUnorderedList" aria-label="Lista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+    <button class="ed-tb" type="button" data-cmd="insertOrderedList" aria-label="Lista numerada"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></button>
+  </div>
 
-      <section class="patient-data">
-        <div>Paciente:</div><strong data-bind="doc-patient">Nombre del paciente</strong>
-        <div>Edad:</div><span>—</span>
-        <div>Sexo:</div><span>—</span>
-        <div>Fecha de Nac.:</div><span>dd/mm/aaaa</span>
-        <div>Fecha del Estudio:</div><strong data-bind="doc-date">11/07/2026</strong>
-        <div>Procedimiento:</div><span data-bind="doc-procedure">Tipo de procedimiento</span>
-      </section>
+  <div class="ed-body">
+    <div class="ed-main">
+      <article class="card ed-doc" id="reportDocument">
+        <header class="doc-h">
+          <h2 id="docTitle" contenteditable="true" data-ph="INFORME DE ENDOSCOPIA">INFORME DE ENDOSCOPIA</h2>
+          <p id="docSubtitle" contenteditable="true" data-ph="ENCLAII">ENCLAII</p>
+        </header>
 
-      <section class="report-section">
-        <h4>INDICACIÓN</h4>
-        <p>Motivo del estudio...</p>
-      </section>
-      <section class="report-section">
-        <h4>PREPARACIÓN</h4>
-        <p>Calidad de la preparación...</p>
-      </section>
-      <section class="report-section">
-        <h4>SEDACIÓN</h4>
-        <p>Tipo y nivel de sedación...</p>
-      </section>
-      <section class="report-section">
-        <h4>HALLAZGOS</h4>
-        <ul><li>Hallazgo por segmento (recto, sigmoides, colon...)</li></ul>
-      </section>
-      <section class="report-section">
-        <h4>IMPRESIÓN DIAGNÓSTICA</h4>
-        <p>Diagnóstico...</p>
-      </section>
-      <section class="report-section">
-        <h4>PLAN Y RECOMENDACIONES</h4>
-        <ul><li>Recomendación...</li></ul>
-      </section>
-      <section class="report-section">
-        <h4>OBSERVACIONES</h4>
-        <p>Observaciones adicionales...</p>
-      </section>
-
-      <footer class="doctor-signature">
-        <div class="signature-mark">firma</div>
-        <span></span>
-        <strong>Dr. Nombre del médico</strong>
-      </footer>
-    </article>
-
-    <aside class="ed-side">
-      <section class="card ed-chat rise d6">
-        <div class="chat-head">
-          <div class="chat-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.1 14.5a6 6 0 1 1 7.8 0c-.8.6-.9 1.5-.9 2.5H9c0-1-.1-1.9-.9-2.5Z"/></svg></div>
-          <div>
-            <h3>ENCLAII</h3>
-            <div class="chat-on"><i></i> En línea</div>
+        <div class="rep-header">
+          <div class="rep-logo" id="repLogo"><span class="logo-ph">Logo de<br>la clínica</span></div>
+          <div class="rep-clinic" id="repClinicBox">
+            <span contenteditable="true" id="repClinicName" data-ph="Nombre de la clínica">Nombre de la clínica</span>
+          </div>
+          <div class="rep-anat" id="repAnat" aria-hidden="true">
+            <svg viewBox="0 0 80 110" fill="none" stroke="currentColor" stroke-width="2"><path d="M30 8c-6 6-10 14-10 22 0 6 2 11 6 16 4 5 6 9 6 15 0 10-8 14-8 24 0 8 6 13 14 13s14-6 14-15c0-12-12-16-12-26 0-7 5-11 9-17 3-5 5-10 5-16C58 22 50 12 42 8"/><path d="M30 8c4-3 8-3 12 0"/></svg>
           </div>
         </div>
-        <div class="chat-msgs">
-          <div class="chat-msg ai">Hola, soy ENCLAII. Tú redactas el reporte y yo te ayudo: puedo proponer hallazgos, recomendaciones o mejorar la redacción de cualquier sección. ¿Empezamos?</div>
-        </div>
-        <div class="quick-prompts">
-          <button type="button">Redacta los hallazgos</button>
-          <button type="button">Sugiere recomendaciones</button>
-          <button type="button">Sugiere una impresión diagnóstica</button>
-          <button type="button">Mejora la redacción</button>
-        </div>
-        <div class="chat-input">
-          <input type="text" placeholder="Escribe un mensaje a la IA...">
-          <button type="button" aria-label="Enviar mensaje"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
-        </div>
-      </section>
 
-      <section class="card template-card rise d7">
+        <div class="doc-meta">
+          <span class="k">Paciente:</span><span contenteditable="true" data-bind="doc-patient" data-ph="Nombre del paciente"></span>
+          <span class="k">Edad:</span><span contenteditable="true" data-bind="doc-age" data-ph="-"></span>
+          <span class="k">Sexo:</span><span contenteditable="true" data-bind="doc-gender" data-ph="-"></span>
+          <span class="k">Fecha de Nac.:</span><span contenteditable="true" data-bind="doc-birth-date" data-ph="dd/mm/aaaa"></span>
+          <span class="k">Fecha del Estudio:</span><span contenteditable="true" data-bind="doc-study-date" data-ph="dd/mm/aaaa"></span>
+          <span class="k">Procedimiento:</span><span contenteditable="true" data-bind="doc-procedure" data-ph="Tipo de procedimiento"></span>
+        </div>
+
+        <div class="rep-imgs" id="repImgs"></div>
+        <div id="docSections"></div>
+        <input type="hidden" id="existingReporteId" value="">
+
+        <div class="rep-sign" id="repSign" data-pos="center">
+          <div class="sign-box">
+            <div class="signature-mark" id="repSignMark">firma</div>
+            <div class="sign-line">
+              <span contenteditable="true" id="repSignName" data-ph="Dr. Nombre del médico">Dr. Nombre del médico</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <aside class="ed-side">
+      <article class="card cap-panel">
+        <div class="cap-head">
+          <h3>Capturas del estudio</h3>
+          <div class="cap-actions">
+            <span class="cap-count" id="capIncludedCount">0/0</span>
+            <button type="button" class="cap-reset" id="imgRestoreAll" aria-label="Mostrar todas" title="Mostrar todas">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 15.5-6.2"/><path d="M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18 3v5h-5"/><path d="M6 21v-5h5"/></svg>
+            </button>
+            <button type="button" class="cap-toggle" id="capPanelToggle" aria-label="Contraer capturas" aria-expanded="true" aria-controls="capPanelBody" title="Contraer capturas">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 15 6-6 6 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="cap-body" id="capPanelBody"><div class="cap-body-inner" id="capGridHost"></div></div>
+      </article>
+
+      <article class="card ed-chat">
+        <div class="chat-head">
+          <span class="chat-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="22" x2="15" y2="22"/></svg></span>
+          <div><h3>ENCLAII</h3><span class="chat-on">En línea</span></div>
+        </div>
+        <div class="chat-msgs" id="chatMsgs"></div>
+        <div class="chat-chips" id="chatChips">
+          <button type="button" class="chat-chip">Redacta los hallazgos</button>
+          <button type="button" class="chat-chip">Sugiere recomendaciones</button>
+          <button type="button" class="chat-chip">Sugiere una impresión diagnóstica</button>
+          <button type="button" class="chat-chip">Mejora la redacción</button>
+        </div>
+        <form class="chat-input" id="chatForm">
+          <input type="text" id="chatText" placeholder="Escribe un mensaje a la IA..." autocomplete="off">
+          <button type="submit" aria-label="Enviar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+        </form>
+      </article>
+
+      <article class="card ed-panel" id="hzPanel">
+        <h3>Hallazgos</h3>
+        <div class="ph-sub">Click para insertar en el reporte o escribe uno nuevo</div>
+        <div class="hz-panel">
+          <div class="hz-chips" id="hzChips"></div>
+          <div class="hz-add">
+            <input type="text" id="hzNewInput" placeholder="Escribir hallazgo nuevo..." maxlength="255">
+            <button type="button" id="hzAddBtn">Añadir</button>
+          </div>
+          <div class="hz-count" id="hzCount"><strong>0</strong> en el reporte</div>
+        </div>
+      </article>
+
+      <article class="card ed-panel">
         <h3>Plantillas</h3>
-        <p>Elige una estructura base para tu reporte</p>
-        <div class="template-tabs">
-          <button class="active" type="button">Informe</button>
-          <button type="button">Imágenes</button>
+        <div class="ph-sub">Elige una estructura base para tu reporte</div>
+        <div class="tpl-tabs">
+          <button type="button" class="tpl-tab active" data-tab="informe">Informe</button>
+          <button type="button" class="tpl-tab" data-tab="imagenes">Imágenes</button>
         </div>
-        <div class="template-list" id="templateList">
-          <button class="template-item" type="button">
-            <span class="template-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span>
-            <span><strong>Colonoscopia</strong><small>Preparación, hallazgos por segmento...</small></span>
-            <svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.04a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.87.34l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.04A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05A1.7 1.7 0 0 0 19.4 9c.24.61.84 1 1.56 1H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15Z"/></svg>
-          </button>
-          <button class="template-item" type="button">
-            <span class="template-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span>
-            <span><strong>Gastroscopia</strong><small>Esófago, estómago, duodeno...</small></span>
-            <svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.04a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.87.34l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.04A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05A1.7 1.7 0 0 0 19.4 9c.24.61.84 1 1.56 1H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15Z"/></svg>
-          </button>
-          <button class="template-item" type="button">
-            <span class="template-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span>
-            <span><strong>Duodenoscopia</strong><small>Duodeno, papila, vía biliar...</small></span>
-            <svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.04a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.87.34l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.04A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05A1.7 1.7 0 0 0 19.4 9c.24.61.84 1 1.56 1H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15Z"/></svg>
-          </button>
-          <button class="template-item" type="button">
-            <span class="template-ico plus">+</span>
-            <span><strong>En blanco</strong><small>Empieza desde cero</small></span>
-            <svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.04a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.87.34l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.04A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05A1.7 1.7 0 0 0 19.4 9c.24.61.84 1 1.56 1H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15Z"/></svg>
-          </button>
+        <div class="tpl-pane active" id="paneInforme"><div class="tpl-list" id="tplList"></div></div>
+        <div class="tpl-pane" id="paneImagenes">
+          <div class="ph-sub">Define cuántas imágenes del estudio se incluyen</div>
+          <div class="img-grid" id="imgTplGrid"></div>
         </div>
-      </section>
+      </article>
     </aside>
-  </section>
+  </div>
+
+  <div class="cfg-ov" id="cfgModal">
+    <div class="cfg-modal" role="dialog" aria-modal="true" aria-labelledby="cfgTitle">
+      <h3 id="cfgTitle">Configurar plantilla</h3>
+      <div class="cfg-sub" id="cfgSub">Así se verá el encabezado del reporte</div>
+      <div class="cfg-pv-tag">Vista previa de la hoja</div>
+      <div class="cfg-pv-hint">Arrastra el logo, el nombre o la imagen para moverlos. Usa la esquina azul para cambiar tamaño.</div>
+      <div class="cfg-sheet" id="cfgSheet">
+        <div class="cfg-head" id="cfgHead">
+          <div class="cfg-el" id="elLogo" data-el="logo"><div class="e-logo" id="elLogoIn">Logo de<br>la clínica</div><span class="rz" data-rz="logo"></span></div>
+          <div class="cfg-el" id="elName" data-el="name"><div class="e-name"><span id="elNameTx">Nombre de la clínica</span></div><span class="rz" data-rz="name"></span></div>
+          <div class="cfg-el" id="elAnat" data-el="anat"><div class="e-anat" id="elAnatIn"></div><span class="rz" data-rz="anat"></span></div>
+        </div>
+        <div class="cfg-body">
+          <div class="b-meta"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="b-grid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="b-lines"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="b-sign" id="cfgSignPv" data-pos="center"><u id="cfgSignPvTx">Dr. Nombre del médico</u></div>
+        </div>
+      </div>
+      <div class="cfg-field"><label>Logo de la clínica</label><label class="cfg-file">Subir logo<input type="file" id="cfgLogoInput" accept="image/*" hidden></label></div>
+      <div class="cfg-field"><label>Nombre de la clínica</label><input type="text" id="cfgClinic" placeholder="Ej. Sanatorio Santa María"></div>
+      <div class="cfg-field"><label>Imagen lateral</label><label class="cfg-file">Subir imagen<input type="file" id="cfgAnatInput" accept="image/*" hidden></label></div>
+      <div class="cfg-field"><label>Nombre en la firma</label><input type="text" id="cfgSignName" placeholder="Dr. Nombre del médico"></div>
+      <div class="cfg-field"><label>Posición de la firma</label><select id="cfgSignPos"><option value="left">Izquierda</option><option value="center" selected>Centro</option><option value="right">Derecha</option></select></div>
+      <div id="imgCfgFields" class="img-cfg-fields">
+        <div class="cfg-row">
+          <div class="cfg-field"><label>Columnas de imágenes</label><input type="number" id="cfgImgCols" min="1" max="6" value="2"></div>
+          <div class="cfg-field"><label>Número de imágenes</label><input type="number" id="cfgImgCount" min="1" max="24" value="4"></div>
+        </div>
+      </div>
+      <div class="cfg-actions">
+        <button type="button" class="cfg-btn" id="cfgCancel">Cerrar</button>
+        <button type="button" class="cfg-btn primary" id="cfgApply">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-ov" id="previewModal">
+    <div class="pv-bar">
+      <span class="pv-title">Vista previa del reporte</span>
+      <div class="pv-bar-actions">
+        <button type="button" class="cfg-btn" id="pvPrint">Imprimir / PDF</button>
+        <button type="button" class="cfg-btn primary" id="pvClose">Cerrar</button>
+      </div>
+    </div>
+    <div class="pv-scroll"><div class="pv-paper" id="pvPaper"></div></div>
+  </div>
+
+  <div class="ed-toast" id="edToast" role="status" aria-live="polite"></div>
 </div>
