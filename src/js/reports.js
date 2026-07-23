@@ -1,13 +1,20 @@
 // ================= IA Reportes - Inicializador =================
 // Tauri consume Laravel por HTTP. La base de datos y la IA viven en Laravel.
 
-import { apiBaseUrl, laravelFetch } from './laravel.js';
+import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  laravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
 import { authHeader, clearAuthToken, getAuthToken, setAuthToken } from './auth.js';
 import { escapeHtml } from './html.js';
 
 const REPORTS_BASE = `${apiBaseUrl()}/api/tauri/reportes`;
 const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
 const REPORT_DRAFT_KEY = 'enclaii.reportes.editor.draft';
+const REPORT_ASSET_TIMEOUT_MS = 8000;
+const REPORT_PRINT_WAIT_MS = 2500;
 
 let reportsTemplate = '';
 let editorState = {
@@ -28,6 +35,7 @@ let editorState = {
   saving: false,
   generating: false,
   chatting: false,
+  assetUrlCache: new Map(),
 };
 
 function endpoint(path = '') {
@@ -178,6 +186,48 @@ function normalizeStudy(item, index) {
     date,
     label: item?.label || `${patientName} - ${procedure}${date ? ` - ${date}` : ''}`,
     raw: item,
+  };
+}
+
+function reportImageUrl(item = {}) {
+  return laravelAssetUrl(
+    item.url ||
+    item.src ||
+    item.media_url ||
+    item.file_url ||
+    item.archivo_url ||
+    item.imagen_url ||
+    item.image_url ||
+    item.path ||
+    item.ruta ||
+    item.archivo ||
+    item.file ||
+    ''
+  );
+}
+
+function normalizeReportImage(item = {}, index = 0) {
+  const url = reportImageUrl(item);
+  const title =
+    item.titulo ||
+    item.title ||
+    item.nombre ||
+    item.filename ||
+    item.file ||
+    `Captura ${index + 1}`;
+
+  return {
+    ...item,
+    id: item.id ?? item.imagen_id ?? item.image_id ?? index,
+    titulo: title,
+    url,
+    show_url: laravelAssetUrl(
+      item.show_url ||
+      item.ver_url ||
+      item.full_url ||
+      item.url ||
+      url
+    ),
   };
 }
 
@@ -525,8 +575,7 @@ function closePreview(root) {
 }
 
 function printReport(root) {
-  openPreview(root);
-  window.print();
+  printPreviewReport(root);
 }
 
 const STUDY_IMAGES = {
@@ -665,6 +714,248 @@ function templateKeyFromType(type) {
 
 function imageKey(img, index) {
   return String(img?.id ?? index);
+}
+
+function reportImageMarkup(img, index, className = '') {
+  const title =
+    img.titulo || 'Captura';
+
+  const url =
+    img.url || '';
+
+  return `
+    <span class="report-img-loader">Cargando imagen...</span>
+    <img
+      class="${escapeHtml(className)}"
+      alt=""
+      title="${escapeHtml(title)}"
+      loading="eager"
+      hidden
+      data-report-img-index="${index}"
+      data-report-asset-url="${escapeHtml(url)}"
+    >
+  `;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function withTimeout(
+  promise,
+  ms,
+  message = 'Tiempo de espera agotado.'
+) {
+  return Promise.race([
+    promise,
+    delay(ms).then(() => {
+      throw new Error(message);
+    }),
+  ]);
+}
+
+async function authenticatedReportAssetUrl(url) {
+  if (!url) {
+    return '';
+  }
+
+  if (!editorState.assetUrlCache) {
+    editorState.assetUrlCache = new Map();
+  }
+
+  if (editorState.assetUrlCache.has(url)) {
+    return editorState.assetUrlCache.get(url);
+  }
+
+  const localUrl =
+    await authenticatedLaravelAssetUrl(
+      url,
+      {
+        accept: 'image/*,*/*',
+      }
+    );
+
+  editorState.assetUrlCache.set(
+    url,
+    localUrl
+  );
+
+  return localUrl;
+}
+
+async function reportImageSourceCandidates(remoteUrl) {
+  const sources = [];
+
+  try {
+    const localUrl =
+      await withTimeout(
+        authenticatedReportAssetUrl(remoteUrl),
+        REPORT_ASSET_TIMEOUT_MS,
+        'La imagen tardo demasiado en responder.'
+      );
+
+    if (localUrl) {
+      sources.push(localUrl);
+    }
+  } catch (error) {
+    console.warn(
+      'No se pudo preparar captura autenticada, se intentara URL directa:',
+      error
+    );
+  }
+
+  if (
+    remoteUrl &&
+    !remoteUrl.startsWith('blob:') &&
+    !remoteUrl.startsWith('data:')
+  ) {
+    sources.push(remoteUrl);
+  }
+
+  return [...new Set(sources)];
+}
+
+function loadReportImageSource(
+  image,
+  src,
+  frame,
+  loader
+) {
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = (loaded) => {
+      if (settled) return;
+      settled = true;
+
+      window.clearTimeout(timer);
+      resolve(loaded);
+    };
+
+    const timer = window.setTimeout(
+      () => finish(false),
+      REPORT_ASSET_TIMEOUT_MS
+    );
+
+    image.onload = () => {
+      if (settled) return;
+      image.hidden = false;
+      image.style.visibility = '';
+      frame?.classList.remove('img-missing');
+
+      if (loader) {
+        loader.hidden = true;
+      }
+
+      finish(true);
+    };
+
+    image.onerror = () => {
+      if (settled) return;
+      finish(false);
+    };
+
+    image.loading = 'eager';
+    image.hidden = false;
+    image.style.visibility = 'hidden';
+    image.src = src;
+
+    if (
+      image.complete &&
+      image.naturalWidth > 0
+    ) {
+      image.onload();
+    }
+  });
+}
+
+async function hydrateReportImage(image, options = {}) {
+  const remoteUrl =
+    image.dataset.reportAssetUrl;
+
+  if (
+    !remoteUrl ||
+    (
+      !options.force &&
+      image.dataset.reportAssetHydrated === 'true'
+    )
+  ) {
+    return Boolean(image.getAttribute('src'));
+  }
+
+  image.dataset.reportAssetHydrated = 'true';
+
+  const frame =
+    image.closest(
+      '.cell, .cap-thumb'
+    );
+
+  const loader =
+    frame?.querySelector(
+      '.report-img-loader'
+    );
+
+  try {
+    const sources =
+      await reportImageSourceCandidates(
+        remoteUrl
+      );
+
+    if (!sources.length) {
+      throw new Error(
+        'Laravel no devolvio una imagen usable.'
+      );
+    }
+
+    for (const src of sources) {
+      const loaded =
+        await loadReportImageSource(
+          image,
+          src,
+          frame,
+          loader
+        );
+
+      if (loaded) {
+        return true;
+      }
+    }
+
+    throw new Error(
+      'No se pudo renderizar la imagen.'
+    );
+  } catch (error) {
+    console.warn(
+      'No se pudo cargar captura para reporte:',
+      error
+    );
+
+    image.hidden = true;
+    frame?.classList.add('img-missing');
+
+    if (loader) {
+      loader.hidden = false;
+      loader.textContent =
+        'No se pudo cargar';
+    }
+
+    image.removeAttribute('data-report-asset-hydrated');
+    return false;
+  }
+}
+
+function hydrateReportImages(root, options = {}) {
+  const images = Array.from(
+    root.querySelectorAll?.(
+      'img[data-report-asset-url]'
+    ) || []
+  );
+
+  return Promise.all(
+    images.map((image) => hydrateReportImage(image, options))
+  );
 }
 
 function imageConfigPayload() {
@@ -892,7 +1183,7 @@ function renderReportImages(root) {
     const span = clampInt(state.size, 1, cols, 1);
     return `
       <span class="cell" data-img-index="${index}" style="grid-column:span ${span}">
-        <img src="${escapeHtml(img.url)}" alt="" title="${escapeHtml(img.titulo || 'Captura')}" loading="lazy">
+        ${reportImageMarkup(img, index)}
         <span class="rep-img-tools">
           <button type="button" data-img-action="smaller" aria-label="Reducir captura" title="Reducir">-</button>
           <button type="button" data-img-action="larger" aria-label="Agrandar captura" title="Agrandar">+</button>
@@ -901,6 +1192,7 @@ function renderReportImages(root) {
         <span class="rep-img-size">${span}x</span>
       </span>`;
   }).join('');
+  hydrateReportImages(repImgs);
   syncCaptureThumbs(root);
 }
 
@@ -929,13 +1221,14 @@ function renderCapturePanel(root) {
   host.innerHTML = `<div class="cap-grid">${editorState.images.map((img, index) => `
     <div class="cap-thumb-wrap">
       <button type="button" class="cap-thumb" data-img-index="${index}" title="Agregar o quitar del reporte">
-        <img src="${escapeHtml(img.url)}" alt="" loading="lazy">
+        ${reportImageMarkup(img, index)}
         <span class="cap-state">En reporte</span>
       </button>
       <a class="cap-open" href="${escapeHtml(img.show_url || img.url)}" target="_blank" rel="noopener" aria-label="Abrir captura completa" title="Abrir captura completa">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
       </a>
     </div>`).join('')}</div>`;
+  hydrateReportImages(host);
   syncCaptureThumbs(root);
 }
 
@@ -1046,11 +1339,70 @@ function openReportPreview(root) {
   const clone = cleanPreviewClone(doc.cloneNode(true));
   paper.innerHTML = '';
   paper.appendChild(clone);
+  resetReportAssetImages(paper);
+  hydrateReportImages(paper, { force: true });
   modal.classList.add('open');
 }
 
 function closeReportPreview(root) {
   root.querySelector('#previewModal')?.classList.remove('open');
+}
+
+function removeReportPrintRoot() {
+  document.getElementById('printReportRoot')?.remove();
+  document.body.classList.remove('has-report-print-root');
+}
+
+function resetReportAssetImages(root) {
+  root.querySelectorAll?.('img[data-report-asset-url]').forEach((image) => {
+    image.removeAttribute('data-report-asset-hydrated');
+
+    const loader = image.closest('.cell, .cap-thumb')?.querySelector('.report-img-loader');
+    if (loader) {
+      loader.hidden = Boolean(image.getAttribute('src')) && !image.hidden;
+    }
+  });
+}
+
+function buildReportPrintRoot(root) {
+  const doc = root.querySelector('#reportDocument');
+  if (!doc) return null;
+
+  removeReportPrintRoot();
+
+  const printRoot = document.createElement('div');
+  printRoot.id = 'printReportRoot';
+
+  const paper = document.createElement('div');
+  paper.className = 'pv-paper print-paper';
+  paper.appendChild(cleanPreviewClone(doc.cloneNode(true)));
+
+  printRoot.appendChild(paper);
+  document.body.appendChild(printRoot);
+  document.body.classList.add('has-report-print-root');
+  resetReportAssetImages(printRoot);
+
+  return printRoot;
+}
+
+async function printPreviewReport(root) {
+  openReportPreview(root);
+  const printRoot = buildReportPrintRoot(root);
+  if (!printRoot) return;
+
+  await Promise.race([
+    hydrateReportImages(printRoot, { force: true }),
+    delay(REPORT_PRINT_WAIT_MS),
+  ]);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  window.addEventListener(
+    'afterprint',
+    () => {
+      setTimeout(removeReportPrintRoot, 200);
+    },
+    { once: true }
+  );
+  window.print();
 }
 
 function setupLaravelEditorInteractions(root) {
@@ -1172,9 +1524,17 @@ function setupLaravelEditorInteractions(root) {
 
   root.querySelector('#btnPreview')?.addEventListener('click', () => openReportPreview(root));
   root.querySelector('#pvClose')?.addEventListener('click', () => closeReportPreview(root));
-  root.querySelector('#pvPrint')?.addEventListener('click', () => {
-    openReportPreview(root);
-    setTimeout(() => window.print(), 80);
+  root.querySelector('#pvPrint')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    if (button?.dataset.printing === 'true') return;
+    if (button) button.dataset.printing = 'true';
+    setButtonBusy(button, true, 'Preparando...');
+    try {
+      await printPreviewReport(root);
+    } finally {
+      if (button) button.dataset.printing = 'false';
+      setButtonBusy(button, false);
+    }
   });
 
   root.querySelector('#reportDocument')?.addEventListener('input', () => {
@@ -1573,6 +1933,9 @@ async function loadEditorData(root) {
   const studies = data.studies.length ? data.studies : (preloadStudy.id && preloadStudy.id !== 'undefined' ? [preloadStudy] : []);
   const templatesByKey = mergeTemplateData(templatesResult.status === 'fulfilled' ? templatesResult.value?.plantillas : {});
   const savedImageConfig = editorData.reporte?.imagenes_config || {};
+  const reportImages = Array.isArray(editorData.imagenes)
+    ? editorData.imagenes.map(normalizeReportImage)
+    : [];
 
   editorState = {
     ...editorState,
@@ -1580,13 +1943,14 @@ async function loadEditorData(root) {
     templates: Object.values(templatesByKey),
     templatesByKey,
     findings: data.findings,
-    images: Array.isArray(editorData.imagenes) ? editorData.imagenes : [],
+    images: reportImages,
     report: editorData.reporte || null,
     selectedStudy: preloadStudy.id && preloadStudy.id !== 'undefined' ? preloadStudy : studies[0] || null,
     selectedTemplate: null,
     imageState: new Map(),
     imageEnabled: savedImageConfig.enabled !== false,
     imageCols: clampInt(savedImageConfig.cols, 1, 8, 4),
+    assetUrlCache: new Map(),
   };
 
   editorState.images.forEach((img, index) => {

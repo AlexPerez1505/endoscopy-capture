@@ -1,7 +1,12 @@
 // ================= Agendar cita (pantalla completa) =================
 // Port 1:1 del flujo de Laravel (resources/views/agenda/agendar) a la SPA de Tauri.
 
-import { apiBaseUrl, laravelFetch } from '../../laravel.js';
+import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from '../../laravel.js';
 import { authHeader } from '../../auth.js';
 import { escapeHtml } from '../../html.js';
 import {
@@ -77,7 +82,32 @@ function normalizePatient(raw = {}) {
     tel: raw.telefono || '',
     email: raw.email || '',
     dir: raw.direccion || '',
-    foto_url: raw.foto_url || null,
+    foto_url: firstLaravelAssetUrl(raw, [
+      'foto_url',
+      'photo_url',
+      'avatar_url',
+      'profile_photo_url',
+      'fotografia_url',
+      'imagen_url',
+      'image_url',
+      'foto_perfil_url',
+      'url_foto',
+      'url_imagen',
+      'foto',
+      'photo',
+      'avatar',
+      'fotografia',
+      'imagen',
+      'image',
+      'foto_perfil',
+      'profile_photo',
+      'profile_photo_path',
+      'avatar_path',
+      'photo_path',
+      'foto_path',
+      'ruta_foto',
+      'ruta_imagen',
+    ]),
     iniciales,
     medico: raw.medico || '',
     procedimiento: raw.procedimiento || '',
@@ -211,17 +241,72 @@ function updateCitaFromPatient(pac) {
   fillSelect(document.getElementById('citaProcedimiento'), pac?.procedimiento, 'Sin procedimiento asignado');
 }
 
+async function renderPatientAvatar(avatar, pac) {
+  if (!avatar) {
+    return;
+  }
+
+  const initials =
+    pac?.iniciales || 'PX';
+
+  if (!pac?.foto_url) {
+    avatar.textContent = initials;
+    return;
+  }
+
+  const requestId =
+    `${Date.now()}-${Math.random()}`;
+
+  avatar.dataset.photoRequestId =
+    requestId;
+  avatar.textContent =
+    initials;
+
+  try {
+    const localUrl =
+      await authenticatedLaravelAssetUrl(
+        pac.foto_url,
+        {
+          accept: 'image/*,*/*',
+        }
+      );
+
+    if (
+      avatar.dataset.photoRequestId !==
+      requestId
+    ) {
+      return;
+    }
+
+    avatar.innerHTML = `
+      <img
+        src="${escapeHtml(localUrl)}"
+        alt="${escapeHtml(pac.nombre || 'Paciente')}"
+      >
+    `;
+  } catch (error) {
+    console.warn(
+      'No se pudo cargar la foto del paciente:',
+      error
+    );
+
+    if (
+      avatar.dataset.photoRequestId ===
+      requestId
+    ) {
+      avatar.textContent =
+        initials;
+    }
+  }
+}
+
 function updatePacResult(pac) {
   if (!pac) return;
   state.selectedPatientId = pac.id || null;
   state.selectedPatientName = pac.nombre || '';
 
   const avatar = document.getElementById('pacAvatar');
-  if (avatar) {
-    avatar.innerHTML = pac.foto_url
-      ? `<img src="${escapeHtml(pac.foto_url)}" alt="${escapeHtml(pac.nombre)}">`
-      : escapeHtml(pac.iniciales || 'PX');
-  }
+  renderPatientAvatar(avatar, pac);
 
   document.getElementById('pacName').textContent = pac.nombre || 'Paciente';
   document.getElementById('pacFolio').textContent = `Folio: ${pac.folio || 'Sin folio'}`;

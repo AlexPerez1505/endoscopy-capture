@@ -1,4 +1,9 @@
-import { apiBaseUrl, laravelFetch } from './laravel.js';
+import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
 import { getAuthToken } from './auth.js';
 import { escapeHtml } from './html.js';
 import {
@@ -18,6 +23,42 @@ let miniTargetId = null;
 let selectedStudyFiles = [];
 
 let patientFormAbortController = null;
+
+function patientPhotoUrl(patient = {}) {
+  return firstLaravelAssetUrl(patient, [
+    'foto_url',
+    'photo_url',
+    'avatar_url',
+    'profile_photo_url',
+    'fotografia_url',
+    'imagen_url',
+    'image_url',
+    'foto_perfil_url',
+    'url_foto',
+    'url_imagen',
+    'fotoUrl',
+    'photoUrl',
+    'avatarUrl',
+    'profilePhotoUrl',
+    'foto',
+    'photo',
+    'avatar',
+    'fotografia',
+    'imagen',
+    'image',
+    'foto_perfil',
+    'profile_photo',
+    'profile_photo_path',
+    'avatar_path',
+    'photo_path',
+    'foto_path',
+    'fotografia_path',
+    'imagen_path',
+    'image_path',
+    'ruta_foto',
+    'ruta_imagen',
+  ]);
+}
 
 /* =========================================================
    API
@@ -355,6 +396,8 @@ function showMainPhoto(url = '') {
 
   if (!url) {
     image.hidden = true;
+    image.onerror = null;
+    image.onload = null;
     image.removeAttribute('src');
 
     if (placeholder) {
@@ -364,12 +407,66 @@ function showMainPhoto(url = '') {
     return;
   }
 
-  image.src = url;
+  const requestId =
+    `${Date.now()}-${Math.random()}`;
+
+  image.dataset.photoRequestId =
+    requestId;
+
+  image.onerror = () => {
+    image.hidden = true;
+    image.removeAttribute('src');
+
+    if (placeholder) {
+      placeholder.hidden = false;
+    }
+  };
+
+  image.onload = () => {
+    image.hidden = false;
+
+    if (placeholder) {
+      placeholder.hidden = true;
+    }
+  };
+
   image.hidden = false;
 
   if (placeholder) {
     placeholder.hidden = true;
   }
+
+  authenticatedLaravelAssetUrl(
+    url,
+    {
+      accept: 'image/*,*/*',
+    }
+  )
+    .then((localUrl) => {
+      if (
+        image.dataset.photoRequestId !==
+        requestId
+      ) {
+        return;
+      }
+
+      image.src = localUrl;
+    })
+    .catch(() => {
+      if (
+        image.dataset.photoRequestId !==
+        requestId
+      ) {
+        return;
+      }
+
+      image.hidden = true;
+      image.removeAttribute('src');
+
+      if (placeholder) {
+        placeholder.hidden = false;
+      }
+    });
 }
 
 function showModalPhoto(url = '') {
@@ -394,6 +491,8 @@ function showModalPhoto(url = '') {
 
   if (!url) {
     image.hidden = true;
+    image.onerror = null;
+    image.onload = null;
     image.removeAttribute('src');
 
     if (
@@ -406,7 +505,32 @@ function showModalPhoto(url = '') {
     return;
   }
 
-  image.src = url;
+  const requestId =
+    `${Date.now()}-${Math.random()}`;
+
+  image.dataset.photoRequestId =
+    requestId;
+
+  image.onerror = () => {
+    image.hidden = true;
+    image.removeAttribute('src');
+
+    if (
+      !cameraStream &&
+      placeholder
+    ) {
+      placeholder.hidden = false;
+    }
+  };
+
+  image.onload = () => {
+    image.hidden = false;
+
+    if (placeholder) {
+      placeholder.hidden = true;
+    }
+  };
+
   image.hidden = false;
 
   if (video) {
@@ -416,6 +540,41 @@ function showModalPhoto(url = '') {
   if (placeholder) {
     placeholder.hidden = true;
   }
+
+  authenticatedLaravelAssetUrl(
+    url,
+    {
+      accept: 'image/*,*/*',
+    }
+  )
+    .then((localUrl) => {
+      if (
+        image.dataset.photoRequestId !==
+        requestId
+      ) {
+        return;
+      }
+
+      image.src = localUrl;
+    })
+    .catch(() => {
+      if (
+        image.dataset.photoRequestId !==
+        requestId
+      ) {
+        return;
+      }
+
+      image.hidden = true;
+      image.removeAttribute('src');
+
+      if (
+        !cameraStream &&
+        placeholder
+      ) {
+        placeholder.hidden = false;
+      }
+    });
 }
 
 function fileToDataUrl(file) {
@@ -1238,7 +1397,12 @@ function renderExistingFiles(
 function fillPatient(
   patient = {}
 ) {
-  currentPatient = patient;
+  currentPatient = {
+    ...patient,
+    foto_url: patientPhotoUrl(patient),
+  };
+
+  patient = currentPatient;
 
   updateFolio(
     patient.folio ||

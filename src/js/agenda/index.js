@@ -13,6 +13,9 @@ import { escapeHtml } from '../html.js';
 import {
   AGENDAR_PREFILL_STORAGE_KEY,
   OPEN_PATIENT_ID_STORAGE_KEY,
+  STUDY_LABEL_STORAGE_KEY,
+  STUDY_PATIENT_ID_STORAGE_KEY,
+  STUDY_PATIENT_NAME_STORAGE_KEY,
 } from '../storage-keys.js';
 
 const API_BASE_URL = apiBaseUrl();
@@ -529,6 +532,30 @@ function navigateHash(route) {
   window.location.hash = route;
 }
 
+function openStudyCapture(d) {
+  const patientId = String(d?.pacienteId || '').trim();
+  const patientName = String(d?.fullName || d?.displayName || '').trim();
+  const studyLabel = String(d?.proc || 'Endoscopia').trim() || 'Endoscopia';
+
+  if (!patientId) {
+    navigateHash('pacientes');
+    return;
+  }
+
+  sessionStorage.setItem(OPEN_PATIENT_ID_STORAGE_KEY, patientId);
+  sessionStorage.setItem(STUDY_PATIENT_ID_STORAGE_KEY, patientId);
+  sessionStorage.setItem(STUDY_PATIENT_NAME_STORAGE_KEY, patientName || 'Paciente');
+  sessionStorage.setItem(STUDY_LABEL_STORAGE_KEY, studyLabel);
+
+  const params = new URLSearchParams({
+    patient_id: patientId,
+    patient_name: patientName || 'Paciente',
+    study_label: studyLabel,
+  });
+
+  window.location.href = `./index.html?${params.toString()}`;
+}
+
 function showPopupForData(d, e, dateKey) {
   const evPopup = document.getElementById('evPopup');
   const evPopAvatar = document.getElementById('evPopAvatar');
@@ -578,8 +605,7 @@ function showPopupForData(d, e, dateKey) {
         sessionStorage.setItem(OPEN_PATIENT_ID_STORAGE_KEY, d.pacienteId || '');
         navigateHash('pacientes');
       } else if (b.label === 'Iniciar Estudio') {
-        sessionStorage.setItem(OPEN_PATIENT_ID_STORAGE_KEY, d.pacienteId || '');
-        navigateHash('pacientes');
+        openStudyCapture(d);
       } else if (b.label === 'Ver Informe') {
         navigateHash('ia-reportes');
       } else if (b.label === 'Reprogramar') {

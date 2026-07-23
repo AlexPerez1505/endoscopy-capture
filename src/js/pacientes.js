@@ -1,4 +1,9 @@
-import { apiBaseUrl, laravelFetch } from './laravel.js';
+import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
 import { getAuthToken } from './auth.js';
 import { escapeHtml } from './html.js';
 import {
@@ -10,6 +15,7 @@ import {
 } from './storage-keys.js';
 
 const PAGE_SIZE = 15;
+const PATIENTS_FETCH_LIMIT = 1000;
 const PATIENTS_SYNC_INTERVAL_MS = 3000;
 
 let patients = [];
@@ -26,10 +32,14 @@ let openMenuPatientId = null;
 
 function endpoint(path = '') {
   const cleanPath = String(path || '').replace(/^\/+/, '');
+  const base =
+    `${apiBaseUrl()}/api/tauri/pacientes`;
 
-  return `${apiBaseUrl()}/api/tauri/pacientes${
-    cleanPath ? `/${cleanPath}` : ''
-  }`;
+  if (cleanPath.startsWith('?')) {
+    return `${base}${cleanPath}`;
+  }
+
+  return `${base}${cleanPath ? `/${cleanPath}` : ''}`;
 }
 
 async function request(path = '', options = {}) {
@@ -144,6 +154,42 @@ function normalizeStudy(study = {}) {
   };
 }
 
+function patientPhotoUrl(patient = {}) {
+  return firstLaravelAssetUrl(patient, [
+    'foto_url',
+    'photo_url',
+    'avatar_url',
+    'profile_photo_url',
+    'fotografia_url',
+    'imagen_url',
+    'image_url',
+    'foto_perfil_url',
+    'url_foto',
+    'url_imagen',
+    'fotoUrl',
+    'photoUrl',
+    'avatarUrl',
+    'profilePhotoUrl',
+    'foto',
+    'photo',
+    'avatar',
+    'fotografia',
+    'imagen',
+    'image',
+    'foto_perfil',
+    'profile_photo',
+    'profile_photo_path',
+    'avatar_path',
+    'photo_path',
+    'foto_path',
+    'fotografia_path',
+    'imagen_path',
+    'image_path',
+    'ruta_foto',
+    'ruta_imagen',
+  ]);
+}
+
 function normalizePatient(patient = {}) {
   const name =
     patient.nombre_completo ||
@@ -221,9 +267,7 @@ function normalizePatient(patient = {}) {
       '',
 
     foto_url:
-      patient.foto_url ||
-      patient.photo_url ||
-      '',
+      patientPhotoUrl(patient),
 
     status:
       latest?.estado ||
@@ -255,15 +299,23 @@ function normalizePatient(patient = {}) {
 }
 
 function normalizePayload(payload) {
-  const list = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.pacientes)
-      ? payload.pacientes
-      : Array.isArray(payload?.patients)
-        ? payload.patients
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : [];
+  let list = [];
+
+  if (Array.isArray(payload)) {
+    list = payload;
+  } else if (Array.isArray(payload?.pacientes)) {
+    list = payload.pacientes;
+  } else if (Array.isArray(payload?.pacientes?.data)) {
+    list = payload.pacientes.data;
+  } else if (Array.isArray(payload?.patients)) {
+    list = payload.patients;
+  } else if (Array.isArray(payload?.patients?.data)) {
+    list = payload.patients.data;
+  } else if (Array.isArray(payload?.data?.data)) {
+    list = payload.data.data;
+  } else if (Array.isArray(payload?.data)) {
+    list = payload.data;
+  }
 
   return list.map(normalizePatient);
 }
@@ -305,6 +357,46 @@ function currentRouteIsPatients() {
     window.location.hash
       .replace(/^#/, '')
       .split('?')[0] === 'pacientes'
+  );
+}
+
+function bindPatientAvatarFallbacks() {
+  if (
+    document.documentElement.dataset
+      .patientAvatarFallbackBound === 'true'
+  ) {
+    return;
+  }
+
+  document.documentElement.dataset
+    .patientAvatarFallbackBound = 'true';
+
+  document.addEventListener(
+    'error',
+    (event) => {
+      const image =
+        event.target;
+
+      if (
+        image?.tagName !== 'IMG' ||
+        image.dataset?.patientAvatarImg !== 'true'
+      ) {
+        return;
+      }
+
+      const container =
+        image.closest(
+          '.patient-avatar, .panel-avatar, .ia-patient-avatar'
+        );
+
+      if (!container) {
+        return;
+      }
+
+      container.textContent =
+        image.dataset.avatarInitials || 'PX';
+    },
+    true
   );
 }
 
@@ -358,7 +450,9 @@ async function loadPatients({
   }
 
   try {
-    const payload = await request();
+    const payload = await request(
+      `?per_page=${PATIENTS_FETCH_LIMIT}`
+    );
     const nextPatients = normalizePayload(payload);
 
     patients = nextPatients;
@@ -395,7 +489,9 @@ async function syncPatientsFromLaravel({
   patientsSyncRunning = true;
 
   try {
-    const payload = await request();
+    const payload = await request(
+      `?per_page=${PATIENTS_FETCH_LIMIT}`
+    );
     const nextPatients = normalizePayload(payload);
 
     const nextFingerprint =
@@ -503,17 +599,104 @@ function statusLabel(status) {
   }[status] || '';
 }
 
+function patientAvatarHtml(patient) {
+  if (!patient.foto_url) {
+    return escapeHtml(patient.initials);
+  }
+
+  return `
+    <span data-patient-avatar-fallback="true">
+      ${escapeHtml(patient.initials)}
+    </span>
+    <img
+      alt="${escapeHtml(patient.name)}"
+      hidden
+      data-patient-avatar-img="true"
+      data-auth-asset-url="${escapeHtml(patient.foto_url)}"
+      data-avatar-initials="${escapeHtml(patient.initials)}"
+    >
+  `;
+}
+
+async function hydratePatientAvatar(image) {
+  const remoteUrl =
+    image.dataset.authAssetUrl;
+
+  if (
+    !remoteUrl ||
+    image.dataset.assetHydrated === 'true'
+  ) {
+    return;
+  }
+
+  image.dataset.assetHydrated = 'true';
+
+  const container =
+    image.closest(
+      '.patient-avatar, .panel-avatar, .ia-patient-avatar'
+    );
+
+  try {
+    const localUrl =
+      await authenticatedLaravelAssetUrl(
+        remoteUrl,
+        {
+          accept: 'image/*,*/*',
+        }
+      );
+
+    if (!localUrl) {
+      throw new Error(
+        'Laravel no devolviÃ³ una URL de imagen usable.'
+      );
+    }
+
+    image.onload = () => {
+      image.hidden = false;
+
+      const fallback =
+        container?.querySelector(
+          '[data-patient-avatar-fallback]'
+        );
+
+      if (fallback) {
+        fallback.hidden = true;
+      }
+    };
+
+    image.onerror = () => {
+      if (container) {
+        container.textContent =
+          image.dataset.avatarInitials || 'PX';
+      }
+    };
+
+    image.src = localUrl;
+  } catch (error) {
+    console.warn(
+      'No se pudo cargar la foto del paciente:',
+      error
+    );
+
+    if (container) {
+      container.textContent =
+        image.dataset.avatarInitials || 'PX';
+    }
+  }
+}
+
+function hydratePatientAvatars(root = document) {
+  root
+    .querySelectorAll?.(
+      'img[data-patient-avatar-img="true"][data-auth-asset-url]'
+    )
+    .forEach((image) => {
+      hydratePatientAvatar(image);
+    });
+}
+
 function rowHtml(patient, index) {
   const status = normalizeStatus(patient.status);
-
-  const avatar = patient.foto_url
-    ? `
-      <img
-        src="${escapeHtml(patient.foto_url)}"
-        alt="${escapeHtml(patient.name)}"
-      >
-    `
-    : escapeHtml(patient.initials);
 
   return `
     <div
@@ -524,7 +707,7 @@ function rowHtml(patient, index) {
     >
       <div class="patient-info">
         <div class="patient-avatar">
-          ${avatar}
+          ${patientAvatarHtml(patient)}
         </div>
 
         <div>
@@ -583,45 +766,38 @@ function rowHtml(patient, index) {
         <button
           type="button"
           class="btn-more"
-          onclick="
-            event.stopPropagation();
-            toggleMenu(this);
-          "
+          data-patient-menu-toggle="${index}"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-label="Opciones de ${escapeHtml(patient.name)}"
         >
           ⋮
         </button>
 
         <div
           class="actions-dropdown"
-          onclick="event.stopPropagation()"
+          data-patient-menu="${index}"
         >
           <a
             href="#"
-            onclick="
-              openPatientEdit(${index});
-              return false;
-            "
+            data-patient-action="edit"
+            data-patient-index="${index}"
           >
             Editar información
           </a>
 
           <a
             href="#"
-            onclick="
-              startPatientStudy(${index});
-              return false;
-            "
+            data-patient-action="study"
+            data-patient-index="${index}"
           >
             Iniciar estudio
           </a>
 
           <a
             href="#"
-            data-nav="ia-reportes"
-            onclick="
-              openPatientReport(${index});
-              return false;
-            "
+            data-patient-action="report"
+            data-patient-index="${index}"
           >
             Crear informe
           </a>
@@ -629,10 +805,8 @@ function rowHtml(patient, index) {
           <a
             href="#"
             class="danger"
-            onclick="
-              deletePatient(${index});
-              return false;
-            "
+            data-patient-action="delete"
+            data-patient-index="${index}"
           >
             Eliminar paciente
           </a>
@@ -692,6 +866,8 @@ function renderPage(page = 1) {
           No se encontraron pacientes.
         </div>
       `;
+
+    hydratePatientAvatars(body);
   }
 
   const info =
@@ -708,6 +884,20 @@ function renderPage(page = 1) {
   restoreOpenMenu();
 }
 
+function shouldShowPaginationPage(page, totalPages) {
+  return (
+    totalPages <= 7 ||
+    page === 1 ||
+    page === totalPages ||
+    Math.abs(page - currentPage) <= 1 ||
+    (currentPage <= 3 && page <= 4) ||
+    (
+      currentPage >= totalPages - 2 &&
+      page >= totalPages - 3
+    )
+  );
+}
+
 function renderPagination(totalPages) {
   const container =
     document.getElementById(
@@ -720,42 +910,102 @@ function renderPagination(totalPages) {
 
   let html = `
     <button
+      type="button"
       class="page-btn"
+      data-page="${currentPage - 1}"
       onclick="renderPage(${currentPage - 1})"
       ${currentPage <= 1 ? 'disabled' : ''}
+      aria-label="Pagina anterior"
     >
       ‹
     </button>
   `;
+
+  let lastRenderedPage = 0;
 
   for (
     let page = 1;
     page <= totalPages;
     page += 1
   ) {
+    if (!shouldShowPaginationPage(page, totalPages)) {
+      continue;
+    }
+
+    if (
+      lastRenderedPage &&
+      page - lastRenderedPage > 1
+    ) {
+      html += '<span class="page-ellipsis">...</span>';
+    }
+
     html += `
       <button
+        type="button"
         class="page-btn ${
           page === currentPage ? 'active' : ''
         }"
+        data-page="${page}"
         onclick="renderPage(${page})"
+        ${page === currentPage ? 'aria-current="page"' : ''}
       >
         ${page}
       </button>
     `;
+
+    lastRenderedPage = page;
   }
 
   html += `
     <button
+      type="button"
       class="page-btn"
+      data-page="${currentPage + 1}"
       onclick="renderPage(${currentPage + 1})"
       ${currentPage >= totalPages ? 'disabled' : ''}
+      aria-label="Pagina siguiente"
     >
       ›
     </button>
   `;
 
   container.innerHTML = html;
+}
+
+function handlePatientsPaginationClick(event) {
+  const button =
+    event.target.closest?.(
+      '#paginationControls .page-btn[data-page]'
+    );
+
+  if (!button || button.disabled) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  renderPage(
+    Number(button.dataset.page) || currentPage
+  );
+}
+
+function bindPaginationEvents() {
+  if (
+    document.documentElement.dataset
+      .patientsPaginationBound === 'true'
+  ) {
+    return;
+  }
+
+  document.documentElement.dataset
+    .patientsPaginationBound = 'true';
+
+  document.addEventListener(
+    'click',
+    handlePatientsPaginationClick,
+    true
+  );
 }
 
 function navigateToPatientCreate() {
@@ -819,20 +1069,10 @@ function openPanel(index) {
     document.getElementById('panelAvatar');
 
   if (avatar) {
-    avatar.innerHTML = patient.foto_url
-      ? `
-        <img
-          src="${escapeHtml(patient.foto_url)}"
-          alt="${escapeHtml(patient.name)}"
-          style="
-            width:100%;
-            height:100%;
-            object-fit:cover;
-            border-radius:inherit;
-          "
-        >
-      `
-      : escapeHtml(patient.initials);
+    avatar.innerHTML =
+      patientAvatarHtml(patient);
+
+    hydratePatientAvatars(avatar);
   }
 
   setPanelText('panelName', patient.name);
@@ -864,7 +1104,15 @@ function openPanel(index) {
     'reportPanelMeta',
     `${patient.age} · ${patient.gender} · ${patient.dob}`
   );
-  setPanelText('reportPanelAvatar', patient.initials);
+  const reportAvatar =
+    document.getElementById('reportPanelAvatar');
+
+  if (reportAvatar) {
+    reportAvatar.innerHTML =
+      patientAvatarHtml(patient);
+
+    hydratePatientAvatars(reportAvatar);
+  }
 
   renderHistory(patient);
 
@@ -940,32 +1188,67 @@ function showTab(tabName) {
     ?.classList.add('active');
 }
 
+function setMenuContainersOpen(isOpen) {
+  document
+    .querySelector('.patients-card')
+    ?.classList.toggle('menu-open', isOpen);
+
+  document
+    .getElementById('contentWrapper')
+    ?.classList.toggle('menu-open', isOpen);
+}
+
+function closeAllPatientMenus() {
+  document
+    .querySelectorAll('.actions-dropdown.active')
+    .forEach((menu) => {
+      menu.classList.remove('active');
+    });
+
+  document
+    .querySelectorAll('.actions-wrapper.is-open')
+    .forEach((wrapper) => {
+      wrapper.classList.remove('is-open');
+    });
+
+  document
+    .querySelectorAll('[data-patient-menu-toggle][aria-expanded="true"]')
+    .forEach((button) => {
+      button.setAttribute('aria-expanded', 'false');
+    });
+
+  openMenuPatientId = null;
+  setMenuContainersOpen(false);
+}
+
 function toggleMenu(button) {
-  const menu = button
-    .closest('.actions-wrapper')
-    ?.querySelector('.actions-dropdown');
+  const wrapper =
+    button.closest('.actions-wrapper');
+
+  const menu =
+    wrapper?.querySelector('.actions-dropdown');
 
   if (!menu) {
     return;
   }
 
-  document
-    .querySelectorAll('.actions-dropdown.active')
-    .forEach((element) => {
-      if (element !== menu) {
-        element.classList.remove('active');
-      }
-    });
+  const shouldOpen =
+    !menu.classList.contains('active');
 
-  menu.classList.toggle('active');
+  closeAllPatientMenus();
 
-  const patientId = button
-    .closest('.patient-row')
-    ?.dataset.patientId;
+  if (!shouldOpen) {
+    return;
+  }
 
-  openMenuPatientId = menu.classList.contains('active')
-    ? patientId || null
-    : null;
+  menu.classList.add('active');
+  wrapper.classList.add('is-open');
+  button.setAttribute('aria-expanded', 'true');
+  setMenuContainersOpen(true);
+
+  openMenuPatientId =
+    button.closest('.patient-row')
+      ?.dataset.patientId || null;
 }
 
 function restoreOpenMenu() {
@@ -977,7 +1260,123 @@ function restoreOpenMenu() {
     `.patient-row[data-patient-id="${openMenuPatientId}"]`
   );
 
-  row?.querySelector('.actions-dropdown')?.classList.add('active');
+  const menu =
+    row?.querySelector('.actions-dropdown');
+
+  const button =
+    row?.querySelector('[data-patient-menu-toggle]');
+
+  if (!menu || !button) {
+    openMenuPatientId = null;
+    setMenuContainersOpen(false);
+    return;
+  }
+
+  menu.classList.add('active');
+  row
+    .querySelector('.actions-wrapper')
+    ?.classList.add('is-open');
+  button.setAttribute('aria-expanded', 'true');
+  setMenuContainersOpen(true);
+}
+
+function handlePatientAction(action, index) {
+  if (
+    !Number.isInteger(index) ||
+    !patients[index]
+  ) {
+    return;
+  }
+
+  closeAllPatientMenus();
+
+  if (action === 'edit') {
+    openPatientEdit(index);
+    return;
+  }
+
+  if (action === 'study') {
+    startPatientStudy(index);
+    return;
+  }
+
+  if (action === 'report') {
+    openPatientReport(index);
+    return;
+  }
+
+  if (action === 'delete') {
+    deletePatient(index);
+  }
+}
+
+function handlePatientMenuClick(event) {
+  const target =
+    event.target;
+
+  const toggle =
+    target.closest?.(
+      '[data-patient-menu-toggle]'
+    );
+
+  if (toggle) {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleMenu(toggle);
+    return;
+  }
+
+  const actionLink =
+    target.closest?.(
+      '[data-patient-action]'
+    );
+
+  if (actionLink) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    handlePatientAction(
+      actionLink.dataset.patientAction,
+      Number(actionLink.dataset.patientIndex)
+    );
+
+    return;
+  }
+
+  if (
+    !target.closest?.('.actions-wrapper')
+  ) {
+    closeAllPatientMenus();
+  }
+}
+
+function handlePatientMenuKeydown(event) {
+  if (event.key === 'Escape') {
+    closeAllPatientMenus();
+  }
+}
+
+function bindPatientMenuEvents() {
+  if (
+    document.documentElement.dataset
+      .patientMenuEventsBound === 'true'
+  ) {
+    return;
+  }
+
+  document.documentElement.dataset
+    .patientMenuEventsBound = 'true';
+
+  document.addEventListener(
+    'click',
+    handlePatientMenuClick,
+    true
+  );
+
+  document.addEventListener(
+    'keydown',
+    handlePatientMenuKeydown
+  );
 }
 
 function deletePatient(index) {
@@ -1384,26 +1783,14 @@ function bindPageEvents() {
       navigateToPatientCreate();
     });
 
-  document.addEventListener('click', (event) => {
-    if (
-      !event.target.closest('.actions-wrapper')
-    ) {
-      document
-        .querySelectorAll(
-          '.actions-dropdown.active'
-        )
-        .forEach((menu) => {
-          menu.classList.remove('active');
-        });
-
-      openMenuPatientId = null;
-    }
-  });
+  bindPatientMenuEvents();
+  bindPaginationEvents();
 }
 
 export async function initPacientes() {
   patientsModuleActive = true;
 
+  bindPatientAvatarFallbacks();
   bindPageEvents();
   bindRealtimeEvents();
 
