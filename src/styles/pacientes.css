@@ -304,6 +304,10 @@
       color: var(--txt-soft);
     }
 
+    .patient-photo-placeholder[hidden] {
+      display: none;
+    }
+
     .patient-photo-placeholder svg {
       width: 70px;
       height: 70px;
@@ -887,6 +891,10 @@
       background: linear-gradient(135deg, #e0e0e0, #f5f5f5);
       border-radius: 50%;
       color: #64748b;
+    }
+
+    .camera-placeholder[hidden] {
+      display: none;
     }
 
     .camera-placeholder svg {

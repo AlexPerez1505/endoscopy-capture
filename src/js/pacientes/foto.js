@@ -173,21 +173,21 @@ function openPhotoModal() {
   }
 }
 
-function closePhotoModal() {
+function closePhotoModal(restore = true) {
   stopCamera();
 
-  if (state.photoModalSnapshot) {
+  if (restore && state.photoModalSnapshot) {
     state.currentPhotoFile =
       state.photoModalSnapshot.file;
     state.currentPhotoDataUrl =
       state.photoModalSnapshot.dataUrl;
 
-    state.photoModalSnapshot = null;
-
     showMainPhoto(
       state.currentPhotoDataUrl
     );
   }
+
+  state.photoModalSnapshot = null;
 
   const modal =
     document.getElementById(

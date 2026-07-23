@@ -308,7 +308,7 @@ function bindEvents() {
           state.currentPhotoDataUrl
         );
 
-        closePhotoModal();
+        closePhotoModal(false);
       },
       {
         signal,
