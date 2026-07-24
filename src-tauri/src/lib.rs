@@ -37,6 +37,8 @@ fn apply_window_icon(app: &tauri::App) -> tauri::Result<()> {
  * modificar esta lista, porque no vive en el lado que controla.
  */
 const PRODUCTION_HOST: &str = "sistema.enclaii.com";
+const DEFAULT_REQUEST_TIMEOUT_SECONDS: u64 = 30;
+const MAX_REQUEST_TIMEOUT_SECONDS: u64 = 60 * 60;
 
 /*
  * Hosts adicionales permitidos SOLO en builds de desarrollo (para apuntar a
@@ -159,10 +161,17 @@ fn http_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
             .build()
             .expect("no se pudo construir el cliente HTTP")
     })
+}
+
+fn request_timeout(seconds: Option<u64>) -> Duration {
+    let seconds = seconds
+        .unwrap_or(DEFAULT_REQUEST_TIMEOUT_SECONDS)
+        .clamp(1, MAX_REQUEST_TIMEOUT_SECONDS);
+
+    Duration::from_secs(seconds)
 }
 
 #[derive(Debug, Deserialize)]
@@ -171,6 +180,7 @@ struct LaravelRequest {
     url: String,
     headers: Option<HashMap<String, String>>,
     body: Option<String>,
+    timeout_seconds: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -185,6 +195,7 @@ struct LaravelResponse {
 struct LaravelAssetRequest {
     url: String,
     headers: Option<HashMap<String, String>>,
+    timeout_seconds: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -200,6 +211,8 @@ struct LaravelAssetResponse {
 async fn laravel_request(
     request: LaravelRequest,
 ) -> Result<LaravelResponse, String> {
+    let timeout = request_timeout(request.timeout_seconds);
+
     let method = request
         .method
         .as_deref()
@@ -216,7 +229,8 @@ async fn laravel_request(
     let mut builder = client.request(
         method,
         validated_url,
-    );
+    )
+    .timeout(timeout);
 
     /*
      * Este valor indica si el body recibido desde JavaScript
@@ -352,10 +366,13 @@ async fn laravel_request(
 async fn laravel_asset(
     request: LaravelAssetRequest,
 ) -> Result<LaravelAssetResponse, String> {
+    let timeout = request_timeout(request.timeout_seconds);
     let validated_url = validate_asset_url(&request.url)?;
     let client = http_client();
 
-    let mut builder = client.get(validated_url);
+    let mut builder = client
+        .get(validated_url)
+        .timeout(timeout);
 
     if let Some(headers) = request.headers {
         for (key, value) in headers {

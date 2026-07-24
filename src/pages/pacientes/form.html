@@ -238,6 +238,52 @@
       background-position: right 12px center;
     }
 
+    .phone-input-group {
+      display: flex;
+      min-height: 42px;
+      align-items: stretch;
+      overflow: hidden;
+      background: var(--panel-2);
+      border: 1px solid var(--stroke-strong);
+      border-radius: 10px;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    .phone-input-group:focus-within {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(56, 199, 244, 0.15);
+    }
+
+    .form-group .phone-input-group input {
+      min-height: 40px;
+      padding-left: 12px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .form-group .phone-input-group .phone-lada {
+      width: 72px;
+      flex: 0 0 72px;
+      padding: 0 10px;
+      border-right: 1px solid var(--stroke-strong);
+      color: var(--txt);
+      font-size: 14px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .form-group .phone-input-group .phone-number {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .form-group .phone-input-group input:focus {
+      border-color: transparent;
+      box-shadow: none;
+    }
+
     .span-2 {
       grid-column: span 2;
     }
@@ -1112,13 +1158,29 @@
             Teléfono
           </label>
 
-          <input
-            type="tel"
-            name="telefono"
-            id="patientPhone"
-            placeholder="722 162 0815"
-            maxlength="50"
-          >
+          <div class="phone-input-group">
+            <input
+              type="tel"
+              name="telefono_lada"
+              id="patientPhoneLada"
+              class="phone-lada"
+              value="+52"
+              placeholder="+52"
+              maxlength="6"
+              inputmode="tel"
+              aria-label="Lada"
+            >
+
+            <input
+              type="tel"
+              name="telefono"
+              id="patientPhone"
+              class="phone-number"
+              placeholder="722 162 0815"
+              maxlength="50"
+              inputmode="tel"
+            >
+          </div>
         </div>
 
         <div class="form-group span-3">

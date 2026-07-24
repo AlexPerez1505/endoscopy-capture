@@ -27,8 +27,10 @@
 
 .qr-stats{
   display:grid;
-  grid-template-columns:repeat(3, minmax(0, 1fr));
-  gap:20px;
+  grid-template-columns:repeat(3, minmax(220px, 1fr));
+  gap:28px;
+  max-width:1180px;
+  margin-bottom:28px;
 }
 
 .qr-stat-card,
@@ -40,24 +42,25 @@
 }
 
 .qr-stat-card{
-  min-height:140px;
+  min-height:112px;
   display:flex;
   flex-direction:column;
   justify-content:center;
-  padding:24px 28px;
+  padding:19px 24px;
+  border-radius:16px;
 }
 
 .qr-stat-card span{
   color:#8fb1ff;
-  font-size:18px;
+  font-size:16px;
   font-weight:700;
 }
 
 .qr-stat-card strong{
-  margin-top:10px;
+  margin-top:8px;
   color:#fff;
   font-family:'Sora', sans-serif;
-  font-size:40px;
+  font-size:34px;
   line-height:1;
 }
 

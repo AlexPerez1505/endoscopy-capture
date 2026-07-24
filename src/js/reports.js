@@ -530,7 +530,8 @@ function saveDraft(root, showMessage = true) {
     savedAt: new Date().toISOString(),
     payload,
     currentTemplateKey: editorState.currentTemplateKey,
-    imagesConfig: imageConfigPayload(),
+    imagesConfig: payload.imagenes_config,
+    headerConfig: payload.encabezado_config,
     mode: editorState.mode,
   }));
   if (showMessage) setEditorAlert(root, 'Borrador guardado en este equipo.', 'ok');
@@ -543,9 +544,34 @@ function restoreDraft(root) {
   try {
     const draft = JSON.parse(raw);
     const sectionsEl = root.querySelector('#docSections');
+
     if (draft?.currentTemplateKey) {
+      const template =
+        editorState.templatesByKey[draft.currentTemplateKey];
+      const headerConfig =
+        draft.headerConfig ||
+        draft.payload?.encabezado_config;
+
+      if (template && headerConfig) {
+        template.cfg = normalizeHeaderConfig(
+          headerConfig,
+          template.cfg || defaultTemplateConfig()
+        );
+      }
+
       applyTemplateByKey(root, draft.currentTemplateKey, true);
     }
+
+    if (
+      draft?.imagesConfig ||
+      draft?.payload?.imagenes_config
+    ) {
+      applyImageConfig(
+        draft.imagesConfig ||
+        draft.payload.imagenes_config
+      );
+    }
+
     if (sectionsEl && draft?.payload?.contenido_html) {
       sectionsEl.innerHTML = draft.payload.contenido_html;
     }
@@ -614,6 +640,87 @@ function defaultTemplateConfig() {
     name: { x: 100, y: 28, w: 466, h: 64, fontSize: 21 },
     anat: { x: 672, y: 5, w: 88, h: 110 },
   };
+}
+
+function configObject(value) {
+  if (!value) return null;
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string') return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHeaderConfig(config, fallback = defaultTemplateConfig()) {
+  const source = configObject(config);
+  const base = JSON.parse(JSON.stringify(fallback || defaultTemplateConfig()));
+  if (!source) return base;
+
+  return {
+    ...base,
+    ...source,
+    logo: { ...base.logo, ...(source.logo || {}) },
+    name: { ...base.name, ...(source.name || {}) },
+    anat: { ...base.anat, ...(source.anat || {}) },
+  };
+}
+
+function savedHeaderConfig(editorData = {}) {
+  const report = editorData.reporte || editorData.report || {};
+  const candidates = [
+    report.encabezado_config,
+    report.header_config,
+    report.plantilla_configuracion,
+    report.template_config,
+    report.configuracion_encabezado,
+    report.encabezado,
+    report.configuracion,
+    report.configuracion?.encabezado,
+    editorData.encabezado_config,
+    editorData.encabezado,
+    editorData.header_config,
+    editorData.plantilla_configuracion,
+    editorData.configuracion,
+  ];
+
+  for (const candidate of candidates) {
+    const config = configObject(candidate);
+    if (config) return config;
+  }
+
+  return null;
+}
+
+function activeHeaderConfig(root) {
+  const template =
+    editorState.selectedTemplate ||
+    editorState.templatesByKey[editorState.currentTemplateKey];
+
+  const currentConfig = normalizeHeaderConfig(
+    template?.cfg || defaultTemplateConfig()
+  );
+
+  return normalizeHeaderConfig({
+    ...currentConfig,
+    clinic:
+      root.querySelector('#repClinicName')?.textContent?.trim() ||
+      currentConfig.clinic ||
+      '',
+    signName:
+      root.querySelector('#repSignName')?.textContent?.trim() ||
+      currentConfig.signName ||
+      '',
+    signPos:
+      root.querySelector('#repSign')?.dataset?.pos ||
+      currentConfig.signPos ||
+      'center',
+  }, currentConfig);
 }
 
 function builtInTemplates() {
@@ -974,6 +1081,48 @@ function imageConfigPayload() {
     cols: editorState.imageEnabled !== false ? editorState.imageCols : 0,
     items,
   };
+}
+
+function applyImageConfig(config = {}) {
+  const source = configObject(config) || {};
+  const enabled = source.enabled !== false;
+  const cols = enabled
+    ? clampInt(source.cols, 1, 8, editorState.imageCols || 4)
+    : 0;
+  const items =
+    source.items &&
+    typeof source.items === 'object' &&
+    !Array.isArray(source.items)
+      ? source.items
+      : {};
+  const nextState = new Map();
+
+  editorState.imageEnabled = enabled;
+  editorState.imageCols = cols;
+
+  editorState.images.forEach((img, index) => {
+    const key = imageKey(img, index);
+    const saved = configObject(items[key]) || {};
+    const previous =
+      editorState.imageState.get(key) ||
+      {};
+
+    nextState.set(key, {
+      visible:
+        saved.visible ??
+        previous.visible ??
+        true,
+      size: clampInt(
+        saved.size ??
+        previous.size,
+        1,
+        cols || 8,
+        1
+      ),
+    });
+  });
+
+  editorState.imageState = nextState;
 }
 
 function mergeTemplateData(rawTemplates = {}) {
@@ -1868,6 +2017,10 @@ function collectReportPayload(root) {
   const sections = root.querySelector('#docSections');
   const typeSelect = root.querySelector('#edTipo');
   const existingReporteId = root.querySelector('#existingReporteId')?.value || null;
+  const headerConfig = activeHeaderConfig(root);
+  const imagesConfig = imageConfigPayload();
+  const documentHtml = documentEl?.innerHTML || '';
+
   return {
     estudio_id: editorState.selectedStudy?.id || root.querySelector('#edEstudioSel')?.value || null,
     paciente_id: editorState.selectedStudy?.patientId || null,
@@ -1878,8 +2031,12 @@ function collectReportPayload(root) {
     usar_ia: editorState.mode === 'ia',
     fecha_reporte: new Date().toISOString().slice(0, 10),
     contenido_html: sections?.innerHTML || documentEl?.innerHTML || '',
+    documento_html: documentHtml,
+    contenido_documento_html: documentHtml,
     contenido_texto: sections?.innerText || documentEl?.innerText || '',
-    imagenes_config: imageConfigPayload(),
+    encabezado_config: headerConfig,
+    plantilla_configuracion: headerConfig,
+    imagenes_config: imagesConfig,
     hallazgos: selectedFindingTexts(root),
   };
 }
@@ -1932,7 +2089,30 @@ async function loadEditorData(root) {
 
   const studies = data.studies.length ? data.studies : (preloadStudy.id && preloadStudy.id !== 'undefined' ? [preloadStudy] : []);
   const templatesByKey = mergeTemplateData(templatesResult.status === 'fulfilled' ? templatesResult.value?.plantillas : {});
-  const savedImageConfig = editorData.reporte?.imagenes_config || {};
+  const savedImageConfig =
+    editorData.reporte?.imagenes_config ||
+    editorData.reporte?.images_config ||
+    editorData.imagenes_config ||
+    {};
+  const initialKey = templateKeyFromType(
+    preloadStudy.type ||
+    editorData.tipo ||
+    editorData.tipo_estudio
+  );
+  const headerConfig = savedHeaderConfig(editorData);
+
+  if (
+    headerConfig &&
+    templatesByKey[initialKey]
+  ) {
+    templatesByKey[initialKey].cfg =
+      normalizeHeaderConfig(
+        headerConfig,
+        templatesByKey[initialKey].cfg ||
+        defaultTemplateConfig()
+      );
+  }
+
   const reportImages = Array.isArray(editorData.imagenes)
     ? editorData.imagenes.map(normalizeReportImage)
     : [];
@@ -1948,26 +2128,16 @@ async function loadEditorData(root) {
     selectedStudy: preloadStudy.id && preloadStudy.id !== 'undefined' ? preloadStudy : studies[0] || null,
     selectedTemplate: null,
     imageState: new Map(),
-    imageEnabled: savedImageConfig.enabled !== false,
-    imageCols: clampInt(savedImageConfig.cols, 1, 8, 4),
+    imageEnabled: true,
+    imageCols: 4,
     assetUrlCache: new Map(),
   };
-
-  editorState.images.forEach((img, index) => {
-    const key = imageKey(img, index);
-    const saved = savedImageConfig.items?.[key] || {};
-    editorState.imageState.set(key, {
-      visible: saved.visible !== false,
-      size: clampInt(saved.size, 1, editorState.imageCols || 8, 1),
-    });
-  });
 
   renderStudyOptionsLaravel(root);
   renderTemplateLists(root);
   renderCapturePanel(root);
   applyStudyLaravel(root, editorState.selectedStudy);
 
-  const initialKey = templateKeyFromType(editorState.selectedStudy?.type || editorData.tipo);
   applyTemplateByKey(root, initialKey, Boolean(editorData.reporte?.contenido_html));
   if (editorData.reporte?.contenido_html) {
     root.querySelector('#docSections').innerHTML = editorData.reporte.contenido_html;
@@ -1976,6 +2146,9 @@ async function loadEditorData(root) {
     root.querySelector('#docSections').innerHTML = `<div contenteditable="true">${escapeHtml(editorData.reporte.contenido_texto)}</div>`;
     root.querySelector('#existingReporteId').value = editorData.reporte.id || '';
   }
+
+  applyImageConfig(savedImageConfig);
+  renderReportImages(root);
 
   setEditorAlert(root, '');
 

@@ -21,6 +21,7 @@ const START_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/estudios/iniciar`;
 const IMAGES_ENDPOINT = `${apiBaseUrl()}/api/tauri/images`;
 const VIDEOS_ENDPOINT = `${apiBaseUrl()}/api/tauri/videos`;
 const FINISH_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/finish-session`;
+const VIDEO_UPLOAD_TIMEOUT_SECONDS = 45 * 60;
 
 // El boton fisico del capturador puede generar clics repetidos/rebotados al
 // conectarse (rebote de contacto). Sin un limite, cada uno de esos clics
@@ -100,6 +101,7 @@ let activeStudyContext = {};
 let isDevicePaired = false;
 let captureAuthMode = null; // 'device' (codigo de 6 digitos) o 'user' (sesion directa)
 let capturedItems = [];
+let pendingVideoUploads = 0;
 
 const DEFAULT_CAMERA_VALUE = '__default_camera__';
 
@@ -443,6 +445,23 @@ function addCaptureThumbnail(url, label, type, remoteUrl = '') {
   captureThumbnails.prepend(button);
 }
 
+function formatFileSize(bytes) {
+  const megabytes = Number(bytes || 0) / 1024 / 1024;
+  if (megabytes >= 1024) return `${(megabytes / 1024).toFixed(2)} GB`;
+  return `${megabytes.toFixed(1)} MB`;
+}
+
+function updatePendingUploadControls() {
+  const disabled = pendingVideoUploads > 0;
+  if (finishStudyBtn) finishStudyBtn.disabled = disabled;
+  if (fullscreenFinishStudyBtn) fullscreenFinishStudyBtn.disabled = disabled;
+}
+
+function setPendingVideoUpload(delta) {
+  pendingVideoUploads = Math.max(0, pendingVideoUploads + delta);
+  updatePendingUploadControls();
+}
+
 function showCaptureLayout() {
   pairCard?.classList.add('is-hidden');
   captureLayout?.classList.remove('is-hidden');
@@ -478,23 +497,44 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
   }
 
   const endpoint = captureType === 'video' ? VIDEOS_ENDPOINT : IMAGES_ENDPOINT;
-  const fileField = captureType === 'video' ? 'filename' : 'filename';
-  const timestampField = captureType === 'video' ? 'ended_at' : 'captured_at';
+  const timeoutSeconds = captureType === 'video'
+    ? VIDEO_UPLOAD_TIMEOUT_SECONDS
+    : undefined;
+  let requestHeaders = {
+    Accept: 'application/json',
+    Authorization: authorization,
+  };
+  let requestBody;
+
+  if (captureType === 'video') {
+    const formData = new FormData();
+    formData.append('session_id', String(Number(sessionId)));
+    formData.append('video', blob, filename);
+    formData.append('filename', filename);
+    formData.append('mime_type', blob.type || 'video/webm');
+    formData.append('ended_at', new Date().toISOString());
+
+    requestBody = formData;
+  } else {
+    requestHeaders = {
+      ...requestHeaders,
+      'Content-Type': 'application/json',
+    };
+
+    requestBody = JSON.stringify({
+      session_id: Number(sessionId),
+      filename,
+      mime_type: blob.type || 'application/octet-stream',
+      data_base64: await blobToBase64(blob),
+      captured_at: new Date().toISOString(),
+    });
+  }
 
   const response = await laravelFetch(endpoint, {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: authorization,
-    },
-    body: JSON.stringify({
-      session_id: Number(sessionId),
-      [fileField]: filename,
-      mime_type: blob.type || 'application/octet-stream',
-      data_base64: await blobToBase64(blob),
-      [timestampField]: new Date().toISOString(),
-    }),
+    timeoutSeconds,
+    headers: requestHeaders,
+    body: requestBody,
   });
 
   const contentType = response.headers.get('content-type') || '';
@@ -1038,7 +1078,8 @@ function startRecording() {
       throw new Error('Primero inicia el video.');
     }
 
-    recordedChunks = [];
+    const chunks = [];
+    recordedChunks = chunks;
 
     const mimeType = getSupportedMimeType();
 
@@ -1049,18 +1090,20 @@ function startRecording() {
       ? createFocusModeRecordingStream(signal)
       : currentStream;
 
-    mediaRecorder = new MediaRecorder(
+    const recorder = new MediaRecorder(
       recordingStream,
       mimeType ? { mimeType } : undefined
     );
 
-    mediaRecorder.ondataavailable = (event) => {
+    mediaRecorder = recorder;
+
+    recorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
-        recordedChunks.push(event.data);
+        chunks.push(event.data);
       }
     };
 
-    mediaRecorder.onstop = () => {
+    recorder.onstop = () => {
       // Respaldo: si esta es la unica senal de que la grabacion termino
       // (por ejemplo el dispositivo se desconecto), esto igual garantiza el
       // cierre del loop de canvas. abort() en un controller ya abortado no
@@ -1069,11 +1112,19 @@ function startRecording() {
       controller.abort();
 
       try {
-        const blob = new Blob(recordedChunks, {
-          type: mediaRecorder.mimeType || 'video/webm',
+        const blob = new Blob(chunks, {
+          type: recorder.mimeType || 'video/webm',
         });
 
+        if (!blob.size) {
+          throw new Error('La grabacion no genero datos de video.');
+        }
+
         const filename = makeFileName('endoscopy-video', 'webm');
+
+        setPendingVideoUpload(1);
+        addLog(`Guardando video (${formatFileSize(blob.size)}) en Laravel. Puede tardar varios minutos.`);
+        showVideoToast('Guardando video...', 'success');
 
         uploadCaptureToLaravel(blob, filename, 'video')
           .then(() => {
@@ -1084,6 +1135,9 @@ function startRecording() {
           .catch((error) => {
             console.error(error);
             addLog(`Error guardando video: ${error.message}`, 'error');
+          })
+          .finally(() => {
+            setPendingVideoUpload(-1);
           });
       } catch (error) {
         console.error(error);
@@ -1103,7 +1157,7 @@ function startRecording() {
 
     activeRecordingController = controller;
 
-    mediaRecorder.start(1000);
+    recorder.start(1000);
 
     recordBtn.disabled = true;
     stopRecordBtn.disabled = false;
@@ -1257,6 +1311,13 @@ pairSkipBtn?.addEventListener('click', async () => {
 async function finishStudy() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     stopRecording();
+    addLog('Grabacion detenida. Espera a que el video termine de guardarse antes de finalizar el estudio.', 'error');
+    return;
+  }
+
+  if (pendingVideoUploads > 0) {
+    addLog('Espera a que termine de guardarse el video antes de finalizar el estudio.', 'error');
+    return;
   }
 
   if (capturedItems.length === 0) {

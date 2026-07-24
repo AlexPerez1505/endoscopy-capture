@@ -1,6 +1,6 @@
 [package]
 name = "enclaii-desktop"
-version = "0.1.0"
+version = "0.1.8"
 description = "ENCLAII Desktop"
 authors = ["Grupo MediBuy"]
 edition = "2021"
@@ -36,4 +36,3 @@ reqwest = {
 }
 
 base64 = "0.22"
-

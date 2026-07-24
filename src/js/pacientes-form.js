@@ -23,6 +23,87 @@ let miniTargetId = null;
 let selectedStudyFiles = [];
 
 let patientFormAbortController = null;
+const DEFAULT_PHONE_LADA = '+52';
+
+function normalizePhoneLada(value) {
+  const lada =
+    String(value || '')
+      .trim()
+      .replace(/[^\d+]/g, '')
+      .replace(/(?!^)\+/g, '');
+
+  if (
+    !lada ||
+    lada === '+'
+  ) {
+    return DEFAULT_PHONE_LADA;
+  }
+
+  return lada.startsWith('+')
+    ? lada
+    : `+${lada}`;
+}
+
+function splitPhoneValue(value) {
+  const phone =
+    String(value || '')
+      .trim();
+
+  if (!phone) {
+    return {
+      lada: DEFAULT_PHONE_LADA,
+      number: '',
+    };
+  }
+
+  const separatedInternational =
+    phone.match(
+      /^\+(\d{1,4})(?:[\s.-]+(.+)|$)/
+    );
+
+  if (separatedInternational) {
+    return {
+      lada: `+${separatedInternational[1]}`,
+      number:
+        separatedInternational[2]
+          ?.trim() ||
+        '',
+    };
+  }
+
+  const compactDigits =
+    phone.replace(/\D/g, '');
+
+  if (
+    compactDigits.length === 12 &&
+    compactDigits.startsWith('52')
+  ) {
+    return {
+      lada: DEFAULT_PHONE_LADA,
+      number: compactDigits.slice(2),
+    };
+  }
+
+  return {
+    lada: DEFAULT_PHONE_LADA,
+    number: phone,
+  };
+}
+
+function phoneWithLada(ladaValue, phoneValue) {
+  const phone =
+    cleanNullableValue(phoneValue);
+
+  if (!phone) {
+    return null;
+  }
+
+  if (phone.startsWith('+')) {
+    return phone;
+  }
+
+  return `${normalizePhoneLada(ladaValue)} ${phone}`;
+}
 
 function patientPhotoUrl(patient = {}) {
   return firstLaravelAssetUrl(patient, [
@@ -1397,6 +1478,11 @@ function renderExistingFiles(
 function fillPatient(
   patient = {}
 ) {
+  const phoneParts =
+    splitPhoneValue(
+      patient.telefono
+    );
+
   currentPatient = {
     ...patient,
     foto_url: patientPhotoUrl(patient),
@@ -1445,8 +1531,13 @@ function fillPatient(
   );
 
   setField(
+    'patientPhoneLada',
+    phoneParts.lada
+  );
+
+  setField(
     'patientPhone',
-    patient.telefono
+    phoneParts.number
   );
 
   setField(
@@ -1532,6 +1623,11 @@ async function loadCreate() {
 
   currentPatient = null;
   currentPatientId = null;
+
+  setField(
+    'patientPhoneLada',
+    DEFAULT_PHONE_LADA
+  );
 }
 
 async function loadEdit() {
@@ -1707,7 +1803,10 @@ function buildPatientPayload(form) {
       ),
 
     telefono:
-      cleanNullableValue(
+      phoneWithLada(
+        form.elements
+          .telefono_lada
+          ?.value,
         form.elements.telefono?.value
       ),
 
@@ -2110,6 +2209,24 @@ function bindEvents() {
   birthDate?.addEventListener(
     'change',
     updateAge,
+    {
+      signal,
+    }
+  );
+
+  const phoneLada =
+    document.getElementById(
+      'patientPhoneLada'
+    );
+
+  phoneLada?.addEventListener(
+    'blur',
+    () => {
+      phoneLada.value =
+        normalizePhoneLada(
+          phoneLada.value
+        );
+    },
     {
       signal,
     }

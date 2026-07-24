@@ -13,6 +13,9 @@ const LOCAL_LARAVEL_HOSTS =
     '::1',
   ]);
 
+const MIN_TIMEOUT_SECONDS = 1;
+const MAX_TIMEOUT_SECONDS = 60 * 60;
+
 /* =========================================================
    PETICIÓN PRINCIPAL
 ========================================================= */
@@ -44,6 +47,12 @@ export async function laravelFetch(
         headers
       );
 
+    const timeoutSeconds =
+      normalizeTimeoutSeconds(
+        options.timeoutSeconds ??
+        options.timeout_seconds
+      );
+
     /*
      * LaravelRequest es un struct de Rust.
      * Se debe enviar como objeto JavaScript.
@@ -61,6 +70,9 @@ export async function laravelFetch(
 
       body:
         preparedBody.body,
+
+      timeout_seconds:
+        timeoutSeconds,
     };
 
     const result =
@@ -89,6 +101,30 @@ export async function laravelFetch(
       )
     );
   }
+}
+
+function normalizeTimeoutSeconds(
+  value
+) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  const seconds =
+    Math.round(Number(value));
+
+  if (!Number.isFinite(seconds)) {
+    return null;
+  }
+
+  return Math.min(
+    Math.max(seconds, MIN_TIMEOUT_SECONDS),
+    MAX_TIMEOUT_SECONDS
+  );
 }
 
 /* =========================================================
@@ -453,6 +489,11 @@ export async function authenticatedLaravelAssetUrl(
         request: {
           url,
           headers,
+          timeout_seconds:
+            normalizeTimeoutSeconds(
+              options.timeoutSeconds ??
+              options.timeout_seconds
+            ),
         },
       }
     );
@@ -770,8 +811,12 @@ async function buildMultipartBody(
       typeof Blob !== 'undefined' &&
       value instanceof Blob
     ) {
+      const filename =
+        value.name ||
+        'archivo';
+
       chunks.push(
-        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"; filename="archivo"\r\n`
+        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"; filename="${escapeHeaderValue(filename)}"\r\n`
       );
 
       chunks.push(
