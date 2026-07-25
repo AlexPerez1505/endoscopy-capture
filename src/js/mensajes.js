@@ -74,12 +74,12 @@ async function fetchLaravelPatients() {
 
   const contentType = response.headers.get('content-type') || '';
   if (!response.ok || !contentType.includes('application/json')) {
-    throw new Error('Pacientes no disponibles desde Laravel.');
+    throw new Error('Pacientes no disponibles.');
   }
 
   const payload = await response.json();
   if (payload?.ok === false) {
-    throw new Error(payload?.message || 'Laravel no devolvio pacientes.');
+    throw new Error(payload?.message || 'No se devolvieron pacientes.');
   }
 
   return normalizePatientsPayload(payload);

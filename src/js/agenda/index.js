@@ -637,7 +637,7 @@ function showPopupForData(d, e, dateKey) {
       await loadAgendaFromLaravel(document.getElementById('pageContent'));
     } catch (error) {
       console.error(error);
-      window.alert('No se pudo actualizar la cita. Verifica tu conexión con Laravel.');
+      window.alert('No se pudo actualizar la cita. Verifica tu conexión.');
     }
   });
   evPopBtns.appendChild(delBtn);
@@ -803,11 +803,11 @@ function rebuildCurrentView() {
 function setAgendaLoading() {
   const calendarBody = document.getElementById('calBody');
   if (calendarBody) {
-    calendarBody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px 20px;color:var(--txt-soft)">Cargando agenda desde Laravel...</td></tr>';
+    calendarBody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px 20px;color:var(--txt-soft)">Cargando agenda...</td></tr>';
   }
   const list = document.getElementById('proxList');
   if (list) {
-    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--txt-soft);font-size:12px">Conectando con Laravel</div>';
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--txt-soft);font-size:12px">Conectando...</div>';
   }
 }
 
@@ -818,10 +818,10 @@ function restoreAgendaShell(root) {
   }
 }
 
-function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Laravel.') {
+function renderLaravelLogin(root, message = 'Inicia sesion con tu cuenta.') {
   root.innerHTML = `
     <form id="laravelAgendaLoginForm" style="max-width:420px;margin:42px auto;padding:24px;border:1px solid var(--stroke);border-radius:14px;background:var(--card);">
-      <strong style="display:block;color:var(--txt);font-size:16px;margin-bottom:8px;">Conectar Agenda con Laravel</strong>
+      <strong style="display:block;color:var(--txt);font-size:16px;margin-bottom:8px;">Conectar Agenda</strong>
       <p style="color:var(--txt-soft);font-size:13px;line-height:1.5;margin:0 0 18px;">${escapeHtml(message)}</p>
       <label style="display:block;color:var(--txt-soft);font-size:12px;margin-bottom:6px;">Correo</label>
       <input id="laravelAgendaEmail" type="email" autocomplete="username" required style="width:100%;margin-bottom:12px;padding:10px 12px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--txt);">
@@ -854,7 +854,7 @@ function renderAgendaError(root, error) {
   }
   root.innerHTML = `
     <div style="padding:42px 20px;text-align:center;color:var(--txt-soft);">
-      <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con Laravel</strong>
+      <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con el servidor</strong>
       <span>${escapeHtml(error.message || 'No se pudieron cargar las citas de agenda.')}</span>
     </div>`;
 }
@@ -868,17 +868,17 @@ async function fetchLaravelAgenda() {
   const contentType = response.headers.get('content-type') || '';
 
   if (response.status === 401 || response.status === 419) {
-    const error = new Error('Ingresa tus credenciales de Laravel para cargar la agenda.');
+    const error = new Error('Ingresa tus credenciales para cargar la agenda.');
     error.code = 'UNAUTHORIZED';
     throw error;
   }
   if (!contentType.includes('application/json')) {
-    throw new Error(`Laravel no devolvio JSON. Revisa sesion y ruta: ${AGENDA_ENDPOINT}`);
+    throw new Error(`El servidor no devolvio JSON. Revisa sesion y ruta: ${AGENDA_ENDPOINT}`);
   }
 
   const payload = await response.json();
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
+    throw new Error(payload?.message || `El servidor respondio HTTP ${response.status}.`);
   }
 
   return { citas: payload.citas || [], bloqueos: payload.bloqueos || [] };
@@ -925,7 +925,7 @@ function confirmDeleteBlock(blockId) {
     .then(() => loadAgendaFromLaravel(document.getElementById('pageContent')))
     .catch((error) => {
       console.error(error);
-      window.alert('No se pudo eliminar el bloqueo. Verifica tu conexión con Laravel.');
+      window.alert('No se pudo eliminar el bloqueo. Verifica tu conexión.');
     });
 }
 
@@ -1026,7 +1026,7 @@ async function handleBloqueoSubmit(event, root) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload?.ok === false) {
-      throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
+      throw new Error(payload?.message || `El servidor respondio HTTP ${response.status}.`);
     }
     closeBloqueoModal();
     await loadAgendaFromLaravel(root);

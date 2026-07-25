@@ -31,7 +31,8 @@ export const DEVICE_UID_STORAGE_KEY = 'enclaii-device-uid';
 /* ---- Preferencias de captura (main.js) ---- */
 export const CONFIG_PANEL_COLLAPSED_STORAGE_KEY = 'enclaii-config-panel-collapsed';
 export const FOCUS_MODE_ENABLED_STORAGE_KEY = 'enclaii-focus-mode-enabled';
-export const FOCUS_MODE_CROP_STORAGE_KEY = 'enclaii-focus-mode-crop-percent';
+export const FOCUS_MODE_ROI_STORAGE_KEY = 'enclaii-focus-mode-roi';
+export const FOCUS_MODE_SELECTED_DEVICE_STORAGE_KEY = 'enclaii-focus-mode-selected-device';
 export const DOUBLE_CLICK_WINDOW_STORAGE_KEY = 'enclaii-double-click-window-ms';
 
 /* ---- Contexto de estudio activo (main.js <-> pacientes/galería) ---- */

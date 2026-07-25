@@ -1141,7 +1141,7 @@ async function setHeaderAvatarPhoto(
 
     if (!localUrl) {
       throw new Error(
-        'Laravel no devolvio una imagen de perfil usable.'
+        'No se devolvio una imagen de perfil usable.'
       );
     }
 

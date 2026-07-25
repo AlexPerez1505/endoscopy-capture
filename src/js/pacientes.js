@@ -92,7 +92,7 @@ async function request(path = '', options = {}) {
   ) {
     throw new Error(
       payload?.message ||
-      `Laravel respondió HTTP ${response.status}.`
+      `El servidor respondió HTTP ${response.status}.`
     );
   }
 
@@ -411,7 +411,7 @@ function showLoading() {
         text-align:center;
         color:var(--txt-soft);
       ">
-        Cargando pacientes desde Laravel...
+        Cargando pacientes...
       </div>
     `;
   }
@@ -647,7 +647,7 @@ async function hydratePatientAvatar(image) {
 
     if (!localUrl) {
       throw new Error(
-        'Laravel no devolviÃ³ una URL de imagen usable.'
+        'No se devolvió una URL de imagen usable.'
       );
     }
 

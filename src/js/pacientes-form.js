@@ -169,7 +169,7 @@ async function request(
     throw new Error(
       validationMessage ||
       payload?.message ||
-      `Laravel respondió HTTP ${response.status}.`
+      `El servidor respondió HTTP ${response.status}.`
     );
   }
 
@@ -1524,7 +1524,7 @@ async function loadCreate() {
     );
 
     throw new Error(
-      'Laravel no devolvió el folio del nuevo paciente.'
+      'No se devolvió el folio del nuevo paciente.'
     );
   }
 

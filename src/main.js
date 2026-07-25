@@ -7,7 +7,8 @@ import {
   DEVICE_UID_STORAGE_KEY as DEVICE_UID_KEY,
   CONFIG_PANEL_COLLAPSED_STORAGE_KEY,
   FOCUS_MODE_ENABLED_STORAGE_KEY,
-  FOCUS_MODE_CROP_STORAGE_KEY,
+  FOCUS_MODE_ROI_STORAGE_KEY,
+  FOCUS_MODE_SELECTED_DEVICE_STORAGE_KEY,
   DOUBLE_CLICK_WINDOW_STORAGE_KEY,
   STUDY_PATIENT_ID_STORAGE_KEY,
   STUDY_PATIENT_NAME_STORAGE_KEY,
@@ -37,9 +38,9 @@ const fullScreenBtn = document.getElementById('fullScreenBtn');
 const exitFullScreenBtn = document.getElementById('exitFullScreenBtn');
 const videoCropWrapper = document.getElementById('videoCropWrapper');
 const focusModeToggleBtn = document.getElementById('focusModeToggleBtn');
-const focusCropField = document.getElementById('focusCropField');
-const focusCropInput = document.getElementById('focusCropInput');
-const focusCropValue = document.getElementById('focusCropValue');
+const focusModeCalibrateBtn = document.getElementById('focusModeCalibrateBtn');
+const focusModeHelp = document.getElementById('focusModeHelp');
+const focusCropCanvas = document.getElementById('focusCropCanvas');
 const videoToast = document.getElementById('videoToast');
 const configPanel = document.getElementById('configPanel');
 const configPanelToggle = document.getElementById('configPanelToggle');
@@ -89,6 +90,7 @@ const finishStudyModal = document.getElementById('finishStudyModal');
 const finishStudyThumbnails = document.getElementById('finishStudyThumbnails');
 const finishStudySummary = document.getElementById('finishStudySummary');
 const finishStudyGalleryBtn = document.getElementById('finishStudyGalleryBtn');
+const finishStudyReportBtn = document.getElementById('finishStudyReportBtn');
 
 let currentStream = null;
 let mediaRecorder = null;
@@ -213,7 +215,7 @@ function captureContext() {
 function renderLaravelConnection() {
   const context = captureContext();
 
-  if (pairStatusText) pairStatusText.textContent = isDevicePaired ? 'Vinculado a Laravel' : 'Sin vincular';
+  if (pairStatusText) pairStatusText.textContent = isDevicePaired ? 'Vinculado' : 'Sin vincular';
   if (tenantText) tenantText.textContent = apiBaseUrl();
   if (patientText) patientText.textContent = context.patientName || (context.patientId ? `ID ${context.patientId}` : 'Sin paciente');
   if (studyText) studyText.textContent = context.studyLabel || (context.studyId ? `ID ${context.studyId}` : 'Sin estudio');
@@ -290,7 +292,7 @@ async function pairWithCode(code) {
   const payload = contentType.includes('application/json') ? await response.json() : {};
 
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al vincular el dispositivo.`);
+    throw new Error(payload?.message || `El servidor respondio HTTP ${response.status} al vincular el dispositivo.`);
   }
 
   persistPairing(payload.data || {});
@@ -327,7 +329,7 @@ async function startDirectSession() {
   const payload = contentType.includes('application/json') ? await response.json() : {};
 
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al iniciar la sesion de captura.`);
+    throw new Error(payload?.message || `El servidor respondio HTTP ${response.status} al iniciar la sesion de captura.`);
   }
 
   const data = payload.data || {};
@@ -474,7 +476,7 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
   const sessionId = sessionStorage.getItem(DEVICE_SESSION_KEY);
 
   if (!authorization || !sessionId) {
-    throw new Error('Vincula el dispositivo con el codigo de Laravel (o selecciona un paciente desde Pacientes) para guardar las capturas en la base de datos.');
+    throw new Error('Vincula el dispositivo con el codigo (o selecciona un paciente desde Pacientes) para guardar las capturas en la base de datos.');
   }
 
   const endpoint = captureType === 'video' ? VIDEOS_ENDPOINT : IMAGES_ENDPOINT;
@@ -507,7 +509,7 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
   }
 
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status} al guardar la captura.`);
+    throw new Error(payload?.message || `El servidor respondio HTTP ${response.status} al guardar la captura.`);
   }
 
   addCaptureThumbnail(
@@ -793,64 +795,428 @@ function resetFilters() {
   addLog('Filtros visuales restaurados.');
 }
 
-// Modo enfoque: recorta el panel de informacion de la derecha que muestra el
-// procesador del endoscopio (ajustes, miniaturas, datos del scope), dejando
-// solo la imagen circular del endoscopio. El recorte se aplica en vivo con
-// un transform CSS (barato, sin afectar el rendimiento del video), y ademas
-// se usa el mismo porcentaje al tomar fotos (recortando el canvas de origen)
-// y al grabar video (ver startRecording, que en este modo dibuja en un
-// canvas intermedio en vez de grabar el stream crudo).
+// =========================================================
+// MODO ENFOQUE (ROI manual)
+// =========================================================
+// Reemplaza el recorte fijo del lado derecho por una seleccion
+// manual de area (Region of Interest) sobre el video. El area se
+// guarda por dispositivo y persiste entre sesiones de la app.
 let focusModeEnabled = localStorage.getItem(FOCUS_MODE_ENABLED_STORAGE_KEY) === 'true';
-let focusCropPercent = Number(localStorage.getItem(FOCUS_MODE_CROP_STORAGE_KEY)) || 28;
+let focusRoi = null; // {x, y, width, height} en pixeles reales del stream
+let focusRoiSelecting = false;
+let focusSelectionStart = null;
+let focusSelectionEnd = null;
+let focusSelectedDevice = localStorage.getItem(FOCUS_MODE_SELECTED_DEVICE_STORAGE_KEY) || '';
+let focusLiveCanvas = null;
+let focusLiveCtx = null;
+let focusRawCanvas = null;
+let focusRawCtx = null;
+let focusRafId = null;
+let focusResizeHandle = null;
+let focusDragOffset = { x: 0, y: 0 };
 
-function focusCropRatio() {
-  return Math.min(Math.max(focusCropPercent, 0), 50) / 100;
+const FOCUS_HANDLE_SIZE = 12;
+const FOCUS_MIN_SELECTION = 40;
+
+async function loadRoiProfile(deviceName) {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke('load_roi_profile', { deviceName: deviceName || null });
+  } catch (error) {
+    console.error('No se pudo cargar perfil ROI:', error);
+    return null;
+  }
+}
+
+async function saveRoiProfile(roi, deviceName) {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const profile = { ...roi, device_name: deviceName || undefined };
+    await invoke('save_roi_profile', { profile });
+    return true;
+  } catch (error) {
+    console.error('No se pudo guardar perfil ROI:', error);
+    return false;
+  }
+}
+
+function normalizeRoi(roi, videoWidth, videoHeight) {
+  if (!roi || !videoWidth || !videoHeight) return null;
+  const x = Math.max(0, Math.min(roi.x || 0, videoWidth - 2));
+  const y = Math.max(0, Math.min(roi.y || 0, videoHeight - 2));
+  const width = Math.max(FOCUS_MIN_SELECTION, Math.min(roi.width || videoWidth, videoWidth - x));
+  const height = Math.max(FOCUS_MIN_SELECTION, Math.min(roi.height || videoHeight, videoHeight - y));
+  return { x, y, width, height };
+}
+
+function deviceNameForRoi() {
+  const label = deviceSelect.options[deviceSelect.selectedIndex]?.textContent || '';
+  return label || 'default';
+}
+
+function canvasToVideoCoordinates(rect) {
+  if (!preview.videoWidth || !focusCropCanvas.width) return rect;
+  const scaleX = preview.videoWidth / focusCropCanvas.clientWidth;
+  const scaleY = preview.videoHeight / focusCropCanvas.clientHeight;
+  return {
+    x: rect.x * scaleX,
+    y: rect.y * scaleY,
+    width: rect.width * scaleX,
+    height: rect.height * scaleY,
+  };
+}
+
+function videoToCanvasCoordinates(roi) {
+  if (!preview.videoWidth || !focusCropCanvas.clientWidth) return roi;
+  const scaleX = focusCropCanvas.clientWidth / preview.videoWidth;
+  const scaleY = focusCropCanvas.clientHeight / preview.videoHeight;
+  return {
+    x: roi.x * scaleX,
+    y: roi.y * scaleY,
+    width: roi.width * scaleX,
+    height: roi.height * scaleY,
+  };
+}
+
+function focusCropHandleAt(x, y, canvasRect) {
+  const handles = [
+    { name: 'nw', x: canvasRect.x, y: canvasRect.y },
+    { name: 'ne', x: canvasRect.x + canvasRect.width, y: canvasRect.y },
+    { name: 'sw', x: canvasRect.x, y: canvasRect.y + canvasRect.height },
+    { name: 'se', x: canvasRect.x + canvasRect.width, y: canvasRect.y + canvasRect.height },
+    { name: 'n', x: canvasRect.x + canvasRect.width / 2, y: canvasRect.y },
+    { name: 's', x: canvasRect.x + canvasRect.width / 2, y: canvasRect.y + canvasRect.height },
+    { name: 'w', x: canvasRect.x, y: canvasRect.y + canvasRect.height / 2 },
+    { name: 'e', x: canvasRect.x + canvasRect.width, y: canvasRect.y + canvasRect.height / 2 },
+  ];
+  for (const handle of handles) {
+    const dx = x - handle.x;
+    const dy = y - handle.y;
+    if (Math.abs(dx) <= FOCUS_HANDLE_SIZE && Math.abs(dy) <= FOCUS_HANDLE_SIZE) {
+      return handle.name;
+    }
+  }
+  return null;
+}
+
+function drawSelectionOverlay() {
+  if (!focusCropCanvas || focusCropCanvas.classList.contains('is-hidden')) return;
+  const ctx = focusCropCanvas.getContext('2d');
+  const width = focusCropCanvas.width;
+  const height = focusCropCanvas.height;
+  ctx.clearRect(0, 0, width, height);
+
+  const rect = focusSelectionStart && focusSelectionEnd
+    ? canvasSelectionRect()
+    : focusRoi
+      ? videoToCanvasCoordinates(focusRoi)
+      : null;
+
+  if (!rect) return;
+
+  // Fondo semitransparente fuera del area
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.65)';
+  ctx.beginPath();
+  ctx.rect(0, 0, width, height);
+  if (rect.width > 0 && rect.height > 0) {
+    ctx.rect(rect.x + rect.width, rect.y, -rect.width, rect.height);
+  }
+  ctx.fill('evenodd');
+
+  // Marco del area
+  ctx.strokeStyle = '#2f7cff';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.setLineDash([]);
+
+  // Handles
+  if (focusRoi || focusSelectionStart) {
+    ctx.fillStyle = '#2f7cff';
+    const handles = [
+      [rect.x, rect.y],
+      [rect.x + rect.width, rect.y],
+      [rect.x, rect.y + rect.height],
+      [rect.x + rect.width, rect.y + rect.height],
+    ];
+    for (const [hx, hy] of handles) {
+      ctx.fillRect(hx - FOCUS_HANDLE_SIZE / 2, hy - FOCUS_HANDLE_SIZE / 2, FOCUS_HANDLE_SIZE, FOCUS_HANDLE_SIZE);
+    }
+  }
+}
+
+function canvasSelectionRect() {
+  const x = Math.min(focusSelectionStart.x, focusSelectionEnd.x);
+  const y = Math.min(focusSelectionStart.y, focusSelectionEnd.y);
+  const width = Math.abs(focusSelectionEnd.x - focusSelectionStart.x);
+  const height = Math.abs(focusSelectionEnd.y - focusSelectionStart.y);
+  return { x, y, width, height };
+}
+
+function startRoiSelection(event) {
+  if (!focusRoiSelecting || !focusCropCanvas) return;
+  const rect = focusCropCanvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  if (focusRoi) {
+    const canvasRect = videoToCanvasCoordinates(focusRoi);
+    const handle = focusCropHandleAt(x, y, canvasRect);
+    if (handle) {
+      focusResizeHandle = handle;
+      focusDragOffset = { x, y };
+      return;
+    }
+    if (x >= canvasRect.x && x <= canvasRect.x + canvasRect.width && y >= canvasRect.y && y <= canvasRect.y + canvasRect.height) {
+      focusResizeHandle = 'move';
+      focusDragOffset = { x: x - canvasRect.x, y: y - canvasRect.y };
+      return;
+    }
+  }
+
+  focusSelectionStart = { x, y };
+  focusSelectionEnd = { x, y };
+  focusRoi = null;
+  drawSelectionOverlay();
+}
+
+function moveRoiSelection(event) {
+  if (!focusRoiSelecting || !focusCropCanvas) return;
+  const rect = focusCropCanvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const cw = focusCropCanvas.clientWidth;
+  const ch = focusCropCanvas.clientHeight;
+
+  if (!focusSelectionStart && !focusResizeHandle) return;
+
+  if (focusResizeHandle && focusRoi) {
+    const canvasRect = videoToCanvasCoordinates(focusRoi);
+    let { x: nx, y: ny, width: nw, height: nh } = canvasRect;
+
+    if (focusResizeHandle === 'move') {
+      nx = x - focusDragOffset.x;
+      ny = y - focusDragOffset.y;
+    } else {
+      if (focusResizeHandle.includes('e')) nw = x - nx;
+      if (focusResizeHandle.includes('w')) {
+        const right = nx + nw;
+        nw = right - x;
+        nx = x;
+      }
+      if (focusResizeHandle.includes('s')) nh = y - ny;
+      if (focusResizeHandle.includes('n')) {
+        const bottom = ny + nh;
+        nh = bottom - y;
+        ny = y;
+      }
+    }
+
+    nx = Math.max(0, Math.min(nx, cw));
+    ny = Math.max(0, Math.min(ny, ch));
+    nw = Math.max(FOCUS_MIN_SELECTION, Math.min(nw, cw - nx));
+    nh = Math.max(FOCUS_MIN_SELECTION, Math.min(nh, ch - ny));
+
+    focusRoi = normalizeRoi(canvasToVideoCoordinates({ x: nx, y: ny, width: nw, height: nh }), preview.videoWidth, preview.videoHeight);
+    drawSelectionOverlay();
+    return;
+  }
+
+  focusSelectionEnd = {
+    x: Math.max(0, Math.min(x, cw)),
+    y: Math.max(0, Math.min(y, ch)),
+  };
+  drawSelectionOverlay();
+}
+
+function endRoiSelection() {
+  if (!focusRoiSelecting) return;
+  if (focusResizeHandle) {
+    focusResizeHandle = null;
+    return;
+  }
+  if (focusSelectionStart && focusSelectionEnd) {
+    const rect = canvasSelectionRect();
+    if (rect.width >= FOCUS_MIN_SELECTION && rect.height >= FOCUS_MIN_SELECTION) {
+      focusRoi = normalizeRoi(canvasToVideoCoordinates(rect), preview.videoWidth, preview.videoHeight);
+    }
+    focusSelectionStart = null;
+    focusSelectionEnd = null;
+    drawSelectionOverlay();
+  }
+}
+
+function confirmRoiSelection() {
+  if (!focusRoi || !focusRoi.width || !focusRoi.height) {
+    addLog('Selecciona un área válida antes de confirmar.', 'error');
+    return;
+  }
+  focusRoiSelecting = false;
+  focusModeEnabled = true;
+  focusCropCanvas?.classList.add('is-hidden');
+  focusCropCanvas?.removeEventListener('mousedown', startRoiSelection);
+  window.removeEventListener('mousemove', moveRoiSelection);
+  window.removeEventListener('mouseup', endRoiSelection);
+  saveRoiProfile(focusRoi, focusSelectedDevice);
+  localStorage.setItem(FOCUS_MODE_ENABLED_STORAGE_KEY, 'true');
+  localStorage.setItem(FOCUS_MODE_ROI_STORAGE_KEY, JSON.stringify(focusRoi));
+  startFocusModeLive();
+  updateFocusModeUI(true);
+  addLog('Área de enfoque guardada y activada.');
+}
+
+function cancelRoiSelection() {
+  focusRoiSelecting = false;
+  focusCropCanvas?.classList.add('is-hidden');
+  focusCropCanvas?.removeEventListener('mousedown', startRoiSelection);
+  window.removeEventListener('mousemove', moveRoiSelection);
+  window.removeEventListener('mouseup', endRoiSelection);
+  drawSelectionOverlay();
+  if (!focusModeEnabled) stopFocusModeLive();
+  updateFocusModeUI(focusModeEnabled);
+}
+
+function showRoiSelector() {
+  if (!currentStream || !focusCropCanvas) {
+    addLog('Primero inicia el video para seleccionar el área.', 'error');
+    return;
+  }
+  focusRoiSelecting = true;
+  focusCropCanvas.classList.remove('is-hidden');
+  focusCropCanvas.width = focusCropCanvas.clientWidth;
+  focusCropCanvas.height = focusCropCanvas.clientHeight;
+  drawSelectionOverlay();
+  focusCropCanvas.addEventListener('mousedown', startRoiSelection);
+  window.addEventListener('mousemove', moveRoiSelection);
+  window.addEventListener('mouseup', endRoiSelection);
+  addLog('Dibuja el área de la cámara. Arrastra bordes/esquinas para ajustar.');
+}
+
+function startFocusModeLive() {
+  if (!focusRoi || !currentStream) return;
+  stopFocusModeLive();
+
+  focusRawCanvas = document.createElement('canvas');
+  focusRawCanvas.width = preview.videoWidth || preview.clientWidth;
+  focusRawCanvas.height = preview.videoHeight || preview.clientHeight;
+  focusRawCtx = focusRawCanvas.getContext('2d');
+
+  const roi = normalizeRoi(focusRoi, focusRawCanvas.width, focusRawCanvas.height);
+
+  focusLiveCanvas = document.createElement('canvas');
+  focusLiveCanvas.width = roi.width;
+  focusLiveCanvas.height = roi.height;
+  focusLiveCtx = focusLiveCanvas.getContext('2d');
+
+  preview.style.display = 'none';
+  if (videoCropWrapper && !videoCropWrapper.querySelector('#focusLiveCanvas')) {
+    focusLiveCanvas.id = 'focusLiveCanvas';
+    focusLiveCanvas.style.width = '100%';
+    focusLiveCanvas.style.height = '100%';
+    focusLiveCanvas.style.objectFit = 'contain';
+    videoCropWrapper.appendChild(focusLiveCanvas);
+  }
+
+  const drawLive = () => {
+    if (!focusModeEnabled || !focusRoi || !currentStream) return;
+    if (preview.readyState >= 2) {
+      focusRawCtx.drawImage(preview, 0, 0, focusRawCanvas.width, focusRawCanvas.height);
+      focusLiveCtx.drawImage(focusRawCanvas, roi.x, roi.y, roi.width, roi.height, 0, 0, roi.width, roi.height);
+    }
+    focusRafId = requestAnimationFrame(drawLive);
+  };
+  focusRafId = requestAnimationFrame(drawLive);
+}
+
+function stopFocusModeLive() {
+  if (focusRafId) {
+    cancelAnimationFrame(focusRafId);
+    focusRafId = null;
+  }
+  const existing = document.getElementById('focusLiveCanvas');
+  if (existing) existing.remove();
+  focusLiveCanvas = null;
+  focusLiveCtx = null;
+  focusRawCanvas = null;
+  focusRawCtx = null;
+  preview.style.display = '';
 }
 
 function applyFocusModeVisual() {
-  if (focusModeEnabled && focusCropRatio() > 0) {
-    // Solo se escala horizontalmente (scaleX): el transform-origin del
-    // <video> esta anclado a la izquierda (ver .video-preview en
-    // styles.css), asi que agrandar el ancho empuja el excedente hacia la
-    // derecha, donde el wrapper con overflow:hidden lo recorta. Un
-    // scale() uniforme tambien agranda el alto y termina recortando
-    // arriba/abajo, que es justo lo que no queremos.
-    const scale = 1 / (1 - focusCropRatio());
-    preview.style.transform = `scaleX(${scale})`;
+  if (focusModeEnabled && focusRoi) {
+    startFocusModeLive();
   } else {
-    preview.style.transform = 'none';
+    stopFocusModeLive();
   }
 }
 
 function updateFocusModeUI(enabled) {
-  focusModeToggleBtn.textContent = enabled ? 'Desactivar modo enfoque' : 'Activar modo enfoque';
-  focusModeToggleBtn.classList.toggle('btn-primary', enabled);
-  focusModeToggleBtn.classList.toggle('btn-outline', !enabled);
-  focusCropField.style.display = enabled ? '' : 'none';
-
-  applyFocusModeVisual();
+  const hasRoi = Boolean(focusRoi && focusRoi.width && focusRoi.height);
+  focusModeToggleBtn.textContent = enabled ? 'Desactivar modo enfoque' : (hasRoi ? 'Activar modo enfoque' : 'Seleccionar área de enfoque');
+  focusModeToggleBtn.classList.toggle('btn-primary', enabled || !hasRoi);
+  focusModeToggleBtn.classList.toggle('btn-outline', !enabled && hasRoi);
+  if (focusModeCalibrateBtn) focusModeCalibrateBtn.style.display = hasRoi ? '' : 'none';
+  if (focusModeHelp) {
+    focusModeHelp.textContent = hasRoi
+      ? (enabled ? 'Modo enfoque activo: se recorta el área seleccionada.' : 'Modo enfoque guardado. Presiona Activar para volver a aplicarlo.')
+      : 'Selecciona el área de la cámara para recortar el video y las fotos.';
+  }
 }
 
-function setFocusModeEnabled(enabled) {
+async function setFocusModeEnabled(enabled) {
+  if (enabled && !focusRoi) {
+    showRoiSelector();
+    return;
+  }
   focusModeEnabled = enabled;
   localStorage.setItem(FOCUS_MODE_ENABLED_STORAGE_KEY, String(enabled));
   updateFocusModeUI(enabled);
-  addLog(enabled ? 'Modo enfoque activado: se ocultará el panel derecho.' : 'Modo enfoque desactivado.');
-}
-
-function setFocusCropPercent(percent) {
-  focusCropPercent = Math.min(Math.max(Number(percent) || 0, 0), 50);
-  localStorage.setItem(FOCUS_MODE_CROP_STORAGE_KEY, String(focusCropPercent));
-  focusCropValue.textContent = String(focusCropPercent);
   applyFocusModeVisual();
+  addLog(enabled ? 'Modo enfoque activado.' : 'Modo enfoque desactivado.');
 }
 
-focusModeToggleBtn.addEventListener('click', () => setFocusModeEnabled(!focusModeEnabled));
-focusCropInput.addEventListener('input', (event) => setFocusCropPercent(event.target.value));
+async function recalibrateFocusRoi() {
+  if (focusRafId) stopFocusModeLive();
+  focusModeEnabled = false;
+  focusRoi = null;
+  localStorage.removeItem(FOCUS_MODE_ROI_STORAGE_KEY);
+  showRoiSelector();
+  updateFocusModeUI(false);
+}
 
-focusCropInput.value = String(focusCropPercent);
-focusCropValue.textContent = String(focusCropPercent);
-updateFocusModeUI(focusModeEnabled);
+function handleFocusToggleClick() {
+  if (focusRoiSelecting) {
+    if (focusRoi && focusRoi.width && focusRoi.height) {
+      confirmRoiSelection();
+    } else {
+      cancelRoiSelection();
+    }
+    return;
+  }
+  setFocusModeEnabled(!focusModeEnabled);
+}
+
+focusModeToggleBtn.addEventListener('click', handleFocusToggleClick);
+focusModeCalibrateBtn?.addEventListener('click', recalibrateFocusRoi);
+
+async function restoreFocusMode() {
+  focusSelectedDevice = deviceNameForRoi();
+  const savedRoiString = localStorage.getItem(FOCUS_MODE_ROI_STORAGE_KEY);
+  if (savedRoiString) {
+    try { focusRoi = JSON.parse(savedRoiString); } catch { focusRoi = null; }
+  }
+  if (!focusRoi) {
+    const profile = await loadRoiProfile(focusSelectedDevice);
+    if (profile) focusRoi = normalizeRoi(profile, preview.videoWidth, preview.videoHeight);
+  }
+  if (focusRoi) {
+    localStorage.setItem(FOCUS_MODE_ROI_STORAGE_KEY, JSON.stringify(focusRoi));
+  }
+  updateFocusModeUI(focusModeEnabled);
+  if (focusModeEnabled) applyFocusModeVisual();
+}
+
+restoreFocusMode();
 
 // Vista del video: "Media pantalla" agranda el panel de video dentro de la
 // misma ventana (oculta el lateral), y "Pantalla completa" usa la
@@ -921,18 +1287,26 @@ async function captureFrameBlob(quality = 0.8, maxWidth = 1280) {
   }
 
   const fullSourceWidth = preview.videoWidth;
-  const sourceHeight = preview.videoHeight;
+  let sourceHeight = preview.videoHeight;
 
   if (!fullSourceWidth || !sourceHeight) {
     throw new Error('El video todavía no está listo.');
   }
 
-  // Modo enfoque activo: solo se dibuja la porcion izquierda del frame de
-  // origen (se descarta el panel de informacion de la derecha del
-  // procesador), igual que el recorte visual en vivo.
-  const sourceWidth = focusModeEnabled
-    ? Math.round(fullSourceWidth * (1 - focusCropRatio()))
-    : fullSourceWidth;
+  // Modo enfoque activo: dibuja solo la Region de Interes (ROI) definida
+  // manualmente, escalada al ancho maximo solicitado. Sin modo enfoque se
+  // usa el frame completo como antes.
+  let sourceX = 0;
+  let sourceY = 0;
+  let sourceWidth = fullSourceWidth;
+
+  if (focusModeEnabled && focusRoi) {
+    const roi = normalizeRoi(focusRoi, fullSourceWidth, sourceHeight);
+    sourceX = roi.x;
+    sourceY = roi.y;
+    sourceWidth = roi.width;
+    sourceHeight = roi.height;
+  }
 
   const scale = sourceWidth > maxWidth ? maxWidth / sourceWidth : 1;
   const width = Math.round(sourceWidth * scale);
@@ -943,7 +1317,7 @@ async function captureFrameBlob(quality = 0.8, maxWidth = 1280) {
 
   const ctx = snapshotCanvas.getContext('2d');
   ctx.filter = preview.style.filter || 'none';
-  ctx.drawImage(preview, 0, 0, sourceWidth, sourceHeight, 0, 0, width, height);
+  ctx.drawImage(preview, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
 
   const blob = await new Promise((resolve) => {
     snapshotCanvas.toBlob(resolve, 'image/jpeg', quality);
@@ -970,7 +1344,7 @@ async function captureImage() {
     totalImages += 1;
     imageCount.textContent = totalImages;
 
-    addLog('Imagen guardada en Laravel.', 'success');
+    addLog('Imagen guardada.', 'success');
     showVideoToast(' Foto tomada', 'photo');
   } catch (error) {
     console.error(error);
@@ -1004,18 +1378,23 @@ let activeRecordingController = null;
 
 function createFocusModeRecordingStream(signal) {
   const fullSourceWidth = preview.videoWidth;
-  const sourceHeight = preview.videoHeight;
-  const sourceWidth = Math.round(fullSourceWidth * (1 - focusCropRatio()));
+  const fullSourceHeight = preview.videoHeight;
+  const roi = normalizeRoi(focusRoi, fullSourceWidth, fullSourceHeight) || {
+    x: 0,
+    y: 0,
+    width: fullSourceWidth,
+    height: fullSourceHeight,
+  };
 
   const canvas = document.createElement('canvas');
-  canvas.width = sourceWidth;
-  canvas.height = sourceHeight;
+  canvas.width = roi.width;
+  canvas.height = roi.height;
 
   const ctx = canvas.getContext('2d');
 
   const drawFrame = () => {
     if (signal.aborted) return;
-    ctx.drawImage(preview, 0, 0, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+    ctx.drawImage(preview, roi.x, roi.y, roi.width, roi.height, 0, 0, roi.width, roi.height);
     requestAnimationFrame(drawFrame);
   };
 
@@ -1079,7 +1458,7 @@ function startRecording() {
           .then(() => {
             totalVideos += 1;
             videoCount.textContent = totalVideos;
-            addLog('Video guardado en Laravel.', 'success');
+            addLog('Video guardado.', 'success');
           })
           .catch((error) => {
             console.error(error);
@@ -1340,6 +1719,15 @@ finishStudyGalleryBtn?.addEventListener('click', () => {
   window.location.href = './app.html#galeria';
 });
 
+finishStudyReportBtn?.addEventListener('click', () => {
+  finishStudyModal?.classList.add('is-hidden');
+  const params = new URLSearchParams();
+  params.set('mode', 'normal');
+  if (activeStudyContext.studyId) params.set('estudio_id', String(activeStudyContext.studyId));
+  if (activeStudyContext.patientId) params.set('paciente_id', String(activeStudyContext.patientId));
+  window.location.href = `./app.html#ia-reportes-redactar?${params.toString()}`;
+});
+
 // Flujo de captura (funciona igual con el mouse, el boton en pantalla y el
 // remoto del capturador):
 //   - Un clic    -> toma una foto al instante (sin retraso), sin importar si
@@ -1516,7 +1904,7 @@ function bootstrap() {
   renderConnection();
   setStatus('Listo', 'idle');
   addLog('Atajos activos: F8 o Espacio = foto, F9 = grabar, F10 = detener. El boton fisico del endoscopio (mouse) tambien toma foto.');
-  addLog('Ingresa el codigo de Laravel para vincular este equipo, o detecta la camara sin vincular.');
+  addLog('Ingresa el codigo para vincular este equipo, o detecta la camara sin vincular.');
 }
 
 bootstrap();

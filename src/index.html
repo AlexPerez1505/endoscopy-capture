@@ -32,7 +32,7 @@
         <div class="video-header">
           <div>
             <h2>Vincular dispositivo de captura</h2>
-            <p>Ingresa el código de 6 dígitos generado en Laravel (Nuevo estudio &rarr; Generar código Tauri) para guardar las capturas con el paciente correcto.</p>
+            <p>Ingresa el código de 6 dígitos generado en el sistema (Nuevo estudio &rarr; Generar código) para guardar las capturas con el paciente correcto.</p>
           </div>
         </div>
 
@@ -74,6 +74,7 @@
           <div class="video-frame" id="videoFrame">
             <div class="video-crop-wrapper" id="videoCropWrapper">
               <video id="preview" autoplay playsinline muted></video>
+              <canvas id="focusCropCanvas" class="is-hidden" style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;z-index:5;"></canvas>
             </div>
 
             <div class="empty-state" id="emptyState">
@@ -125,7 +126,7 @@
 
             <div class="connection-box">
               <p><strong>Estado:</strong> <span id="pairStatusText">Conectando</span></p>
-              <p><strong>Laravel:</strong> <span id="tenantText">--</span></p>
+              <p><strong>Servidor:</strong> <span id="tenantText">--</span></p>
               <p><strong>Paciente:</strong> <span id="patientText">--</span></p>
               <p><strong>Estudio:</strong> <span id="studyText">--</span></p>
               <p><strong>Sesion:</strong> <span id="sessionText">--</span></p>
@@ -152,18 +153,17 @@
 
               <div class="config-section">
                 <h3>Modo enfoque</h3>
-                <p style="color:var(--txt-soft,#94a3b8);font-size:12px;margin:0 0 10px;">
-                  Recorta el panel de información de la derecha del procesador para ver y guardar solo la imagen del endoscopio.
+                <p id="focusModeHelp" style="color:var(--txt-soft,#94a3b8);font-size:12px;margin:0 0 10px;">
+                  Selecciona el área de la cámara para recortar el video y las fotos.
                 </p>
 
                 <button class="btn btn-outline full" id="focusModeToggleBtn" type="button">
                   Activar modo enfoque
                 </button>
 
-                <label class="range-field" id="focusCropField" style="margin-top:12px;display:none;">
-                  <span>Recorte lateral derecho (<span id="focusCropValue">28</span>%)</span>
-                  <input id="focusCropInput" type="range" min="0" max="50" step="1" value="28" />
-                </label>
+                <button class="btn full" id="focusModeCalibrateBtn" type="button" style="margin-top:8px;display:none;">
+                  Recalibrar área
+                </button>
               </div>
 
               <div class="config-section">
@@ -232,10 +232,11 @@
       <div id="finishStudyModal" class="is-hidden" style="position:fixed;inset:0;background:rgba(2,6,23,0.85);display:grid;place-items:center;z-index:50;padding:32px;">
         <div style="background:var(--panel-bg,#0f172a);border-radius:16px;padding:28px;max-width:900px;width:100%;max-height:85vh;overflow-y:auto;">
           <h2 style="margin-bottom:4px;">Estudio finalizado</h2>
-          <p id="finishStudySummary" style="color:var(--txt-soft,#94a3b8);margin-bottom:18px;">Imágenes y videos guardados en Laravel para este paciente.</p>
+          <p id="finishStudySummary" style="color:var(--txt-soft,#94a3b8);margin-bottom:18px;">Imágenes y videos guardados en el sistema para este paciente.</p>
           <div id="finishStudyThumbnails" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;"></div>
           <div style="display:flex;gap:12px;flex-wrap:wrap;">
             <button class="btn btn-primary" id="finishStudyGalleryBtn" type="button">Ver galería</button>
+            <button class="btn btn-primary" id="finishStudyReportBtn" type="button">Hacer reporte</button>
           </div>
         </div>
       </div>
