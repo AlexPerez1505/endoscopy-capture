@@ -8,7 +8,7 @@
   --qr-orange:#f6a63a;
   --qr-red:#ff5b72;
   display:grid;
-  gap:28px;
+  gap:36px;
 }
 
 .qr-alert{
@@ -28,7 +28,8 @@
 .qr-stats{
   display:grid;
   grid-template-columns:repeat(3, minmax(0, 1fr));
-  gap:20px;
+  column-gap:40px;
+  row-gap:24px;
 }
 
 .qr-stat-card,
@@ -64,11 +65,13 @@
 .qr-layout{
   display:grid;
   grid-template-columns:minmax(420px, .95fr) minmax(0, 1.08fr);
-  gap:26px;
+  column-gap:40px;
+  row-gap:40px;
   align-items:start;
 }
 
 .qr-card{
+  min-width:0;
   padding:28px 30px;
 }
 
@@ -475,11 +478,12 @@ html[data-theme="light"] .qr-history-menu-pop button{color:#3b4a6b}
 
 .qr-prereg-list{
   display:grid;
-  gap:18px;
-  margin-top:28px;
+  gap:16px;
+  margin-top:24px;
 }
 
 .qr-prereg{
+  min-width:0;
   overflow:hidden;
   border:1px solid rgba(99,133,205,.22);
   border-radius:18px;
@@ -488,10 +492,10 @@ html[data-theme="light"] .qr-history-menu-pop button{color:#3b4a6b}
 
 .qr-prereg summary{
   display:grid;
-  grid-template-columns:minmax(260px, 1.25fr) minmax(150px, .7fr) auto;
+  grid-template-columns:minmax(0, 1.25fr) minmax(0, .7fr) auto;
   gap:18px;
   align-items:center;
-  padding:20px 22px;
+  padding:16px 18px;
   list-style:none;
   cursor:pointer;
 }
@@ -502,7 +506,15 @@ html[data-theme="light"] .qr-history-menu-pop button{color:#3b4a6b}
   min-width:0;
   display:flex;
   align-items:center;
-  gap:15px;
+  gap:18px;
+}
+
+.qr-person > div{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:7px;
 }
 
 .qr-person-avatar{
@@ -545,13 +557,13 @@ html[data-theme="light"] .qr-history-menu-pop button{color:#3b4a6b}
 
 .qr-prereg-detail{
   display:grid;
-  gap:14px;
-  padding:0 22px 22px;
+  gap:20px;
+  padding:22px 24px 24px;
   border-top:1px solid rgba(99,133,205,.22);
 }
 
 .qr-warning{
-  margin-top:16px;
+  margin-top:20px;
   padding:12px 14px;
   border-radius:12px;
   background:rgba(246,166,58,.1);
@@ -563,20 +575,21 @@ html[data-theme="light"] .qr-history-menu-pop button{color:#3b4a6b}
 .qr-data-grid{
   display:grid;
   grid-template-columns:repeat(3, minmax(0, 1fr));
-  gap:10px;
-  margin-top:16px;
+  gap:22px;
+  margin-top:24px;
 }
 
 .qr-data-grid div{
   min-width:0;
-  padding:12px;
+  padding:18px;
   border-radius:12px;
   background:rgba(110,160,255,.08);
+  border:1px solid rgba(99,133,205,.16);
 }
 
 .qr-data-grid .wide{grid-column:span 3}
-.qr-data-grid b{display:block;margin-bottom:5px;color:#98acd9;font-size:12px}
-.qr-data-grid span{color:#eef4ff;font-size:14px;font-weight:800;white-space:pre-wrap}
+.qr-data-grid b{display:block;margin-bottom:10px;color:#98acd9;font-size:12px}
+.qr-data-grid span{color:#eef4ff;font-size:14px;font-weight:800;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-width:0}
 
 .qr-review-actions{
   display:flex;
@@ -640,25 +653,39 @@ html[data-theme="light"] .qr-data-grid div{background:#edf4ff;color:#13213d}
 html[data-theme="light"] .qr-dates b{color:#13213d}
 
 @media (max-width:1320px){
-  .qr-layout{grid-template-columns:1fr}
+  .qr-layout{
+    grid-template-columns:1fr;
+    row-gap:52px;
+  }
 }
 
 @media (max-width:820px){
   .qr-stats,
   .qr-builder{grid-template-columns:1fr}
+  .qr-stats{row-gap:22px}
+  .qr-layout{row-gap:36px}
   .qr-preview-box{width:min(270px, 78vw);height:min(270px, 78vw)}
   .qr-actions,
   .qr-expiration-group{grid-template-columns:1fr}
   .qr-action-btn.print{grid-column:span 1}
-  .qr-prereg summary{grid-template-columns:1fr auto}
+  .qr-prereg summary{grid-template-columns:1fr;gap:12px}
+  .qr-person{flex-wrap:wrap}
+  .qr-person strong,
+  .qr-person span{white-space:normal}
   .qr-received{display:none}
-  .qr-data-grid{grid-template-columns:1fr 1fr}
-  .qr-data-grid .wide{grid-column:span 2}
+  .qr-data-grid{grid-template-columns:1fr}
+  .qr-data-grid .wide{grid-column:span 1}
 }
 
 @media (max-width:520px){
   .qr-card{padding:22px 18px}
+  .qr-stat-card{padding:20px 22px}
+  .qr-stat-card strong{font-size:32px}
+  .qr-card-head h2{font-size:22px}
+  .qr-card-head p{font-size:15px}
+  .qr-history-tabs button{font-size:12px}
   .qr-data-grid{grid-template-columns:1fr}
   .qr-data-grid .wide{grid-column:span 1}
   .qr-review-actions{flex-direction:column}
+  .qr-code-line{flex-direction:column;align-items:flex-start;gap:10px;padding:14px}
 }

@@ -113,6 +113,10 @@ a{color:inherit;text-decoration:none}
 .side-brand-row{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;width:100%}
 .side-brand{display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:0}
 .side-brand img{width:64px;height:64px;object-fit:contain;margin-bottom:2px;filter:drop-shadow(0 0 16px rgba(56,199,244,.15))}
+.side-logo-dark{display:block}
+.side-logo-light{display:none}
+html[data-theme="light"] .side-logo-dark{display:none}
+html[data-theme="light"] .side-logo-light{display:block}
 .side-brand-copy{display:flex;flex-direction:column;align-items:center}
 .side-brand-name{font-family:'Sora',sans-serif;font-weight:800;font-size:17px;letter-spacing:.38em}
 .side-brand-name span{color:var(--blue)}
