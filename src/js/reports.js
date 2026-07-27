@@ -40,6 +40,10 @@ let editorState = {
   assetUrlCache: new Map(),
 };
 
+let predictiveStudies = [];
+let predictiveIndex = 0;
+let predictiveInterval = null;
+
 function endpoint(path = '') {
   const suffix = String(path || '').replace(/^\/+/, '');
   return `${REPORTS_BASE}${suffix ? `/${suffix}` : ''}`;
@@ -133,11 +137,13 @@ function normalizeReportsPayload(payload) {
   const reports = payload?.reportes || payload?.reports || payload?.data?.reportes || payload?.data?.reports || [];
   const kpis = payload?.kpis || payload?.summary || payload?.data?.kpis || {};
   const findings = payload?.hallazgos || payload?.findings || payload?.data?.hallazgos || [];
+  const estudiosSinReporte = payload?.estudios_sin_reporte || payload?.estudiosSinReporte || payload?.data?.estudios_sin_reporte || [];
 
   return {
     reports: Array.isArray(reports) ? reports.map(normalizeReport) : [],
     kpis,
     findings: Array.isArray(findings) ? findings.map(normalizeFinding) : [],
+    estudiosSinReporte: Array.isArray(estudiosSinReporte) ? estudiosSinReporte : [],
   };
 }
 
@@ -470,23 +476,99 @@ function renderFindings(root, findings) {
     : `${title}<div class="find-empty">Sin hallazgos registrados</div>${link}`;
 }
 
-function renderPredictive(root, reports) {
-  const first = reports[0];
-  if (!first) return;
-  setText(root, '[data-bind="predictive-initials"]', first.initials);
-  setText(root, '[data-bind="predictive-name"]', first.name);
-  setText(root, '[data-bind="predictive-study"]', first.study);
-  setText(root, '[data-bind="predictive-date"]', first.date || 'Sin fecha');
+function renderPredictive(root, estudios, index = 0) {
+  const first = estudios?.[index] || estudios?.[0];
+  const mini = root.querySelector('#predMini');
+  const name = root.querySelector('#predName');
+  const meta = root.querySelector('#predMeta');
+  const risk = root.querySelector('#predRisk');
+  const sub = root.querySelector('#predRiskSub');
+  const link = root.querySelector('#predLink');
+  const gauge = root.querySelector('#predGauge');
+  const water = root.querySelector('#waterLevel');
+
+  if (!first) {
+    if (mini) mini.textContent = '—';
+    if (name) name.textContent = 'Sin estudios pendientes';
+    if (meta) meta.innerHTML = 'Estudio: —<br>\nFecha: —';
+    if (risk) risk.style.display = 'none';
+    if (sub) sub.textContent = 'Requiere elaborar el reporte clínico';
+    if (link) {
+      link.style.pointerEvents = 'none';
+      link.style.opacity = '0.5';
+    }
+    if (gauge) gauge.style.strokeDashoffset = '314.16';
+    if (water) water.style.transform = 'translate(0, 0)';
+    return;
+  }
+
+  if (mini) mini.textContent = first.ini || 'NA';
+  if (name) name.textContent = first.paciente || 'Paciente sin nombre';
+  if (meta) {
+    meta.innerHTML = `Estudio: ${escapeHtml(first.tipo || '—')}<br>\nFecha: ${escapeHtml(first.fecha || '—')}`;
+  }
+  if (risk) risk.style.display = '';
+  if (sub) sub.textContent = 'Requiere elaborar el reporte clínico';
+  if (link) {
+    link.style.pointerEvents = '';
+    link.style.opacity = '';
+    const route = `ia-reportes-redactar?mode=normal&estudio_id=${encodeURIComponent(first.id)}`;
+    link.dataset.nav = route;
+    link.setAttribute('href', `#${route}`);
+  }
+
+  const pct = Math.max(50, Math.min(100, Number(first.pct) || 0));
+  const circumference = 314.16;
+  const targetOffset = (circumference * (1 - pct / 100)).toFixed(2);
+  const targetLevel = ((100 - pct) * 0.35).toFixed(2);
+
+  if (gauge) {
+    gauge.style.transition = 'none';
+    gauge.style.strokeDashoffset = '314.16';
+    gauge.dataset.pct = pct;
+  }
+  if (water) {
+    water.style.transition = 'none';
+    water.style.transform = 'translate(0, 35px)';
+  }
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (gauge) {
+        gauge.style.transition = 'stroke-dashoffset 1.2s ease-out';
+        gauge.style.strokeDashoffset = targetOffset;
+      }
+      if (water) {
+        water.style.transition = 'transform 1.2s ease-out';
+        water.style.transform = `translate(0, ${targetLevel}px)`;
+      }
+    });
+  });
+}
+
+function startPredictiveRotation(root) {
+  if (predictiveInterval) {
+    clearInterval(predictiveInterval);
+    predictiveInterval = null;
+  }
+  if (!predictiveStudies || predictiveStudies.length <= 1) return;
+  predictiveInterval = setInterval(() => {
+    predictiveIndex = (predictiveIndex + 1) % predictiveStudies.length;
+    renderPredictive(root, predictiveStudies, predictiveIndex);
+  }, 3500);
 }
 
 function renderReportsData(root, data) {
   recentReportsCache = data.reports;
   showingAllReports = false;
+  predictiveStudies = data.estudiosSinReporte || [];
+  predictiveIndex = 0;
 
   renderKpis(root, data.kpis);
   renderReportsTable(data.reports);
   renderFindings(root, data.findings);
-  renderPredictive(root, data.reports);
+  renderPredictive(root, predictiveStudies, predictiveIndex);
+  startPredictiveRotation(root);
 
   const verTodosLink = root.querySelector('#verTodosReportesLink');
   if (verTodosLink && !verTodosLink.dataset.bound) {

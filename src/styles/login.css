@@ -34,7 +34,7 @@ body {
 .ec-shell {
   display: grid;
   grid-template-columns: minmax(420px, 560px) 1fr;
-  min-height: 100vh;
+  min-height: calc(100vh - var(--titlebar-h, 0px));
 }
 
 .ec-form-panel {
@@ -235,9 +235,9 @@ body {
 
 @media (max-width: 1024px) {
   html, body { background: #ffffff; }
-  .ec-shell { display: block; min-height: 100svh; }
+  .ec-shell { display: block; min-height: calc(100svh - var(--titlebar-h, 0px)); }
   .ec-visual { display: none !important; }
-  .ec-form-panel { border-radius: 0; min-height: 100svh; padding: 20px 24px; justify-content: center; }
+  .ec-form-panel { border-radius: 0; min-height: calc(100svh - var(--titlebar-h, 0px)); padding: 20px 24px; justify-content: center; }
   .ec-brand { margin-bottom: 18px; gap: 7px; }
   .ec-brand img { width: 64px; }
   .ec-brand-name { font-size: 17px; letter-spacing: .34em; }

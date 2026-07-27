@@ -1,0 +1,85 @@
+/* ============ BARRA DE TITULO PERSONALIZADA (reemplaza la nativa de Windows) ============ */
+:root {
+  --titlebar-h: 36px;
+}
+
+body {
+  padding-top: var(--titlebar-h);
+}
+
+.app-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--titlebar-h);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel, #0A0F2E);
+  border-bottom: 1px solid var(--stroke, rgba(110, 160, 255, .12));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app-titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-titlebar-brand img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex: none;
+}
+
+.app-titlebar-brand span {
+  font-family: 'Sora', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--txt, #EAF1FF);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-titlebar-controls {
+  display: flex;
+  height: 100%;
+  flex: none;
+}
+
+.app-titlebar-btn {
+  width: 46px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--txt-soft, #8FA3CF);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+
+.app-titlebar-btn:hover {
+  background: rgba(110, 160, 255, .14);
+  color: var(--txt, #EAF1FF);
+}
+
+.app-titlebar-btn--close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+html[data-theme="light"] .app-titlebar {
+  background: #FFFFFF;
+  border-bottom-color: rgba(0, 0, 0, .08);
+}
