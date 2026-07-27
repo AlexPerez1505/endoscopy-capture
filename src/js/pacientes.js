@@ -4,6 +4,7 @@ import {
   firstLaravelAssetUrl,
   laravelFetch,
 } from './laravel.js';
+import { runWithConcurrencyLimit } from './concurrency.js';
 import { getAuthToken } from './auth.js';
 import { escapeHtml } from './html.js';
 import {
@@ -15,8 +16,23 @@ import {
 } from './storage-keys.js';
 
 const PAGE_SIZE = 15;
-const PATIENTS_FETCH_LIMIT = 1000;
+
+// El backend (TauriPatientController::index) acepta 'per_page' y 'page'
+// pero SIEMPRE lo topa a 100 (min($request->integer('per_page', 100), 100)),
+// sin importar que se pida mas. Pedir per_page=1000 no trae 1000 registros:
+// trae 100 y el resto queda invisible para el listado local. Por eso aqui
+// se respeta ese tope real y, si hay mas de una pagina, se traen todas.
+const PATIENTS_SERVER_PAGE_SIZE = 100;
+const PATIENTS_MAX_SERVER_PAGES = 50; // limite de seguridad: hasta 5000 pacientes
+const PATIENTS_PAGE_FETCH_CONCURRENCY = 4;
 const PATIENTS_SYNC_INTERVAL_MS = 3000;
+
+// Paciente no usa soft deletes: un registro eliminado simplemente
+// desaparece de la tabla y 'updated_since' jamas se enterara de eso.
+// Por eso cada N ciclos de sync incremental se hace una reconciliacion
+// completa (fetchAllPatients) para detectar eliminaciones. El resto de
+// los ciclos usan delta sync (solo lo que cambio desde el ultimo poll).
+const PATIENTS_FULL_RESYNC_EVERY_TICKS = 10; // ~30s con intervalo de 3s
 
 let patients = [];
 let filteredPatients = [];
@@ -29,6 +45,8 @@ let patientsSyncRunning = false;
 let patientsFingerprint = '';
 let patientsModuleActive = false;
 let openMenuPatientId = null;
+let lastSyncedAt = null;
+let syncTickCount = 0;
 
 function endpoint(path = '') {
   const cleanPath = String(path || '').replace(/^\/+/, '');
@@ -298,6 +316,100 @@ function normalizePatient(patient = {}) {
   };
 }
 
+// Trae TODAS las paginas del listado de pacientes de la clinica, no solo
+// la primera. El backend ya pagina correctamente; el problema historico
+// era que el frontend pedia un 'per_page' irreal y asumia que ahi venia
+// todo. Con esto, un paciente numero 250 ya no desaparece del listado.
+async function fetchAllPatients() {
+  const firstPayload = await request(
+    `?per_page=${PATIENTS_SERVER_PAGE_SIZE}&page=1`
+  );
+
+  let allPatients = normalizePayload(firstPayload);
+
+  const reportedLastPage =
+    Number(firstPayload?.pagination?.last_page) || 1;
+
+  const lastPage = Math.min(
+    reportedLastPage,
+    PATIENTS_MAX_SERVER_PAGES
+  );
+
+  if (lastPage > 1) {
+    const remainingPages = Array.from(
+      { length: lastPage - 1 },
+      (_, index) => index + 2
+    );
+
+    const pageResults = new Array(remainingPages.length);
+
+    await runWithConcurrencyLimit(
+      remainingPages,
+      PATIENTS_PAGE_FETCH_CONCURRENCY,
+      async (page, index) => {
+        const payload = await request(
+          `?per_page=${PATIENTS_SERVER_PAGE_SIZE}&page=${page}`
+        );
+
+        pageResults[index] = normalizePayload(payload);
+      }
+    );
+
+    allPatients = allPatients.concat(
+      ...pageResults.filter(Boolean)
+    );
+  }
+
+  if (reportedLastPage > PATIENTS_MAX_SERVER_PAGES) {
+    console.warn(
+      `Esta clinica tiene mas de ${PATIENTS_MAX_SERVER_PAGES * PATIENTS_SERVER_PAGE_SIZE} pacientes; ` +
+      'se muestran solo los primeros. Considera agregar busqueda server-side para listas de este tamano.'
+    );
+  }
+
+  return {
+    patients: allPatients,
+    serverTime: firstPayload?.server_time || null,
+  };
+}
+
+// Sync incremental: solo trae pacientes creados/modificados desde
+// 'sinceIso'. Nunca reporta eliminaciones (ver nota de
+// PATIENTS_FULL_RESYNC_EVERY_TICKS mas arriba).
+async function fetchPatientsDelta(sinceIso) {
+  const payload = await request(
+    `?per_page=${PATIENTS_SERVER_PAGE_SIZE}&updated_since=${encodeURIComponent(sinceIso)}`
+  );
+
+  return {
+    patients: normalizePayload(payload),
+    serverTime: payload?.server_time || null,
+  };
+}
+
+function mergePatientsDelta(basePatients, changedPatients) {
+  if (!changedPatients.length) {
+    return basePatients;
+  }
+
+  const merged = [...basePatients];
+
+  changedPatients.forEach((changed) => {
+    const index = merged.findIndex(
+      (patient) =>
+        String(patient.id) === String(changed.id)
+    );
+
+    if (index >= 0) {
+      merged[index] = changed;
+    } else {
+      merged.unshift(changed);
+    }
+  });
+
+  return merged;
+}
+
 function normalizePayload(payload) {
   let list = [];
 
@@ -450,16 +562,17 @@ async function loadPatients({
   }
 
   try {
-    const payload = await request(
-      `?per_page=${PATIENTS_FETCH_LIMIT}`
-    );
-    const nextPatients = normalizePayload(payload);
+    const { patients: nextPatients, serverTime } =
+      await fetchAllPatients();
 
     patients = nextPatients;
     filteredPatients = [...nextPatients];
 
     patientsFingerprint =
       createFingerprint(nextPatients);
+
+    lastSyncedAt = serverTime;
+    syncTickCount = 0;
 
     currentPage = 1;
 
@@ -489,16 +602,44 @@ async function syncPatientsFromLaravel({
   patientsSyncRunning = true;
 
   try {
-    const payload = await request(
-      `?per_page=${PATIENTS_FETCH_LIMIT}`
-    );
-    const nextPatients = normalizePayload(payload);
+    const needsFullResync =
+      force ||
+      !lastSyncedAt ||
+      syncTickCount >= PATIENTS_FULL_RESYNC_EVERY_TICKS;
+
+    let nextPatients;
+    let serverTime;
+
+    if (needsFullResync) {
+      ({ patients: nextPatients, serverTime } =
+        await fetchAllPatients());
+
+      syncTickCount = 0;
+    } else {
+      const delta = await fetchPatientsDelta(lastSyncedAt);
+
+      nextPatients = mergePatientsDelta(
+        patients,
+        delta.patients
+      );
+
+      serverTime = delta.serverTime;
+      syncTickCount += 1;
+    }
+
+    if (serverTime) {
+      lastSyncedAt = serverTime;
+    }
 
     const nextFingerprint =
       createFingerprint(nextPatients);
 
+    // 'force' solo debe forzar que se consulte al servidor AHORA
+    // (saltando el intervalo/el delta), nunca forzar un re-render.
+    // Si los datos no cambiaron, no hay razon para reconstruir la tabla
+    // ni volver a pedir los avatares (eso es lo que causaba que la foto
+    // 'parpadeara'/recargara cada vez que se volvia a la app).
     if (
-      !force &&
       nextFingerprint === patientsFingerprint
     ) {
       return;
@@ -685,14 +826,19 @@ async function hydratePatientAvatar(image) {
   }
 }
 
+const AVATAR_HYDRATION_CONCURRENCY = 5;
+
 function hydratePatientAvatars(root = document) {
-  root
-    .querySelectorAll?.(
+  const images =
+    root.querySelectorAll?.(
       'img[data-patient-avatar-img="true"][data-auth-asset-url]'
-    )
-    .forEach((image) => {
-      hydratePatientAvatar(image);
-    });
+    ) || [];
+
+  runWithConcurrencyLimit(
+    images,
+    AVATAR_HYDRATION_CONCURRENCY,
+    (image) => hydratePatientAvatar(image)
+  );
 }
 
 function rowHtml(patient, index) {

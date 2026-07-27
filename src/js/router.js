@@ -28,6 +28,7 @@ import { escapeHtml } from './html.js';
 import {
   apiBaseUrl,
   authenticatedLaravelAssetUrl,
+  clearAuthenticatedAssetCache,
   firstLaravelAssetUrl,
   laravelFetch,
 } from './laravel.js';
@@ -892,62 +893,13 @@ window.addEventListener(
 
 /* =========================================================
    ACTUALIZAR PACIENTES AL VOLVER
+   NOTA: pacientes.js ya registra sus propios listeners de
+   'focus'/'visibilitychange'/'online' (ver bindRealtimeEvents)
+   que llaman a syncPatientsFromLaravel con la misma condicion
+   de ruta. Tenerlos tambien aqui duplicaba cada peticion (se
+   disparaban dos sincronizaciones completas por cada cambio de
+   ventana).
 ========================================================= */
-
-window.addEventListener(
-  'focus',
-  () => {
-    if (
-      currentRoute() ===
-        'pacientes' &&
-      typeof window
-        .syncPatientsFromLaravel ===
-        'function'
-    ) {
-      window
-        .syncPatientsFromLaravel({
-          force: true,
-        })
-        .catch((error) => {
-          console.error(
-            'Error actualizando pacientes:',
-            error
-          );
-        });
-    }
-  }
-);
-
-document.addEventListener(
-  'visibilitychange',
-  () => {
-    if (
-      document.visibilityState !==
-      'visible'
-    ) {
-      return;
-    }
-
-    if (
-      currentRoute() ===
-        'pacientes' &&
-      typeof window
-        .syncPatientsFromLaravel ===
-        'function'
-    ) {
-      window
-        .syncPatientsFromLaravel({
-          force: true,
-        })
-        .catch((error) => {
-          console.error(
-            'Error sincronizando pacientes:',
-            error
-          );
-        });
-    }
-  }
-);
 
 /* =========================================================
    EVENTO DE PACIENTE GUARDADO
@@ -1539,6 +1491,7 @@ if (logoutBtn) {
       }
 
       clearAuthToken();
+      clearAuthenticatedAssetCache();
 
       sessionStorage.removeItem(
         ACCOUNT_NAME_STORAGE_KEY

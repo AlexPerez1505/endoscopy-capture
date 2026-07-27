@@ -471,6 +471,89 @@ async function finishActiveSession() {
   }
 }
 
+// Reintentos con backoff exponencial para la subida de capturas.
+//
+// Un fallo de red/timeout (por ejemplo, el timeout de 30s del cliente
+// HTTP en Rust ante un video grande) o un error 5xx del servidor suelen
+// ser transitorios: reintentar despues de una pausa puede salvar la
+// captura sin que el usuario tenga que hacer nada. Un 401/419 (token
+// invalido) o un 4xx (payload rechazado) NUNCA se arreglan reintentando
+// el mismo request, asi que esos se propagan de inmediato.
+const UPLOAD_RETRY_ATTEMPTS = 3;
+const UPLOAD_RETRY_BASE_DELAY_MS = 2000;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableUploadError(status) {
+  // Sin status HTTP (el request nunca llego a tener respuesta: error de
+  // red, timeout, dispositivo desconectado) se trata como transitorio.
+  if (!Number.isFinite(status)) return true;
+  return status >= 500;
+}
+
+async function performCaptureUploadRequest(endpoint, authorization, body) {
+  const response = await laravelFetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: authorization,
+    },
+    body,
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json')
+    ? await response.json()
+    : { message: await response.text() };
+
+  if (response.status === 401 || response.status === 419) {
+    const error = new Error('El dispositivo no esta vinculado o el token expiro. Vuelve a ingresar el codigo.');
+    error.status = response.status;
+    throw error;
+  }
+
+  if (!response.ok || payload?.ok === false) {
+    const error = new Error(payload?.message || `El servidor respondio HTTP ${response.status} al guardar la captura.`);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+async function uploadCaptureWithRetry(endpoint, authorization, body, captureType) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= UPLOAD_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await performCaptureUploadRequest(endpoint, authorization, body);
+    } catch (error) {
+      lastError = error;
+
+      const isLastAttempt = attempt >= UPLOAD_RETRY_ATTEMPTS;
+
+      if (isLastAttempt || !isRetryableUploadError(error.status)) {
+        throw error;
+      }
+
+      const waitMs = UPLOAD_RETRY_BASE_DELAY_MS * attempt;
+      const label = captureType === 'video' ? 'video' : 'foto';
+
+      addLog(
+        `No se pudo guardar el ${label} (intento ${attempt}/${UPLOAD_RETRY_ATTEMPTS}): ${error.message} Reintentando en ${Math.round(waitMs / 1000)}s...`,
+        'error'
+      );
+
+      await delay(waitMs);
+    }
+  }
+
+  throw lastError;
+}
+
 async function uploadCaptureToLaravel(blob, filename, captureType) {
   const authorization = activeCaptureAuthHeader();
   const sessionId = sessionStorage.getItem(DEVICE_SESSION_KEY);
@@ -483,34 +566,18 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
   const fileField = captureType === 'video' ? 'filename' : 'filename';
   const timestampField = captureType === 'video' ? 'ended_at' : 'captured_at';
 
-  const response = await laravelFetch(endpoint, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: authorization,
-    },
-    body: JSON.stringify({
-      session_id: Number(sessionId),
-      [fileField]: filename,
-      mime_type: blob.type || 'application/octet-stream',
-      data_base64: await blobToBase64(blob),
-      [timestampField]: new Date().toISOString(),
-    }),
+  // El Blob se codifica UNA sola vez antes de reintentar: es lo mas
+  // costoso de esta operacion (sobre todo en videos grandes) y no cambia
+  // entre intentos, asi que repetirlo en cada retry seria puro desperdicio.
+  const body = JSON.stringify({
+    session_id: Number(sessionId),
+    [fileField]: filename,
+    mime_type: blob.type || 'application/octet-stream',
+    data_base64: await blobToBase64(blob),
+    [timestampField]: new Date().toISOString(),
   });
 
-  const contentType = response.headers.get('content-type') || '';
-  const payload = contentType.includes('application/json')
-    ? await response.json()
-    : { message: await response.text() };
-
-  if (response.status === 401 || response.status === 419) {
-    throw new Error('El dispositivo no esta vinculado o el token expiro. Vuelve a ingresar el codigo.');
-  }
-
-  if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `El servidor respondio HTTP ${response.status} al guardar la captura.`);
-  }
+  const payload = await uploadCaptureWithRetry(endpoint, authorization, body, captureType);
 
   addCaptureThumbnail(
     URL.createObjectURL(blob),
