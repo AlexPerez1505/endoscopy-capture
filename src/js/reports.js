@@ -17,6 +17,8 @@ const REPORT_ASSET_TIMEOUT_MS = 8000;
 const REPORT_PRINT_WAIT_MS = 2500;
 
 let reportsTemplate = '';
+let recentReportsCache = [];
+let showingAllReports = false;
 let editorState = {
   studies: [],
   templates: [],
@@ -393,6 +395,47 @@ function renderReportsTable(reports) {
   tbody.innerHTML = reports.map(reportRowHTML).join('');
 }
 
+function setVerTodosLinkLabel(root, expanded) {
+  const link = root.querySelector('#verTodosReportesLink');
+  if (!link) return;
+  const span = link.querySelector('span');
+  link.childNodes[0].textContent = expanded ? 'Ver solo recientes ' : 'Ver todos los reportes ';
+  if (!span) link.append(' ->');
+}
+
+async function toggleAllReports(root) {
+  const link = root.querySelector('#verTodosReportesLink');
+
+  if (showingAllReports) {
+    showingAllReports = false;
+    renderReportsTable(recentReportsCache);
+    setVerTodosLinkLabel(root, false);
+    return;
+  }
+
+  const originalText = link ? link.textContent : '';
+  if (link) link.textContent = 'Cargando...';
+
+  try {
+    const payload = await reportsRequest('todos');
+    const reports = Array.isArray(payload?.reportes)
+      ? payload.reportes.map(normalizeReport)
+      : [];
+
+    showingAllReports = true;
+    renderReportsTable(reports);
+    setVerTodosLinkLabel(root, true);
+  } catch (error) {
+    console.error('No se pudo cargar el listado completo de reportes:', error);
+    if (link) link.textContent = originalText;
+
+    if (error.code === 'UNAUTHORIZED') {
+      clearAuthToken();
+      renderLaravelLogin(root, error.message);
+    }
+  }
+}
+
 function renderKpis(root, kpis) {
   setKpi(root, 'kpi-reportes', kpis?.reportes?.valor ?? kpis?.reportes ?? 0);
   setKpi(root, 'kpi-pendientes', kpis?.sin_reporte?.valor ?? kpis?.pendientes?.valor ?? kpis?.sin_reporte ?? 0);
@@ -437,10 +480,22 @@ function renderPredictive(root, reports) {
 }
 
 function renderReportsData(root, data) {
+  recentReportsCache = data.reports;
+  showingAllReports = false;
+
   renderKpis(root, data.kpis);
   renderReportsTable(data.reports);
   renderFindings(root, data.findings);
   renderPredictive(root, data.reports);
+
+  const verTodosLink = root.querySelector('#verTodosReportesLink');
+  if (verTodosLink && !verTodosLink.dataset.bound) {
+    verTodosLink.dataset.bound = 'true';
+    verTodosLink.addEventListener('click', (event) => {
+      event.preventDefault();
+      toggleAllReports(root);
+    });
+  }
 }
 
 async function loadReportsFromLaravel(root) {

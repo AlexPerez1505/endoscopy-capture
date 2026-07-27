@@ -44,6 +44,56 @@
   pointer-events: none;
 }
 
+/* Brillo animado que recorre las 4 tarjetas de KPIs
+   ('Reportes generados', 'Estudios sin reporte', 'Evidencias
+   capturadas' y 'Estudios realizados') de forma periodica. */
+.reports-page .stat.blue::after,
+.reports-page .stat.orange::after,
+.reports-page .stat.red::after,
+.reports-page .stat.green::after {
+  inset: 0;
+  left: -40%;
+  right: auto;
+  width: 30%;
+  background: linear-gradient(110deg, transparent, rgba(255,255,255,.28), transparent);
+  animation: reports-stat-shine 4.2s ease-in-out infinite;
+}
+
+.reports-page .stat.orange::after {
+  animation-delay: .9s;
+}
+
+.reports-page .stat.red::after {
+  animation-delay: 1.8s;
+}
+
+.reports-page .stat.green::after {
+  animation-delay: 2.7s;
+}
+
+@keyframes reports-stat-shine {
+  0% {
+    left: -40%;
+  }
+
+  55% {
+    left: 120%;
+  }
+
+  100% {
+    left: 120%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reports-page .stat.blue::after,
+  .reports-page .stat.orange::after,
+  .reports-page .stat.red::after,
+  .reports-page .stat.green::after {
+    animation: none;
+  }
+}
+
 .reports-page .stat .ico {
   width: 72px;
   height: 72px;
@@ -304,20 +354,38 @@
 }
 
 .reports-page .chip {
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(148, 176, 255, .12);
+  border: 1px solid rgba(148, 176, 255, .3);
   color: var(--reports-text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.reports-page .chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .reports-page .chip.urgent {
   color: #ff4f5e;
+  background: rgba(255, 79, 94, .14);
+  border-color: rgba(255, 79, 94, .38);
 }
 
 .reports-page .chip.done {
-  color: var(--reports-text);
+  color: #13d297;
+  background: rgba(19, 210, 151, .14);
+  border-color: rgba(19, 210, 151, .38);
 }
 
 .reports-page .row-actions {
@@ -683,8 +751,17 @@ html[data-theme="light"] .reports-page .mini {
   border-color: rgba(2, 132, 199, .35);
 }
 
-html[data-theme="light"] .reports-page .chip.urgent { color: #ef4444; }
-html[data-theme="light"] .reports-page .chip.done { color: var(--reports-text); }
+html[data-theme="light"] .reports-page .chip.urgent {
+  color: #dc2626;
+  background: rgba(220, 38, 38, .1);
+  border-color: rgba(220, 38, 38, .32);
+}
+
+html[data-theme="light"] .reports-page .chip.done {
+  color: #0f9d70;
+  background: rgba(15, 157, 112, .1);
+  border-color: rgba(15, 157, 112, .32);
+}
 
 html[data-theme="light"] .reports-page .btn-gen.secondary {
   background: var(--reports-card-2);
