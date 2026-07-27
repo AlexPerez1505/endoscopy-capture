@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::path::Path;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -10,6 +11,7 @@ use base64::{
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
+use tauri_plugin_store::StoreExt;
 
 fn apply_window_icon(app: &tauri::App) -> tauri::Result<()> {
     if let Some(window) =
@@ -446,6 +448,81 @@ async fn laravel_asset(
     })
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct CropImageRequest {
+    data_base64: String,
+    filename: String,
+    folder: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct CropImageResponse {
+    path: String,
+    bytes: usize,
+}
+
+#[tauri::command]
+async fn save_crop_image(
+    app: tauri::AppHandle,
+    request: CropImageRequest,
+) -> Result<CropImageResponse, String> {
+    let bytes = BASE64_STANDARD
+        .decode(&request.data_base64)
+        .map_err(|error| format!("Base64 invalido: {error}"))?;
+
+    let app_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| format!("No se pudo obtener directorio local: {error}"))?;
+
+    let folder = request.folder.unwrap_or_else(|| "focus_captures".to_string());
+    let dir = app_dir.join(&folder);
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("No se pudo crear carpeta: {error}"))?;
+
+    let path = dir.join(
+        Path::new(&request.filename)
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("capture.jpg")),
+    );
+    std::fs::write(&path, &bytes)
+        .map_err(|error| format!("No se pudo guardar imagen: {error}"))?;
+
+    Ok(CropImageResponse {
+        path: path.to_string_lossy().to_string(),
+        bytes: bytes.len(),
+    })
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+struct RoiProfile {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    device_name: Option<String>,
+}
+
+#[tauri::command]
+async fn load_roi_profile(app: tauri::AppHandle, device_name: Option<String>) -> Result<Option<RoiProfile>, String> {
+    let store = app.store("roi-profiles.json").map_err(|e| e.to_string())?;
+    let key = device_name.unwrap_or_else(|| "__default__".to_string());
+    let value = store.get(&key);
+    match value {
+        Some(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+async fn save_roi_profile(app: tauri::AppHandle, profile: RoiProfile) -> Result<(), String> {
+    let store = app.store("roi-profiles.json").map_err(|e| e.to_string())?;
+    let key = profile.device_name.clone().unwrap_or_else(|| "__default__".to_string());
+    store.set(&key, serde_json::to_value(&profile).map_err(|e| e.to_string())?);
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(
     mobile,
     tauri::mobile_entry_point
@@ -460,10 +537,16 @@ pub fn run() {
         .plugin(
             tauri_plugin_opener::init()
         )
+        .plugin(
+            tauri_plugin_store::Builder::new().build()
+        )
         .invoke_handler(
             tauri::generate_handler![
                 laravel_request,
-                laravel_asset
+                laravel_asset,
+                save_crop_image,
+                load_roi_profile,
+                save_roi_profile
             ]
         )
         .run(

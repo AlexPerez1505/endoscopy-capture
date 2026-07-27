@@ -101,7 +101,7 @@ async function apiRequest(path = '', options = {}) {
     const error = new Error(
       validationMessage ||
       payload?.message ||
-      `Laravel respondió HTTP ${response.status}.`
+      `El servidor respondió HTTP ${response.status}.`
     );
 
     error.status = response.status;
@@ -1570,22 +1570,9 @@ function renderConnection() {
       'cfgConnectionStatus'
     );
 
-  const api =
-    document.getElementById(
-      'cfgApiEndpoint'
-    );
-
   if (status) {
     status.textContent = 'En línea';
     status.classList.add('cfg-online');
-  }
-
-  if (api) {
-    api.textContent =
-      apiBaseUrl();
-
-    api.title =
-      apiBaseUrl();
   }
 }
 

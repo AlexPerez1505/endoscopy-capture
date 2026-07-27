@@ -26,7 +26,7 @@ async function loginToLaravel(email, password) {
   const payload = await response.json();
 
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || 'No se pudo iniciar sesión con Laravel.');
+    throw new Error(payload?.message || 'No se pudo iniciar sesión.');
   }
 
   return payload.token;
@@ -47,15 +47,15 @@ function setCounter(root, id, value) {
 }
 
 function setDashboardLoading(root) {
-  setText(root, 'next-patient-name', 'Conectando con Laravel');
+  setText(root, 'next-patient-name', 'Conectando');
   setText(root, 'next-patient-when', 'Cargando datos del dashboard...');
   setText(root, 'next-patient-proc', '');
 }
 
-function renderLaravelLogin(root, message = 'Inicia sesión con tu usuario de Laravel.') {
+function renderLaravelLogin(root, message = 'Inicia sesión con tu cuenta.') {
   root.innerHTML = `
     <form id="laravelDashboardLoginForm" style="max-width:420px;margin:42px auto;padding:24px;border:1px solid var(--stroke);border-radius:14px;background:var(--card);">
-      <strong style="display:block;color:var(--txt);font-size:16px;margin-bottom:8px;">Conectar Dashboard con Laravel</strong>
+      <strong style="display:block;color:var(--txt);font-size:16px;margin-bottom:8px;">Conectar Dashboard</strong>
       <p style="color:var(--txt-soft);font-size:13px;line-height:1.5;margin:0 0 18px;">${escapeHtml(message)}</p>
       <label style="display:block;color:var(--txt-soft);font-size:12px;margin-bottom:6px;">Correo</label>
       <input id="laravelDashboardEmail" type="email" autocomplete="username" required style="width:100%;margin-bottom:12px;padding:10px 12px;border-radius:10px;border:1px solid var(--stroke);background:var(--bg);color:var(--txt);">
@@ -108,19 +108,19 @@ async function fetchLaravelDashboard() {
   const contentType = response.headers.get('content-type') || '';
 
   if (response.status === 401 || response.status === 419) {
-    const error = new Error('Ingresa tus credenciales de Laravel para cargar el dashboard.');
+    const error = new Error('Ingresa tus credenciales para cargar el dashboard.');
     error.code = 'UNAUTHORIZED';
     throw error;
   }
 
   if (!contentType.includes('application/json')) {
-    throw new Error(`Laravel no devolvió JSON. Revisa sesión y ruta: ${DASHBOARD_ENDPOINT}`);
+    throw new Error(`El servidor no devolvió JSON. Revisa sesión y ruta: ${DASHBOARD_ENDPOINT}`);
   }
 
   const payload = await response.json();
 
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondió HTTP ${response.status}.`);
+    throw new Error(payload?.message || `El servidor respondió HTTP ${response.status}.`);
   }
 
   return payload.dashboard || {};

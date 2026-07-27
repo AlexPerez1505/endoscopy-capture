@@ -101,16 +101,16 @@ async function loginToLaravel(email, password) {
   const payload = await response.json();
 
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || 'No se pudo iniciar sesion con Laravel.');
+    throw new Error(payload?.message || 'No se pudo iniciar sesion.');
   }
 
   return payload.token;
 }
 
-function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Laravel.') {
+function renderLaravelLogin(root, message = 'Inicia sesion con tu cuenta.') {
   root.innerHTML = `
     <form id="laravelGaleriaLoginForm" style="max-width:420px;margin:42px auto;padding:24px;border:1px solid var(--stroke,#26314a);border-radius:14px;background:var(--card,#101a33);">
-      <strong style="display:block;color:var(--txt,#fff);font-size:16px;margin-bottom:8px;">Conectar Galeria con Laravel</strong>
+      <strong style="display:block;color:var(--txt,#fff);font-size:16px;margin-bottom:8px;">Conectar Galeria</strong>
       <p style="color:var(--txt-soft,#94a3b8);font-size:13px;line-height:1.5;margin:0 0 18px;">${escapeHtml(message)}</p>
       <label style="display:block;margin-bottom:12px;">
         <span style="display:block;font-size:12px;color:var(--txt-soft,#94a3b8);margin-bottom:4px;">Correo</span>
@@ -153,13 +153,13 @@ async function loadGalleryData() {
     const response = await laravelFetch(GALLERY_ENDPOINT, { headers });
 
     if (response.status === 401 || response.status === 419) {
-      const error = new Error('Ingresa tus credenciales de Laravel para cargar la galeria.');
+      const error = new Error('Ingresa tus credenciales para cargar la galeria.');
       error.code = 'UNAUTHORIZED';
       throw error;
     }
 
     if (!response.ok) {
-      throw new Error(`Laravel respondio HTTP ${response.status}`);
+      throw new Error(`El servidor respondio HTTP ${response.status}`);
     }
 
     const payload = await response.json();
@@ -178,7 +178,7 @@ async function loadGalleryData() {
       return 'unauthorized';
     }
 
-    setGalleryEmptyText('No se pudo cargar la galeria desde Laravel.');
+    setGalleryEmptyText('No se pudo cargar la galeria.');
     return false;
   }).finally(() => {
     galleryLoadPromise = null;
@@ -964,7 +964,7 @@ export function initGaleria() {
   document.getElementById('galleryImageFiltersPanel')?.classList.add('is-hidden');
   setFilterPanelOpen(!window.matchMedia('(max-width: 1100px)').matches);
   updateAdjustmentLabels();
-  setGalleryEmptyText('Cargando galeria desde Laravel...');
+  setGalleryEmptyText('Cargando galeria...');
   renderGalleryPatients();
   loadGalleryData().then(ok => {
     if (ok === 'unauthorized') return;

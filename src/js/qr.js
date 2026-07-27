@@ -39,18 +39,18 @@ async function qrRequest(path = '', options = {}) {
   const contentType = response.headers.get('content-type') || '';
 
   if (response.status === 401 || response.status === 419) {
-    const error = new Error('Ingresa tus credenciales de Laravel para cargar QR.');
+    const error = new Error('Ingresa tus credenciales para cargar QR.');
     error.code = 'UNAUTHORIZED';
     throw error;
   }
 
   if (!contentType.includes('application/json')) {
-    throw new Error(`Laravel no devolvio JSON. Revisa sesion y ruta: ${QR_ENDPOINT}`);
+    throw new Error(`El servidor no devolvio JSON. Revisa sesion y ruta: ${QR_ENDPOINT}`);
   }
 
   const payload = await response.json();
   if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `Laravel respondio HTTP ${response.status}.`);
+    throw new Error(payload?.message || `El servidor respondio HTTP ${response.status}.`);
   }
 
   return payload;
@@ -88,10 +88,10 @@ function restoreQrTemplate(root) {
   }
 }
 
-function renderLaravelLogin(root, message = 'Inicia sesion con tu usuario de Laravel.') {
+function renderLaravelLogin(root, message = 'Inicia sesion con tu cuenta.') {
   root.innerHTML = `
     <form class="qr-login" id="laravelQrLoginForm">
-      <strong>Conectar QR con Laravel</strong>
+      <strong>Conectar QR</strong>
       <p>${escapeHtml(message)}</p>
       <label for="laravelQrEmail">Correo</label>
       <input id="laravelQrEmail" type="email" autocomplete="username" required>
@@ -120,7 +120,7 @@ function renderQrError(root, error) {
 
   root.innerHTML = `
     <div class="card" style="padding:42px 20px;text-align:center;color:var(--txt-soft);">
-      <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con Laravel</strong>
+      <strong style="display:block;color:var(--txt);margin-bottom:8px;">No se pudo conectar con el servidor</strong>
       <span>${escapeHtml(error.message || 'No se pudo cargar QR.')}</span>
     </div>`;
 }
