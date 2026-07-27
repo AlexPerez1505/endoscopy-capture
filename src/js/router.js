@@ -7,20 +7,36 @@ import { initPacientes } from './pacientes.js';
 import { initPacienteForm } from './pacientes-form.js';
 import { initAgenda } from './agenda/index.js';
 import { initAgendar } from './agenda/agendar/index.js';
+
 import {
   initReports,
   initReportEditor,
 } from './reports.js';
+
 import { initGaleria } from './galeria.js';
 import { initMensajes } from './mensajes.js';
 import { initQr } from './qr.js';
 import { initConfiguracion } from './configuracion.js';
-import { clearAuthToken, getAuthToken } from './auth.js';
+
+import {
+  clearAuthToken,
+  getAuthToken,
+} from './auth.js';
+
 import { escapeHtml } from './html.js';
+
+import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
+
 import {
   THEME_STORAGE_KEY,
   ACCOUNT_NAME_STORAGE_KEY,
   ACCOUNT_ROLE_STORAGE_KEY,
+  ACCOUNT_PHOTO_URL_STORAGE_KEY,
   DEVICE_TOKEN_STORAGE_KEY,
   DEVICE_SESSION_STORAGE_KEY,
   EDIT_PATIENT_ID_STORAGE_KEY,
@@ -106,12 +122,26 @@ const HEAD = {
     title: 'Configuración',
     sub: 'Personaliza tu experiencia y gestiona los ajustes de tu cuenta y sistema',
   },
+
+  /*
+   * Esta ruta no se carga dentro del router.
+   * Únicamente sirve para mostrar un título correcto
+   * durante la redirección hacia index.html.
+   */
+  'nuevo-estudio': {
+    title: 'Iniciar estudio',
+    sub: 'Captura imágenes y video del procedimiento endoscópico',
+  },
 };
 
 /* =========================================================
    RUTAS DISPONIBLES
 ========================================================= */
 
+/*
+ * nuevo-estudio NO se agrega aquí porque no es una página
+ * interna de app.html. Su pantalla vive en index.html.
+ */
 const AVAILABLE = new Set([
   'dashboard',
   'agenda',
@@ -138,6 +168,11 @@ const AVAILABLE = new Set([
  * src/pages/pacientes/form.html
  *
  * Crear y editar usan el mismo archivo form.html.
+ *
+ * La captura de endoscopia NO está aquí.
+ * Esa pantalla vive directamente en:
+ *
+ * src/index.html
  */
 const PAGE_FILES = {
   dashboard:
@@ -193,11 +228,10 @@ const headSub =
 let currentLoadingRoute = null;
 
 /*
- * Controlador de aborto de la página activa. Cada llamada a loadPage()
- * cancela el anterior antes de crear uno nuevo, y lo pasa a initializeRoute()
- * para que cada módulo pueda limpiar sus propios timers/listeners cuando el
- * usuario navega a otra sección (ver signal?.addEventListener('abort', ...)
- * en configuracion.js, agenda/index.js y agenda/agendar/index.js).
+ * Controlador de aborto de la página activa.
+ *
+ * Cada llamada a loadPage() cancela el anterior antes
+ * de crear uno nuevo y lo pasa a initializeRoute().
  */
 let currentPageAbortController = null;
 
@@ -236,7 +270,8 @@ function navRouteFor(route) {
   }
 
   if (
-    route === 'ia-reportes-redactar'
+    route ===
+    'ia-reportes-redactar'
   ) {
     return 'ia-reportes';
   }
@@ -467,7 +502,9 @@ function renderError(route, error) {
   `;
 
   document
-    .getElementById('routerRetryButton')
+    .getElementById(
+      'routerRetryButton'
+    )
     ?.addEventListener(
       'click',
       () => {
@@ -480,51 +517,76 @@ function renderError(route, error) {
    INICIALIZAR CADA PÁGINA
 ========================================================= */
 
-async function initializeRoute(route, signal) {
+async function initializeRoute(
+  route,
+  signal
+) {
   switch (route) {
     case 'dashboard':
-      await initDashboard({ signal });
+      await initDashboard({
+        signal,
+      });
       break;
 
     case 'pacientes':
-      await initPacientes({ signal });
+      await initPacientes({
+        signal,
+      });
       break;
 
     case 'pacientes-crear':
     case 'pacientes-editar':
-      await initPacienteForm({ signal });
+      await initPacienteForm({
+        signal,
+      });
       break;
 
     case 'agenda':
-      await initAgenda({ signal });
+      await initAgenda({
+        signal,
+      });
       break;
 
     case 'agendar':
-      await initAgendar({ signal });
+      await initAgendar({
+        signal,
+      });
       break;
 
     case 'qr':
-      await initQr({ signal });
+      await initQr({
+        signal,
+      });
       break;
 
     case 'ia-reportes':
-      await initReports({ signal });
+      await initReports({
+        signal,
+      });
       break;
 
     case 'ia-reportes-redactar':
-      await initReportEditor({ signal });
+      await initReportEditor({
+        signal,
+      });
       break;
 
     case 'galeria':
-      await initGaleria({ signal });
+      await initGaleria({
+        signal,
+      });
       break;
 
     case 'mensajes':
-      await initMensajes({ signal });
+      await initMensajes({
+        signal,
+      });
       break;
 
     case 'configuracion':
-      await initConfiguracion({ signal });
+      await initConfiguracion({
+        signal,
+      });
       break;
 
     default:
@@ -543,7 +605,9 @@ function cleanupModules(nextRoute) {
    */
   if (
     nextRoute !== 'pacientes' &&
-    typeof window.stopPatientsRealtimeSync === 'function'
+    typeof window
+      .stopPatientsRealtimeSync ===
+      'function'
   ) {
     window.stopPatientsRealtimeSync();
   }
@@ -567,6 +631,23 @@ function cleanupModules(nextRoute) {
 async function loadPage(route) {
   const normalizedRoute =
     normalizeRoute(route);
+
+  /*
+   * La captura de endoscopia vive en index.html.
+   *
+   * No se carga como fragmento dentro de app.html
+   * porque contiene su propio main.js, cámara,
+   * capturador y estructura independiente.
+   */
+  if (
+    normalizedRoute ===
+    'nuevo-estudio'
+  ) {
+    window.location.href =
+      './index.html';
+
+    return;
+  }
 
   currentPageAbortController?.abort();
 
@@ -592,17 +673,9 @@ async function loadPage(route) {
   );
 
   if (
-    normalizedRoute ===
-    'nuevo-estudio'
-  ) {
-    window.location.href =
-      './index.html';
-
-    return;
-  }
-
-  if (
-    !AVAILABLE.has(normalizedRoute)
+    !AVAILABLE.has(
+      normalizedRoute
+    )
   ) {
     renderPlaceholder(
       normalizedRoute
@@ -628,7 +701,9 @@ async function loadPage(route) {
 
   try {
     const pageUrl =
-      PAGE_FILES[normalizedRoute];
+      PAGE_FILES[
+        normalizedRoute
+      ];
 
     if (!pageUrl) {
       throw new Error(
@@ -637,10 +712,13 @@ async function loadPage(route) {
     }
 
     const response =
-      await fetch(pageUrl, {
-        method: 'GET',
-        cache: 'no-store',
-      });
+      await fetch(
+        pageUrl,
+        {
+          method: 'GET',
+          cache: 'no-store',
+        }
+      );
 
     if (!response.ok) {
       throw new Error(
@@ -670,6 +748,12 @@ async function loadPage(route) {
       pageAbortController.signal
     );
 
+    if (
+      pageAbortController.signal.aborted
+    ) {
+      return;
+    }
+
     document.dispatchEvent(
       new CustomEvent(
         'enclaii:route-loaded',
@@ -684,6 +768,12 @@ async function loadPage(route) {
       )
     );
   } catch (error) {
+    if (
+      pageAbortController.signal.aborted
+    ) {
+      return;
+    }
+
     console.error(
       `Error cargando ${normalizedRoute}:`,
       error
@@ -702,22 +792,50 @@ async function loadPage(route) {
 
 function navigate(route) {
   const requestedRoute =
-    String(route || 'dashboard')
+    String(
+      route ||
+      'dashboard'
+    )
       .replace(/^#/, '')
       .trim() ||
     'dashboard';
 
   const normalizedRoute =
-    normalizeRoute(requestedRoute);
+    normalizeRoute(
+      requestedRoute
+    );
+
+  /*
+   * Nuevo estudio vive en index.html.
+   *
+   * Se redirige inmediatamente para evitar primero
+   * modificar el hash de app.html.
+   */
+  if (
+    normalizedRoute ===
+    'nuevo-estudio'
+  ) {
+    window.location.href =
+      './index.html';
+
+    return;
+  }
 
   const currentHash =
-    String(window.location.hash || '')
+    String(
+      window.location.hash ||
+      ''
+    )
       .replace(/^#/, '');
 
   if (
-    currentHash === requestedRoute ||
-    (!requestedRoute.includes('?') &&
-      currentRoute() === normalizedRoute)
+    currentHash ===
+      requestedRoute ||
+    (
+      !requestedRoute.includes('?') &&
+      currentRoute() ===
+        normalizedRoute
+    )
   ) {
     loadPage(
       normalizedRoute
@@ -780,8 +898,11 @@ window.addEventListener(
   'focus',
   () => {
     if (
-      currentRoute() === 'pacientes' &&
-      typeof window.syncPatientsFromLaravel === 'function'
+      currentRoute() ===
+        'pacientes' &&
+      typeof window
+        .syncPatientsFromLaravel ===
+        'function'
     ) {
       window
         .syncPatientsFromLaravel({
@@ -808,8 +929,11 @@ document.addEventListener(
     }
 
     if (
-      currentRoute() === 'pacientes' &&
-      typeof window.syncPatientsFromLaravel === 'function'
+      currentRoute() ===
+        'pacientes' &&
+      typeof window
+        .syncPatientsFromLaravel ===
+        'function'
     ) {
       window
         .syncPatientsFromLaravel({
@@ -853,16 +977,19 @@ if (themeToggle) {
     'click',
     () => {
       const currentTheme =
-        document.documentElement
+        document
+          .documentElement
           .dataset.theme ||
         'dark';
 
       const nextTheme =
-        currentTheme === 'light'
+        currentTheme ===
+        'light'
           ? 'dark'
           : 'light';
 
-      document.documentElement
+      document
+        .documentElement
         .dataset.theme =
         nextTheme;
 
@@ -875,7 +1002,8 @@ if (themeToggle) {
 }
 
 /* =========================================================
-   SIDEBAR (contraer / expandir)
+   SIDEBAR
+   Contraer / expandir
 ========================================================= */
 
 const sidebarCollapseBtn =
@@ -893,8 +1021,13 @@ const dashEl =
     '.dash'
   );
 
-function setSidebarCollapsed(collapsed) {
-  if (!sidebarEl || !dashEl) {
+function setSidebarCollapsed(
+  collapsed
+) {
+  if (
+    !sidebarEl ||
+    !dashEl
+  ) {
     return;
   }
 
@@ -1016,7 +1149,8 @@ if (profileMenu) {
     'keydown',
     (event) => {
       if (
-        event.key === 'Escape'
+        event.key ===
+        'Escape'
       ) {
         profileMenu.classList.remove(
           'open'
@@ -1034,6 +1168,157 @@ if (profileMenu) {
 /* =========================================================
    RESTAURAR PERFIL
 ========================================================= */
+
+const ACCOUNT_PHOTO_FIELDS = [
+  'profile.photo_url',
+  'profile.avatar_url',
+  'profile.profile_photo_url',
+  'profile.foto_url',
+  'profile.image_url',
+  'profile.photo',
+  'profile.avatar',
+  'profile.profile_photo',
+  'profile.profile_photo_path',
+  'profile.foto',
+  'profile.imagen',
+
+  'user.photo_url',
+  'user.avatar_url',
+  'user.profile_photo_url',
+  'user.foto_url',
+  'user.image_url',
+  'user.photo',
+  'user.avatar',
+  'user.profile_photo',
+  'user.profile_photo_path',
+  'user.foto',
+  'user.imagen',
+];
+
+function initialsForAccount(name) {
+  const parts =
+    String(
+      name ||
+      'Doctor'
+    )
+      .split(/\s+/)
+      .filter(Boolean);
+
+  if (
+    parts.length >
+    1
+  ) {
+    return `${parts[0][0]}${parts[1][0]}`
+      .toUpperCase();
+  }
+
+  return String(
+    name ||
+    'DR'
+  )
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function accountPhotoUrlFromState(
+  state = {}
+) {
+  return firstLaravelAssetUrl(
+    state,
+    ACCOUNT_PHOTO_FIELDS
+  );
+}
+
+function setHeaderAvatarInitials(
+  avatar,
+  accountName
+) {
+  if (!avatar) {
+    return;
+  }
+
+  avatar.textContent =
+    initialsForAccount(
+      accountName
+    );
+}
+
+async function setHeaderAvatarPhoto(
+  avatar,
+  photoUrl,
+  accountName
+) {
+  if (
+    !avatar ||
+    !photoUrl
+  ) {
+    setHeaderAvatarInitials(
+      avatar,
+      accountName
+    );
+
+    return;
+  }
+
+  const requestId =
+    `${Date.now()}-${Math.random()}`;
+
+  avatar.dataset.photoRequestId =
+    requestId;
+
+  setHeaderAvatarInitials(
+    avatar,
+    accountName
+  );
+
+  try {
+    const localUrl =
+      await authenticatedLaravelAssetUrl(
+        photoUrl,
+        {
+          accept:
+            'image/*,*/*',
+        }
+      );
+
+    if (
+      avatar.dataset
+        .photoRequestId !==
+      requestId
+    ) {
+      return;
+    }
+
+    if (!localUrl) {
+      throw new Error(
+        'No se devolvio una imagen de perfil usable.'
+      );
+    }
+
+    avatar.innerHTML = `
+      <img
+        src="${escapeHtml(localUrl)}"
+        alt="${escapeHtml(accountName)}"
+      >
+    `;
+  } catch (error) {
+    console.warn(
+      'No se pudo cargar la foto de la cuenta:',
+      error
+    );
+
+    if (
+      avatar.dataset
+        .photoRequestId ===
+      requestId
+    ) {
+      setHeaderAvatarInitials(
+        avatar,
+        accountName
+      );
+    }
+  }
+}
 
 function restoreHeaderProfile() {
   if (!profileMenu) {
@@ -1063,6 +1348,15 @@ function restoreHeaderProfile() {
       'strong'
     );
 
+  const accountPhotoUrl =
+    sessionStorage.getItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY
+    ) ||
+    localStorage.getItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY
+    ) ||
+    '';
+
   const roleElement =
     profileMenu.querySelector(
       '.profile > div > span'
@@ -1087,23 +1381,145 @@ function restoreHeaderProfile() {
   }
 
   if (avatar) {
-    const parts =
+    setHeaderAvatarPhoto(
+      avatar,
+      accountPhotoUrl,
       accountName
-        .split(/\s+/)
-        .filter(Boolean);
-
-    if (parts.length > 1) {
-      avatar.textContent =
-        `${parts[0][0]}${parts[1][0]}`
-          .toUpperCase();
-    } else {
-      avatar.textContent =
-        accountName
-          .slice(0, 2)
-          .toUpperCase();
-    }
+    );
   }
 }
+
+/* =========================================================
+   GUARDAR PERFIL DESDE LARAVEL
+========================================================= */
+
+function storeHeaderProfileFromState(
+  state = {}
+) {
+  const user =
+    state.user || {};
+
+  const profile =
+    state.profile || {};
+
+  const accountName =
+    user.account_name ||
+    user.name ||
+    profile.name ||
+    '';
+
+  const accountRole =
+    user.role ||
+    user.clinica_rol ||
+    profile.role ||
+    profile.clinica_rol ||
+    '';
+
+  const accountPhotoUrl =
+    accountPhotoUrlFromState({
+      user,
+      profile,
+    });
+
+  if (accountName) {
+    sessionStorage.setItem(
+      ACCOUNT_NAME_STORAGE_KEY,
+      accountName
+    );
+  }
+
+  if (accountRole) {
+    sessionStorage.setItem(
+      ACCOUNT_ROLE_STORAGE_KEY,
+      accountRole
+    );
+  }
+
+  if (accountPhotoUrl) {
+    sessionStorage.setItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY,
+      accountPhotoUrl
+    );
+  } else {
+    sessionStorage.removeItem(
+      ACCOUNT_PHOTO_URL_STORAGE_KEY
+    );
+  }
+}
+
+/* =========================================================
+   ACTUALIZAR PERFIL DESDE LARAVEL
+========================================================= */
+
+async function refreshHeaderProfileFromLaravel() {
+  const token =
+    getAuthToken();
+
+  if (!token) {
+    return;
+  }
+
+  try {
+    const response =
+      await laravelFetch(
+        `${apiBaseUrl()}/api/tauri/configuracion`,
+        {
+          headers: {
+            Accept:
+              'application/json',
+
+            Authorization:
+              `Bearer ${token}`,
+          },
+
+          credentials:
+            'include',
+        }
+      );
+
+    const contentType =
+      response.headers.get(
+        'content-type'
+      ) || '';
+
+    if (
+      !response.ok ||
+      !contentType.includes(
+        'application/json'
+      )
+    ) {
+      return;
+    }
+
+    const payload =
+      await response.json();
+
+    storeHeaderProfileFromState(
+      payload?.data ||
+      payload ||
+      {}
+    );
+
+    restoreHeaderProfile();
+  } catch (error) {
+    console.warn(
+      'No se pudo actualizar el perfil del encabezado:',
+      error
+    );
+  }
+}
+
+document.addEventListener(
+  'enclaiiConfigurationUpdated',
+  (event) => {
+    storeHeaderProfileFromState(
+      event.detail?.state ||
+      {}
+    );
+
+    restoreHeaderProfile();
+  }
+);
 
 /* =========================================================
    CERRAR SESIÓN
@@ -1138,6 +1554,14 @@ if (logoutBtn) {
 
       localStorage.removeItem(
         ACCOUNT_ROLE_STORAGE_KEY
+      );
+
+      sessionStorage.removeItem(
+        ACCOUNT_PHOTO_URL_STORAGE_KEY
+      );
+
+      localStorage.removeItem(
+        ACCOUNT_PHOTO_URL_STORAGE_KEY
       );
 
       sessionStorage.removeItem(
@@ -1181,6 +1605,8 @@ window.enclaiiReloadCurrentRoute =
 ========================================================= */
 
 restoreHeaderProfile();
+
+refreshHeaderProfileFromLaravel();
 
 loadPage(
   currentRoute()
