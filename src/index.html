@@ -107,8 +107,59 @@
       white-space: nowrap;
     }
 
-    .capture-pair-card {
-      margin-bottom: 22px;
+    .capture-pair-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .capture-pair-modal.is-hidden {
+      display: none !important;
+    }
+
+    .capture-pair-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(2px);
+    }
+
+    .capture-pair-dialog {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .capture-pair-back-btn {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--stroke, rgba(148, 163, 184, 0.2));
+      border-radius: 50%;
+      background: transparent;
+      color: var(--txt-soft, #94a3b8);
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+
+    .capture-pair-back-btn:hover {
+      background: var(--hover-bg, rgba(59, 130, 246, 0.1));
+      color: var(--txt, #f8fafc);
+    }
+
+    .capture-pair-dialog .video-header {
+      padding-top: 26px;
     }
 
     .capture-pair-form {
@@ -353,7 +404,7 @@
 
     html[data-theme="dark"] .capture-page .video-card,
     html[data-theme="dark"] .capture-page .side-card,
-    html[data-theme="dark"] .capture-pair-card {
+    html[data-theme="dark"] .capture-pair-dialog {
       border-color: rgba(143, 163, 207, 0.18) !important;
       background:
         linear-gradient(
@@ -437,7 +488,7 @@
       color: #8fa3cf !important;
     }
 
-    html[data-theme="dark"] .recording-indicator span {
+    html[data-theme="dark"] .recording-indicator-dot {
       background: #64748b !important;
     }
 
@@ -447,7 +498,7 @@
       color: #ef4444 !important;
     }
 
-    html[data-theme="dark"] .recording-indicator.is-recording span {
+    html[data-theme="dark"] .recording-indicator.is-recording .recording-indicator-dot {
       background: #ef4444 !important;
     }
 
@@ -522,7 +573,7 @@
 
     html[data-theme="light"] .capture-page .video-card,
     html[data-theme="light"] .capture-page .side-card,
-    html[data-theme="light"] .capture-pair-card {
+    html[data-theme="light"] .capture-pair-dialog {
       border-color: #dce5f1 !important;
       background: #ffffff !important;
       box-shadow:
@@ -1151,61 +1202,88 @@
               </div>
             </div>
 
-            <!-- Vinculación -->
-            <section
-              class="video-card capture-pair-card"
+            <!-- Si llegamos desde "Iniciar estudio" (patient_id en la URL),
+                 se oculta la tarjeta de vinculacion antes de que el navegador
+                 la pinte, para evitar el parpadeo mientras main.js (modulo
+                 diferido) termina de cargar y ejecutar el mismo salto. -->
+            <script>
+              (function () {
+                try {
+                  const params = new URLSearchParams(window.location.search);
+                  const forcePairCard = params.get('pair') === '1';
+                  const hasPatientId = Boolean(params.get('patient_id'));
+                  const alreadyPaired = Boolean(
+                    sessionStorage.getItem('enclaii-device-token') &&
+                    sessionStorage.getItem('enclaii-device-session-id')
+                  );
+
+                  if (!forcePairCard && (hasPatientId || alreadyPaired)) {
+                    document.write('<style>#pairCard{display:none!important;}#captureLayout{display:grid!important;}</style>');
+                  }
+                } catch (error) {}
+              })();
+            </script>
+
+            <!-- Vinculación: ventana flotante -->
+            <div
+              class="capture-pair-modal"
               id="pairCard"
             >
-              <div class="video-header">
-                <div>
-                  <h2>
-                    Vincular dispositivo de captura
-                  </h2>
+              <div class="capture-pair-modal-backdrop"></div>
 
-                  <p>
-                    Ingresa el código de 6 dígitos generado en Laravel
-                    desde Nuevo estudio → Generar código Tauri para
-                    guardar las capturas con el paciente correcto.
-                  </p>
-                </div>
-              </div>
-
-              <form
-                id="pairForm"
-                class="controls capture-pair-form"
-              >
-                <input
-                  id="pairCodeInput"
-                  class="capture-pair-code"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="6"
-                  autocomplete="one-time-code"
-                  placeholder="000000"
-                />
-
+              <section class="video-card capture-pair-dialog">
                 <button
-                  class="btn btn-primary"
-                  id="pairSubmitBtn"
-                  type="submit"
-                >
-                  Vincular dispositivo
-                </button>
-
-                <button
-                  class="btn btn-ghost"
-                  id="pairSkipBtn"
+                  class="capture-pair-back-btn"
+                  id="pairBackBtn"
                   type="button"
+                  aria-label="Regresar"
                 >
-                  Detectar cámara sin vincular
+                  &larr;
                 </button>
-              </form>
 
-              <p
-                id="pairStatusMsg"
-                class="capture-pair-message"
-              ></p>
-            </section>
+                <div class="video-header">
+                  <div>
+                    <h2>
+                      Vincular dispositivo de captura
+                    </h2>
+
+                    <p>
+                      Ingresa el código de 6 dígitos generado en Laravel
+                      desde Nuevo estudio → Generar código Tauri para
+                      guardar las capturas con el paciente correcto.
+                    </p>
+                  </div>
+                </div>
+
+                <form
+                  id="pairForm"
+                  class="controls capture-pair-form"
+                >
+                  <input
+                    id="pairCodeInput"
+                    class="capture-pair-code"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="6"
+                    autocomplete="one-time-code"
+                    placeholder="000000"
+                  />
+
+                  <button
+                    class="btn btn-primary"
+                    id="pairSubmitBtn"
+                    type="submit"
+                  >
+                    Vincular dispositivo
+                  </button>
+                </form>
+
+                <p
+                  id="pairStatusMsg"
+                  class="capture-pair-message"
+                ></p>
+              </section>
+            </div>
 
             <!-- Captura principal -->
             <section
@@ -1245,8 +1323,15 @@
                       class="recording-indicator"
                       id="recordingIndicator"
                     >
-                      <span></span>
-                      Grabación detenida
+                      <span class="recording-indicator-dot"></span>
+                      <span id="recordingIndicatorText">Grabación detenida</span>
+                      <span
+                        class="recording-timer"
+                        id="recordingTimer"
+                        style="display: none;"
+                      >
+                        00:00
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1299,6 +1384,14 @@
                     Salir de pantalla completa (Esc)
                   </button>
 
+                  <button
+                    class="btn video-fullscreen-finish"
+                    id="fullscreenFinishStudyBtn"
+                    type="button"
+                  >
+                    Finalizar estudio
+                  </button>
+
                   <div
                     class="video-toast"
                     id="videoToast"
@@ -1324,15 +1417,6 @@
                     disabled
                   >
                     Iniciar grabación
-                  </button>
-
-                  <button
-                    class="btn btn-danger"
-                    id="stopRecordBtn"
-                    type="button"
-                    style="display: none;"
-                  >
-                    Detener grabación
                   </button>
 
                   <button
@@ -1428,6 +1512,18 @@
                             Cámara predeterminada
                           </option>
                         </select>
+                      </label>
+                    </div>
+
+                    <div class="config-section">
+                      <h3>Doble clic</h3>
+
+                      <label class="field field-checkbox">
+                        <input
+                          id="doubleClickToggle"
+                          type="checkbox"
+                        />
+                        <span>Usar doble clic para iniciar/detener video</span>
                       </label>
                     </div>
 

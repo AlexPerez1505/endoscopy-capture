@@ -121,6 +121,31 @@
       </main>
     </div>
 
+    <!-- Modal global: vincular dispositivo con código de 6 dígitos -->
+    <div id="pairCodeModal" class="pair-code-modal">
+      <div id="pairCodeModalBackdrop" class="pair-code-modal-backdrop"></div>
+      <div class="pair-code-modal-dialog">
+        <button id="pairCodeModalClose" type="button" class="pair-code-modal-close" aria-label="Regresar">&larr;</button>
+        <h2>Vincular dispositivo de captura</h2>
+        <p>Ingresa el código de 6 dígitos generado en Laravel desde Nuevo estudio → Generar código Tauri para guardar las capturas con el paciente correcto.</p>
+        <form id="pairCodeModalForm" class="pair-code-modal-form">
+          <input id="pairCodeModalInput" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" class="pair-code-modal-input" />
+          <button id="pairCodeModalSubmit" type="submit" class="pair-code-modal-submit">Vincular dispositivo</button>
+        </form>
+        <p id="pairCodeModalStatus" class="pair-code-modal-status"></p>
+      </div>
+    </div>
+
+    <script type="module">
+      import { openPairCodeModal } from './js/pair-code.js';
+
+      window.openPairCodeModal = function () {
+        openPairCodeModal(() => {
+          window.location.href = './index.html';
+        });
+      };
+    </script>
+
     <script type="module" src="./js/router.js"></script>
   </body>
 </html>

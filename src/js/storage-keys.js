@@ -34,6 +34,7 @@ export const FOCUS_MODE_ENABLED_STORAGE_KEY = 'enclaii-focus-mode-enabled';
 export const FOCUS_MODE_ROI_STORAGE_KEY = 'enclaii-focus-mode-roi';
 export const FOCUS_MODE_SELECTED_DEVICE_STORAGE_KEY = 'enclaii-focus-mode-selected-device';
 export const DOUBLE_CLICK_WINDOW_STORAGE_KEY = 'enclaii-double-click-window-ms';
+export const DOUBLE_CLICK_ENABLED_STORAGE_KEY = 'enclaii-double-click-enabled';
 
 /* ---- Contexto de estudio activo (main.js <-> pacientes/galería) ---- */
 export const STUDY_PATIENT_ID_STORAGE_KEY = 'enclaii-patient_id';
