@@ -39,6 +39,23 @@ export function isAuthenticated() {
 }
 
 /**
+ * El protocolo `assetproxy://` (usado para servir imagenes/videos sin
+ * Base64/IPC, ver laravel.js) corre del lado de Rust y no puede leer
+ * sessionStorage, asi que necesita su propia copia del token en memoria
+ * del proceso nativo. Se sincroniza aqui, en el unico lugar donde se
+ * escribe/borra el token, para que nunca queden desincronizados.
+ */
+function syncAuthTokenToNative(token) {
+  const invoke = window.__TAURI__?.core?.invoke;
+
+  if (!invoke) return;
+
+  invoke('set_session_auth_token', { token: token || null }).catch((error) => {
+    console.warn('No se pudo sincronizar el token de sesion con el proceso nativo.', error);
+  });
+}
+
+/**
  * Guarda el token de sesión. Se persiste únicamente en sessionStorage,
  * igual que hacían todos los flujos de login existentes (la sesión no
  * sobrevive a un reinicio completo de la app, solo a la navegación
@@ -52,6 +69,7 @@ export function setAuthToken(token) {
   if (!value) return;
 
   sessionStorage.setItem(AUTH_STORAGE_KEY, value);
+  syncAuthTokenToNative(value);
 }
 
 /**
@@ -61,4 +79,5 @@ export function setAuthToken(token) {
 export function clearAuthToken() {
   sessionStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  syncAuthTokenToNative(null);
 }

@@ -163,6 +163,7 @@ fn http_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECONDS))
             .build()
             .expect("no se pudo construir el cliente HTTP")
     })
@@ -174,6 +175,37 @@ fn request_timeout(seconds: Option<u64>) -> Duration {
         .clamp(1, MAX_REQUEST_TIMEOUT_SECONDS);
 
     Duration::from_secs(seconds)
+}
+
+/*
+ * Token de sesion guardado en memoria del proceso nativo (no en disco).
+ * Lo sincroniza JS (auth.js) cada vez que inicia/cierra sesion, y lo usa
+ * el protocolo `assetproxy://` para poder autenticar la descarga de
+ * imagenes/videos sin que el WebView tenga que mandar headers custom
+ * (algo que un simple <img src> no puede hacer).
+ */
+fn auth_token_store() -> &'static std::sync::Mutex<Option<String>> {
+    static TOKEN: OnceLock<std::sync::Mutex<Option<String>>> = OnceLock::new();
+
+    TOKEN.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn current_auth_token() -> Option<String> {
+    auth_token_store()
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
+
+#[tauri::command]
+fn set_session_auth_token(token: Option<String>) -> Result<(), String> {
+    let mut guard = auth_token_store()
+        .lock()
+        .map_err(|_| "No se pudo actualizar el token de sesion.".to_string())?;
+
+    *guard = token.filter(|value| !value.trim().is_empty());
+
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -448,6 +480,107 @@ async fn laravel_asset(
     })
 }
 
+/*
+ * Protocolo `assetproxy://` (solucion C, escalable, para imagenes/videos).
+ *
+ * En vez de: JS pide bytes por invoke() -> Rust los codifica ENTEROS en
+ * Base64 -> viaja como string JSON gigante por el puente IPC -> JS lo
+ * decodifica con atob() byte a byte; aqui el <img>/<video> del HTML
+ * apunta DIRECTO a `assetproxy://localhost/?u=<url original>` y el
+ * WebView hace la peticion HTTP como si fuera cualquier recurso normal.
+ * Este handler recibe esa peticion, hace el GET real a Laravel (agregando
+ * el header Authorization solo si el host es el propio de Laravel) y
+ * devuelve los bytes crudos con su Content-Type, sin ningun paso de
+ * Base64/IPC de por medio. El WebView puede incluso cachear la respuesta
+ * como cachearia cualquier imagen normal.
+ */
+fn extract_asset_proxy_target(uri: &tauri::http::Uri) -> Result<String, String> {
+    let parsed = reqwest::Url::parse(&uri.to_string())
+        .map_err(|error| format!("URI de assetproxy invalida: {error}"))?;
+
+    parsed
+        .query_pairs()
+        .find(|(key, _)| key == "u")
+        .map(|(_, value)| value.into_owned())
+        .ok_or_else(|| "Falta el parametro 'u' con la URL del archivo.".to_string())
+}
+
+fn asset_proxy_error(status: u16, message: String) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(status)
+        .header("Content-Type", "text/plain; charset=utf-8")
+        .body(message.into_bytes())
+        .expect("no se pudo construir la respuesta de error de assetproxy")
+}
+
+async fn handle_asset_proxy_request(
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    let target_url = match extract_asset_proxy_target(request.uri()) {
+        Ok(url) => url,
+        Err(message) => return asset_proxy_error(400, message),
+    };
+
+    let validated_url = match validate_asset_url(&target_url) {
+        Ok(url) => url,
+        Err(message) => return asset_proxy_error(403, message),
+    };
+
+    let attach_auth = validated_url
+        .host_str()
+        .map(|host| is_allowed_host(&host.to_ascii_lowercase()))
+        .unwrap_or(false);
+
+    let client = http_client();
+    let mut builder = client.get(validated_url);
+
+    if attach_auth {
+        if let Some(token) = current_auth_token() {
+            builder = builder.header("Authorization", format!("Bearer {token}"));
+        }
+    }
+
+    let upstream = match builder.send().await {
+        Ok(response) => response,
+        Err(error) => {
+            let message = if error.is_timeout() {
+                "Laravel no respondio a tiempo (timeout).".to_string()
+            } else {
+                format!("No se pudo alcanzar Laravel: {error}")
+            };
+
+            return asset_proxy_error(502, message);
+        }
+    };
+
+    let status = upstream.status().as_u16();
+    let content_type = upstream
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    let bytes = match upstream.bytes().await {
+        Ok(bytes) => bytes.to_vec(),
+        Err(error) => {
+            return asset_proxy_error(
+                502,
+                format!("Laravel respondio, pero no se pudo leer el archivo: {error}"),
+            );
+        }
+    };
+
+    tauri::http::Response::builder()
+        .status(status)
+        .header("Content-Type", content_type)
+        .header("Cache-Control", "private, max-age=3600")
+        .body(bytes)
+        .unwrap_or_else(|_| {
+            asset_proxy_error(500, "No se pudo construir la respuesta.".to_string())
+        })
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct CropImageRequest {
     data_base64: String,
@@ -540,10 +673,19 @@ pub fn run() {
         .plugin(
             tauri_plugin_store::Builder::new().build()
         )
+        .register_asynchronous_uri_scheme_protocol(
+            "assetproxy",
+            move |_app, request, responder| {
+                tauri::async_runtime::spawn(async move {
+                    responder.respond(handle_asset_proxy_request(request).await);
+                });
+            },
+        )
         .invoke_handler(
             tauri::generate_handler![
                 laravel_request,
                 laravel_asset,
+                set_session_auth_token,
                 save_crop_image,
                 load_roi_profile,
                 save_roi_profile

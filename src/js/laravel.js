@@ -386,29 +386,21 @@ export function laravelAssetUrl(
   }
 }
 
-function base64ToBlob(
-  value,
-  contentType = 'application/octet-stream'
-) {
-  const binary =
-    atob(String(value || ''));
-
-  const bytes =
-    new Uint8Array(binary.length);
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] =
-      binary.charCodeAt(index);
-  }
-
-  return new Blob(
-    [bytes],
-    {
-      type:
-        contentType ||
-        'application/octet-stream',
-    }
-  );
+/*
+ * URL del protocolo nativo `assetproxy` (registrado en
+ * src-tauri/src/lib.rs). El WebView la trata como cualquier recurso HTTP
+ * normal: la puede poner directo en un <img src>/<video src> y Rust hace
+ * el GET real a Laravel y devuelve los bytes, sin pasar por Base64 ni por
+ * el puente IPC de invoke().
+ *
+ * En Windows/Android, WebView2/WebView no aceptan un esquema arbitrario
+ * como `assetproxy://` en la barra de recursos (ERR_UNKNOWN_URL_SCHEME):
+ * Tauri exige usar la forma `https://<scheme>.localhost/...` (activada
+ * con "useHttpsScheme": true en tauri.conf.json) y la traduce
+ * internamente hacia el mismo handler registrado como "assetproxy".
+ */
+function assetProxyUrl(url) {
+  return `https://assetproxy.localhost/?u=${encodeURIComponent(url)}`;
 }
 
 function shouldSendAuthorizationToAsset(
@@ -425,6 +417,28 @@ function shouldSendAuthorizationToAsset(
   } catch {
     return true;
   }
+}
+
+/*
+ * Cache en memoria de URLs de assets ya resueltos (foto -> objectURL).
+ *
+ * Sin esto, cada re-render de una lista (pacientes, galeria, reportes,
+ * etc.) vuelve a pedir la MISMA foto a Laravel, re-codificarla en Base64
+ * en Rust y re-decodificarla en JS, aunque ya se hubiera cargado hace
+ * un instante. El Map guarda la Promise en curso (para deduplicar
+ * llamadas concurrentes a la misma URL) y luego el objectURL final.
+ * Si la peticion falla, se limpia la entrada para permitir reintentar.
+ */
+const assetUrlCache = new Map();
+
+export function clearAuthenticatedAssetCache() {
+  for (const value of assetUrlCache.values()) {
+    if (typeof value === 'string' && value.startsWith('blob:')) {
+      URL.revokeObjectURL(value);
+    }
+  }
+
+  assetUrlCache.clear();
 }
 
 export async function authenticatedLaravelAssetUrl(
@@ -445,26 +459,38 @@ export async function authenticatedLaravelAssetUrl(
     return url;
   }
 
-  const authorization =
-    shouldSendAuthorizationToAsset(url)
-      ? authHeader()
-      : '';
-
-  const headers =
-    normalizeHeaders({
-      Accept:
-        options.accept ||
-        'image/*,video/*,*/*',
-      ...(authorization
-        ? { Authorization: authorization }
-        : {}),
-      ...(options.headers || {}),
-    });
-
   const invoke =
     window.__TAURI__?.core?.invoke;
 
-  if (!invoke) {
+  // Bajo Tauri, el protocolo assetproxy:// sirve el archivo directo desde
+  // Rust (streaming de bytes reales, sin Base64 ni IPC), asi que el
+  // <img>/<video> puede apuntar ahi sin que JS descargue ni decodifique
+  // nada. El propio WebView se encarga de cachear la respuesta HTTP.
+  if (invoke) {
+    return assetProxyUrl(url);
+  }
+
+  if (assetUrlCache.has(url)) {
+    return assetUrlCache.get(url);
+  }
+
+  const requestPromise = (async () => {
+    const authorization =
+      shouldSendAuthorizationToAsset(url)
+        ? authHeader()
+        : '';
+
+    const headers =
+      normalizeHeaders({
+        Accept:
+          options.accept ||
+          'image/*,video/*,*/*',
+        ...(authorization
+          ? { Authorization: authorization }
+          : {}),
+        ...(options.headers || {}),
+      });
+
     const response =
       await fetch(url, {
         headers,
@@ -480,40 +506,16 @@ export async function authenticatedLaravelAssetUrl(
     return URL.createObjectURL(
       await response.blob()
     );
+  })();
+
+  assetUrlCache.set(url, requestPromise);
+
+  try {
+    return await requestPromise;
+  } catch (error) {
+    assetUrlCache.delete(url);
+    throw error;
   }
-
-  const result =
-    await invoke(
-      'laravel_asset',
-      {
-        request: {
-          url,
-          headers,
-          timeout_seconds:
-            normalizeTimeoutSeconds(
-              options.timeoutSeconds ??
-              options.timeout_seconds
-            ),
-        },
-      }
-    );
-
-  if (
-    !result?.ok ||
-    Number(result.status || 0) < 200 ||
-    Number(result.status || 0) >= 300
-  ) {
-    throw new Error(
-      `Laravel respondiÃ³ HTTP ${result?.status || 0} al cargar el archivo.`
-    );
-  }
-
-  return URL.createObjectURL(
-    base64ToBlob(
-      result.body_base64,
-      result.content_type
-    )
-  );
 }
 
 /* =========================================================
@@ -811,12 +813,8 @@ async function buildMultipartBody(
       typeof Blob !== 'undefined' &&
       value instanceof Blob
     ) {
-      const filename =
-        value.name ||
-        'archivo';
-
       chunks.push(
-        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"; filename="${escapeHeaderValue(filename)}"\r\n`
+        `Content-Disposition: form-data; name="${escapeHeaderValue(name)}"; filename="archivo"\r\n`
       );
 
       chunks.push(

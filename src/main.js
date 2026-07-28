@@ -10,6 +10,7 @@ import {
   FOCUS_MODE_ROI_STORAGE_KEY,
   FOCUS_MODE_SELECTED_DEVICE_STORAGE_KEY,
   DOUBLE_CLICK_WINDOW_STORAGE_KEY,
+  DOUBLE_CLICK_ENABLED_STORAGE_KEY,
   STUDY_PATIENT_ID_STORAGE_KEY,
   STUDY_PATIENT_NAME_STORAGE_KEY,
   STUDY_ID_STORAGE_KEY,
@@ -22,7 +23,6 @@ const START_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/estudios/iniciar`;
 const IMAGES_ENDPOINT = `${apiBaseUrl()}/api/tauri/images`;
 const VIDEOS_ENDPOINT = `${apiBaseUrl()}/api/tauri/videos`;
 const FINISH_SESSION_ENDPOINT = `${apiBaseUrl()}/api/tauri/finish-session`;
-const VIDEO_UPLOAD_TIMEOUT_SECONDS = 45 * 60;
 
 // El boton fisico del capturador puede generar clics repetidos/rebotados al
 // conectarse (rebote de contacto). Sin un limite, cada uno de esos clics
@@ -51,11 +51,13 @@ const detectDevicesBtn = document.getElementById('detectDevicesBtn');
 const startBtn = document.getElementById('startBtn');
 const captureBtn = document.getElementById('captureBtn');
 const recordBtn = document.getElementById('recordBtn');
-const stopRecordBtn = document.getElementById('stopRecordBtn');
+const doubleClickToggle = document.getElementById('doubleClickToggle');
 const snapshotCanvas = document.getElementById('snapshotCanvas');
 const logBox = document.getElementById('logBox');
 const connectionStatus = document.getElementById('connectionStatus');
 const recordingIndicator = document.getElementById('recordingIndicator');
+const recordingIndicatorText = document.getElementById('recordingIndicatorText');
+const recordingTimer = document.getElementById('recordingTimer');
 const deviceLabel = document.getElementById('deviceLabel');
 const backToAppBtn = document.getElementById('backToAppBtn');
 
@@ -63,7 +65,7 @@ const pairCard = document.getElementById('pairCard');
 const captureLayout = document.getElementById('captureLayout');
 const pairForm = document.getElementById('pairForm');
 const pairCodeInput = document.getElementById('pairCodeInput');
-const pairSkipBtn = document.getElementById('pairSkipBtn');
+const pairBackBtn = document.getElementById('pairBackBtn');
 const pairStatusMsg = document.getElementById('pairStatusMsg');
 
 const pairStatusText = document.getElementById('pairStatusText');
@@ -96,6 +98,8 @@ const finishStudyReportBtn = document.getElementById('finishStudyReportBtn');
 let currentStream = null;
 let mediaRecorder = null;
 let recordedChunks = [];
+let recordingStartedAt = 0;
+let recordingTimerIntervalId = null;
 
 let totalImages = 0;
 let totalVideos = 0;
@@ -103,7 +107,15 @@ let activeStudyContext = {};
 let isDevicePaired = false;
 let captureAuthMode = null; // 'device' (codigo de 6 digitos) o 'user' (sesion directa)
 let capturedItems = [];
-let pendingVideoUploads = 0;
+// Promesas de subidas de video en curso. No bloquean "Finalizar estudio":
+// el video ya aparece en capturedItems apenas se detiene la grabacion, y
+// esta lista solo se usa para saber si aun hay subidas pendientes.
+let pendingVideoUploads = [];
+// Se resuelve cuando el handler onstop del MediaRecorder ya agrego el video
+// a capturedItems (no cuando termina de subirse). mediaRecorder.stop() es
+// asincrono: sin esto, finishStudy() podia revisar capturedItems antes de
+// que el video recien grabado apareciera ahi.
+let recordingStopHandled = Promise.resolve();
 
 const DEFAULT_CAMERA_VALUE = '__default_camera__';
 
@@ -225,7 +237,6 @@ function renderLaravelConnection() {
 
   captureBtn.disabled = !currentStream;
   recordBtn.disabled = !currentStream;
-  stopRecordBtn.disabled = !mediaRecorder || mediaRecorder.state === 'inactive';
 }
 
 function blobToBase64(blob) {
@@ -399,10 +410,14 @@ function closeCaptureMediaModal() {
 captureMediaModalClose?.addEventListener('click', closeCaptureMediaModal);
 captureMediaModalBackdrop?.addEventListener('click', closeCaptureMediaModal);
 
-function addCaptureThumbnail(url, label, type, remoteUrl = '') {
-  capturedItems.push({ url, remoteUrl, label, type });
+function addCaptureThumbnail(url, label, type, remoteUrl = '', status = 'done') {
+  // El item se agrega a capturedItems de inmediato, sin esperar a que la
+  // subida al servidor termine. Asi "Finalizar estudio" nunca se bloquea
+  // ni depende de la subida del video (ver uploadVideoInChunks/onstop).
+  const item = { url, remoteUrl, label, type, status };
+  capturedItems.push(item);
 
-  if (!captureThumbnails || !url) return;
+  if (!captureThumbnails || !url) return item;
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -414,6 +429,7 @@ function addCaptureThumbnail(url, label, type, remoteUrl = '') {
   button.style.borderRadius = '8px';
   button.style.background = 'none';
   button.style.cursor = 'pointer';
+  button.style.position = 'relative';
   button.addEventListener('click', () => openCaptureMediaModal(url, type));
 
   if (type === 'video') {
@@ -433,6 +449,14 @@ function addCaptureThumbnail(url, label, type, remoteUrl = '') {
     caption.style.padding = '8px';
     caption.style.fontSize = '12px';
     button.appendChild(caption);
+
+    if (status === 'uploading') {
+      const badge = document.createElement('span');
+      badge.className = 'capture-upload-badge';
+      badge.textContent = 'Subiendo...';
+      button.appendChild(badge);
+      item._badgeEl = badge;
+    }
   } else {
     const img = document.createElement('img');
     img.src = url;
@@ -445,23 +469,8 @@ function addCaptureThumbnail(url, label, type, remoteUrl = '') {
   }
 
   captureThumbnails.prepend(button);
-}
 
-function formatFileSize(bytes) {
-  const megabytes = Number(bytes || 0) / 1024 / 1024;
-  if (megabytes >= 1024) return `${(megabytes / 1024).toFixed(2)} GB`;
-  return `${megabytes.toFixed(1)} MB`;
-}
-
-function updatePendingUploadControls() {
-  const disabled = pendingVideoUploads > 0;
-  if (finishStudyBtn) finishStudyBtn.disabled = disabled;
-  if (fullscreenFinishStudyBtn) fullscreenFinishStudyBtn.disabled = disabled;
-}
-
-function setPendingVideoUpload(delta) {
-  pendingVideoUploads = Math.max(0, pendingVideoUploads + delta);
-  updatePendingUploadControls();
+  return item;
 }
 
 function showCaptureLayout() {
@@ -490,6 +499,239 @@ async function finishActiveSession() {
   }
 }
 
+// Reintentos con backoff exponencial para la subida de capturas.
+//
+// Un fallo de red/timeout (por ejemplo, el timeout de 30s del cliente
+// HTTP en Rust ante un video grande) o un error 5xx del servidor suelen
+// ser transitorios: reintentar despues de una pausa puede salvar la
+// captura sin que el usuario tenga que hacer nada. Un 401/419 (token
+// invalido) o un 4xx (payload rechazado) NUNCA se arreglan reintentando
+// el mismo request, asi que esos se propagan de inmediato.
+const UPLOAD_RETRY_ATTEMPTS = 3;
+const UPLOAD_RETRY_BASE_DELAY_MS = 2000;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableUploadError(status) {
+  // Sin status HTTP (el request nunca llego a tener respuesta: error de
+  // red, timeout, dispositivo desconectado) se trata como transitorio.
+  if (!Number.isFinite(status)) return true;
+  return status >= 500;
+}
+
+async function performCaptureUploadRequest(endpoint, authorization, body) {
+  const response = await laravelFetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: authorization,
+    },
+    body,
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json')
+    ? await response.json()
+    : { message: await response.text() };
+
+  if (response.status === 401 || response.status === 419) {
+    const error = new Error('El dispositivo no esta vinculado o el token expiro. Vuelve a ingresar el codigo.');
+    error.status = response.status;
+    throw error;
+  }
+
+  if (!response.ok || payload?.ok === false) {
+    const error = new Error(payload?.message || `El servidor respondio HTTP ${response.status} al guardar la captura.`);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+async function uploadCaptureWithRetry(endpoint, authorization, body, captureType) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= UPLOAD_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await performCaptureUploadRequest(endpoint, authorization, body);
+    } catch (error) {
+      lastError = error;
+
+      const isLastAttempt = attempt >= UPLOAD_RETRY_ATTEMPTS;
+
+      if (isLastAttempt || !isRetryableUploadError(error.status)) {
+        throw error;
+      }
+
+      const waitMs = UPLOAD_RETRY_BASE_DELAY_MS * attempt;
+      const label = captureType === 'video' ? 'video' : 'foto';
+
+      addLog(
+        `No se pudo guardar el ${label} (intento ${attempt}/${UPLOAD_RETRY_ATTEMPTS}): ${error.message} Reintentando en ${Math.round(waitMs / 1000)}s...`,
+        'error'
+      );
+
+      await delay(waitMs);
+    }
+  }
+
+  throw lastError;
+}
+
+// Subida de video por partes (chunks): en vez de mandar el video completo
+// en un solo request (limitado por memoria y por timeouts, ver
+// storeVideo() en el backend), se corta en pedazos pequenos y se sube cada
+// uno por separado. Si un pedazo falla, solo se reintenta ese pedazo, no
+// el video completo. Requiere los endpoints /videos/init, /videos/{id}/
+// chunk/{index} y /videos/{id}/finalize del backend Laravel.
+const VIDEO_CHUNK_SIZE_BYTES = 4 * 1024 * 1024;
+const VIDEO_CHUNK_RETRY_ATTEMPTS = 5;
+// Numero de chunks que se suben al mismo tiempo. Subir uno por uno deja
+// "huecos" esperando la ida y vuelta de cada request; subir varios en
+// paralelo aprovecha mejor el ancho de banda. 4 es un limite prudente para
+// no saturar el hosting compartido (Hostinger) con demasiadas conexiones
+// simultaneas por sesion de grabacion.
+const VIDEO_CHUNK_CONCURRENCY = 4;
+
+// Ejecuta `worker(index)` para indices 0..total-1 usando un pool de como
+// maximo `limit` tareas concurrentes, en vez de esperar cada una antes de
+// empezar la siguiente.
+async function runWithConcurrency(total, limit, worker) {
+  let nextIndex = 0;
+
+  async function runNext() {
+    if (nextIndex >= total) return;
+    const index = nextIndex;
+    nextIndex += 1;
+    await worker(index);
+    await runNext();
+  }
+
+  const workerCount = Math.max(1, Math.min(limit, total));
+  await Promise.all(Array.from({ length: workerCount }, () => runNext()));
+}
+
+async function performChunkUploadRequest(endpoint, authorization, chunkBlob) {
+  const response = await laravelFetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': chunkBlob.type || 'application/octet-stream',
+      Authorization: authorization,
+    },
+    body: chunkBlob,
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json')
+    ? await response.json()
+    : { message: await response.text() };
+
+  if (response.status === 401 || response.status === 419) {
+    const error = new Error('El dispositivo no esta vinculado o el token expiro. Vuelve a ingresar el codigo.');
+    error.status = response.status;
+    throw error;
+  }
+
+  if (!response.ok || payload?.ok === false) {
+    const error = new Error(payload?.message || `El servidor respondio HTTP ${response.status} al subir una parte del video.`);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+async function withUploadRetries(label, task) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= VIDEO_CHUNK_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+
+      const isLastAttempt = attempt >= VIDEO_CHUNK_RETRY_ATTEMPTS;
+
+      if (isLastAttempt || !isRetryableUploadError(error.status)) {
+        throw error;
+      }
+
+      const waitMs = UPLOAD_RETRY_BASE_DELAY_MS * attempt;
+
+      addLog(
+        `${label} (intento ${attempt}/${VIDEO_CHUNK_RETRY_ATTEMPTS}): ${error.message} Reintentando en ${Math.round(waitMs / 1000)}s...`,
+        'error'
+      );
+
+      await delay(waitMs);
+    }
+  }
+
+  throw lastError;
+}
+
+async function uploadVideoInChunks(blob, filename) {
+  const authorization = activeCaptureAuthHeader();
+  const sessionId = sessionStorage.getItem(DEVICE_SESSION_KEY);
+
+  if (!authorization || !sessionId) {
+    throw new Error('Vincula el dispositivo con el codigo (o selecciona un paciente desde Pacientes) para guardar las capturas en la base de datos.');
+  }
+
+  const mimeType = blob.type || 'video/webm';
+  const totalChunks = Math.max(1, Math.ceil(blob.size / VIDEO_CHUNK_SIZE_BYTES));
+
+  addLog(`Subiendo video en ${totalChunks} parte(s) (${(blob.size / (1024 * 1024)).toFixed(1)}MB)...`);
+
+  const initBody = JSON.stringify({
+    session_id: Number(sessionId),
+    filename,
+    mime_type: mimeType,
+    total_size: blob.size,
+    total_chunks: totalChunks,
+    ended_at: new Date().toISOString(),
+  });
+
+  const initPayload = await withUploadRetries(
+    'No se pudo iniciar la subida del video',
+    () => performCaptureUploadRequest(`${VIDEOS_ENDPOINT}/init`, authorization, initBody)
+  );
+
+  const uploadId = initPayload.data?.upload_id;
+
+  if (!uploadId) {
+    throw new Error('El servidor no devolvio un identificador de subida.');
+  }
+
+  // Los chunks se suben en paralelo (hasta VIDEO_CHUNK_CONCURRENCY a la
+  // vez) en vez de uno por uno: el backend acepta chunks en cualquier
+  // orden porque los rastrea por indice en `received_chunks`, asi que no
+  // hay que esperar a que termine el anterior para mandar el siguiente.
+  await runWithConcurrency(totalChunks, VIDEO_CHUNK_CONCURRENCY, async (index) => {
+    const start = index * VIDEO_CHUNK_SIZE_BYTES;
+    const end = Math.min(start + VIDEO_CHUNK_SIZE_BYTES, blob.size);
+    const chunkBlob = blob.slice(start, end, mimeType);
+    const chunkEndpoint = `${VIDEOS_ENDPOINT}/${uploadId}/chunk/${index}`;
+
+    await withUploadRetries(
+      `No se pudo subir la parte ${index + 1}/${totalChunks} del video`,
+      () => performChunkUploadRequest(chunkEndpoint, authorization, chunkBlob)
+    );
+  });
+
+  const finalizePayload = await withUploadRetries(
+    'No se pudo finalizar la subida del video',
+    () => performCaptureUploadRequest(`${VIDEOS_ENDPOINT}/${uploadId}/finalize`, authorization, JSON.stringify({}))
+  );
+
+  return finalizePayload;
+}
+
 async function uploadCaptureToLaravel(blob, filename, captureType) {
   const authorization = activeCaptureAuthHeader();
   const sessionId = sessionStorage.getItem(DEVICE_SESSION_KEY);
@@ -499,58 +741,21 @@ async function uploadCaptureToLaravel(blob, filename, captureType) {
   }
 
   const endpoint = captureType === 'video' ? VIDEOS_ENDPOINT : IMAGES_ENDPOINT;
-  const timeoutSeconds = captureType === 'video'
-    ? VIDEO_UPLOAD_TIMEOUT_SECONDS
-    : undefined;
-  let requestHeaders = {
-    Accept: 'application/json',
-    Authorization: authorization,
-  };
-  let requestBody;
+  const fileField = captureType === 'video' ? 'filename' : 'filename';
+  const timestampField = captureType === 'video' ? 'ended_at' : 'captured_at';
 
-  if (captureType === 'video') {
-    const formData = new FormData();
-    formData.append('session_id', String(Number(sessionId)));
-    formData.append('video', blob, filename);
-    formData.append('filename', filename);
-    formData.append('mime_type', blob.type || 'video/webm');
-    formData.append('ended_at', new Date().toISOString());
-
-    requestBody = formData;
-  } else {
-    requestHeaders = {
-      ...requestHeaders,
-      'Content-Type': 'application/json',
-    };
-
-    requestBody = JSON.stringify({
-      session_id: Number(sessionId),
-      filename,
-      mime_type: blob.type || 'application/octet-stream',
-      data_base64: await blobToBase64(blob),
-      captured_at: new Date().toISOString(),
-    });
-  }
-
-  const response = await laravelFetch(endpoint, {
-    method: 'POST',
-    timeoutSeconds,
-    headers: requestHeaders,
-    body: requestBody,
+  // El Blob se codifica UNA sola vez antes de reintentar: es lo mas
+  // costoso de esta operacion (sobre todo en videos grandes) y no cambia
+  // entre intentos, asi que repetirlo en cada retry seria puro desperdicio.
+  const body = JSON.stringify({
+    session_id: Number(sessionId),
+    [fileField]: filename,
+    mime_type: blob.type || 'application/octet-stream',
+    data_base64: await blobToBase64(blob),
+    [timestampField]: new Date().toISOString(),
   });
 
-  const contentType = response.headers.get('content-type') || '';
-  const payload = contentType.includes('application/json')
-    ? await response.json()
-    : { message: await response.text() };
-
-  if (response.status === 401 || response.status === 419) {
-    throw new Error('El dispositivo no esta vinculado o el token expiro. Vuelve a ingresar el codigo.');
-  }
-
-  if (!response.ok || payload?.ok === false) {
-    throw new Error(payload?.message || `El servidor respondio HTTP ${response.status} al guardar la captura.`);
-  }
+  const payload = await uploadCaptureWithRetry(endpoint, authorization, body, captureType);
 
   addCaptureThumbnail(
     URL.createObjectURL(blob),
@@ -1457,8 +1662,7 @@ function startRecording() {
       throw new Error('Primero inicia el video.');
     }
 
-    const chunks = [];
-    recordedChunks = chunks;
+    recordedChunks = [];
 
     const mimeType = getSupportedMimeType();
 
@@ -1469,20 +1673,21 @@ function startRecording() {
       ? createFocusModeRecordingStream(signal)
       : currentStream;
 
-    const recorder = new MediaRecorder(
+    mediaRecorder = new MediaRecorder(
       recordingStream,
       mimeType ? { mimeType } : undefined
     );
 
-    mediaRecorder = recorder;
-
-    recorder.ondataavailable = (event) => {
+    mediaRecorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
-        chunks.push(event.data);
+        recordedChunks.push(event.data);
       }
     };
 
-    recorder.onstop = () => {
+    let resolveStopHandled;
+    recordingStopHandled = new Promise((resolve) => { resolveStopHandled = resolve; });
+
+    mediaRecorder.onstop = () => {
       // Respaldo: si esta es la unica senal de que la grabacion termino
       // (por ejemplo el dispositivo se desconecto), esto igual garantiza el
       // cierre del loop de canvas. abort() en un controller ya abortado no
@@ -1491,8 +1696,8 @@ function startRecording() {
       controller.abort();
 
       try {
-        const blob = new Blob(chunks, {
-          type: recorder.mimeType || 'video/webm',
+        const blob = new Blob(recordedChunks, {
+          type: mediaRecorder.mimeType || 'video/webm',
         });
 
         if (!blob.size) {
@@ -1501,26 +1706,36 @@ function startRecording() {
 
         const filename = makeFileName('endoscopy-video', 'webm');
 
-        setPendingVideoUpload(1);
-        addLog(`Guardando video (${formatFileSize(blob.size)}) en Laravel. Puede tardar varios minutos.`);
-        showVideoToast('Guardando video...', 'success');
+        // La miniatura y el contador se actualizan de inmediato con el
+        // blob local, sin esperar la subida al servidor: "Finalizar
+        // estudio" ya ve este video en capturedItems aunque la subida
+        // siga en curso. La subida real corre en segundo plano abajo.
+        totalVideos += 1;
+        videoCount.textContent = totalVideos;
+        const item = addCaptureThumbnail(URL.createObjectURL(blob), filename, 'video', '', 'uploading');
 
-        uploadCaptureToLaravel(blob, filename, 'video')
-          .then(() => {
-            totalVideos += 1;
-            videoCount.textContent = totalVideos;
+        addLog(`Video listo (${(blob.size / (1024 * 1024)).toFixed(1)}MB). Subiendo en segundo plano...`);
+
+        const uploadPromise = uploadVideoInChunks(blob, filename)
+          .then((finalizePayload) => {
+            item.remoteUrl = finalizePayload.data?.url || '';
+            item.status = 'done';
+            if (item._badgeEl) item._badgeEl.remove();
             addLog('Video guardado.', 'success');
           })
           .catch((error) => {
+            item.status = 'error';
+            if (item._badgeEl) item._badgeEl.textContent = 'Error al subir';
             console.error(error);
             addLog(`Error guardando video: ${error.message}`, 'error');
-          })
-          .finally(() => {
-            setPendingVideoUpload(-1);
           });
+
+        pendingVideoUploads.push(uploadPromise);
       } catch (error) {
         console.error(error);
         addLog(`Error guardando video: ${error.message}`, 'error');
+      } finally {
+        resolveStopHandled();
       }
     };
 
@@ -1536,14 +1751,17 @@ function startRecording() {
 
     activeRecordingController = controller;
 
-    recorder.start(1000);
+    mediaRecorder.start(1000);
 
-    recordBtn.disabled = true;
-    stopRecordBtn.disabled = false;
+    recordBtn.disabled = false;
+    recordBtn.textContent = 'Detener grabación';
+    recordBtn.classList.remove('btn-danger-soft');
+    recordBtn.classList.add('btn-danger');
     captureBtn.disabled = false;
 
     recordingIndicator.classList.add('is-recording');
-    recordingIndicator.innerHTML = '<span></span> Grabando';
+    if (recordingIndicatorText) recordingIndicatorText.textContent = 'Grabando';
+    startRecordingTimer();
 
     addLog('Grabación iniciada.');
     showVideoToast('● Grabación iniciada', 'success');
@@ -1552,6 +1770,47 @@ function startRecording() {
     activeRecordingController = null;
     console.error(error);
     addLog(`No se pudo iniciar grabación: ${error.message}`, 'error');
+  }
+}
+
+function formatRecordingDuration(totalMs) {
+  const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const pad = (value) => String(value).padStart(2, '0');
+
+  return hours > 0
+    ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+    : `${pad(minutes)}:${pad(seconds)}`;
+}
+
+function updateRecordingTimerDisplay() {
+  if (!recordingTimer) return;
+  recordingTimer.textContent = formatRecordingDuration(Date.now() - recordingStartedAt);
+}
+
+function startRecordingTimer() {
+  recordingStartedAt = Date.now();
+
+  if (recordingTimer) {
+    recordingTimer.style.display = '';
+    updateRecordingTimerDisplay();
+  }
+
+  clearInterval(recordingTimerIntervalId);
+  recordingTimerIntervalId = setInterval(updateRecordingTimerDisplay, 1000);
+}
+
+function stopRecordingTimer() {
+  clearInterval(recordingTimerIntervalId);
+  recordingTimerIntervalId = null;
+  recordingStartedAt = 0;
+
+  if (recordingTimer) {
+    recordingTimer.style.display = 'none';
+    recordingTimer.textContent = '00:00';
   }
 }
 
@@ -1571,10 +1830,13 @@ function stopRecording() {
   }
 
   recordBtn.disabled = false;
-  stopRecordBtn.disabled = true;
+  recordBtn.textContent = 'Iniciar grabación';
+  recordBtn.classList.remove('btn-danger');
+  recordBtn.classList.add('btn-danger-soft');
 
   recordingIndicator.classList.remove('is-recording');
-  recordingIndicator.innerHTML = '<span></span> Grabación detenida';
+  if (recordingIndicatorText) recordingIndicatorText.textContent = 'Grabación detenida';
+  stopRecordingTimer();
 
   addLog('Grabación detenida.');
   showVideoToast('■ Grabación detenida', 'error');
@@ -1664,39 +1926,15 @@ pairForm?.addEventListener('submit', async (event) => {
   }
 });
 
-pairSkipBtn?.addEventListener('click', async () => {
-  sessionStorage.removeItem(DEVICE_SESSION_KEY);
-  sessionStorage.removeItem(DEVICE_TOKEN_KEY);
-  captureAuthMode = null;
-  isDevicePaired = false;
-
-  const context = captureContext();
-
-  if (context.patientId) {
-    try {
-      await startDirectSession();
-      addLog(`Continuando sin codigo. Las capturas se guardaran en el registro de ${context.patientName || `ID ${context.patientId}`}.`, 'success');
-    } catch (error) {
-      addLog(`No se pudo iniciar la sesion directa: ${error.message}`, 'error');
-    }
-  } else {
-    addLog('Continuando sin vincular. Selecciona un paciente desde Pacientes para guardar las capturas.', 'error');
-  }
-
-  showCaptureLayout();
-  detectDevices();
-});
+pairBackBtn?.addEventListener('click', goBackToApp);
 
 async function finishStudy() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     stopRecording();
-    addLog('Grabacion detenida. Espera a que el video termine de guardarse antes de finalizar el estudio.', 'error');
-    return;
-  }
-
-  if (pendingVideoUploads > 0) {
-    addLog('Espera a que termine de guardarse el video antes de finalizar el estudio.', 'error');
-    return;
+    // mediaRecorder.stop() es asincrono: espera a que onstop ya haya
+    // agregado el video a capturedItems (no a que termine de subirse) para
+    // que este chequeo no falle por una condicion de carrera.
+    await recordingStopHandled;
   }
 
   if (capturedItems.length === 0) {
@@ -1708,8 +1946,12 @@ async function finishStudy() {
 
   if (finishStudySummary) {
     const patientLabel = activeStudyContext.patientName || 'este paciente';
+    const uploadingCount = capturedItems.filter((item) => item.status === 'uploading').length;
+    const uploadNote = uploadingCount > 0
+      ? ` ${uploadingCount} video(s) aun se estan subiendo en segundo plano.`
+      : '';
     finishStudySummary.textContent = capturedItems.length
-      ? `Se guardaron ${totalImages} foto(s) y ${totalVideos} video(s) para ${patientLabel}.`
+      ? `Se guardaron ${totalImages} foto(s) y ${totalVideos} video(s) para ${patientLabel}.${uploadNote}`
       : `No se tomaron capturas para ${patientLabel} en esta sesion.`;
   }
 
@@ -1763,10 +2005,6 @@ async function finishStudy() {
 
 finishStudyBtn?.addEventListener('click', finishStudy);
 
-// El modal de "Estudio finalizado" vive fuera de videoFrame, asi que en
-// pantalla completa nativa no se veria (el navegador solo muestra el
-// elemento en fullscreen y sus hijos). Por eso primero se sale de
-// fullscreen y despues se dispara finishStudy().
 fullscreenFinishStudyBtn?.addEventListener('click', async () => {
   await setVideoFullscreen(false);
   finishStudy();
@@ -1845,6 +2083,24 @@ const doubleClickCalibrator = createDoubleClickCalibrator({
   storageKey: DOUBLE_CLICK_WINDOW_STORAGE_KEY,
 });
 
+// Habilitado por defecto (comportamiento historico) salvo que el usuario lo
+// haya desactivado explicitamente desde el panel de Configuracion.
+let doubleClickEnabled = localStorage.getItem(DOUBLE_CLICK_ENABLED_STORAGE_KEY) !== 'false';
+
+if (doubleClickToggle) {
+  doubleClickToggle.checked = doubleClickEnabled;
+
+  doubleClickToggle.addEventListener('change', () => {
+    doubleClickEnabled = doubleClickToggle.checked;
+    localStorage.setItem(DOUBLE_CLICK_ENABLED_STORAGE_KEY, String(doubleClickEnabled));
+    addLog(
+      doubleClickEnabled
+        ? 'Doble clic para iniciar/detener video activado.'
+        : 'Doble clic para iniciar/detener video desactivado.'
+    );
+  });
+}
+
 let lastCaptureClickAt = 0;
 
 function handleCaptureClick(event) {
@@ -1871,7 +2127,10 @@ function handleCaptureClick(event) {
 
   const isRecording = mediaRecorder && mediaRecorder.state !== 'inactive';
 
-  const isDoubleClick = elapsedSinceLastClick !== null && doubleClickCalibrator.isDoubleClick(elapsedSinceLastClick);
+  const isDoubleClick =
+    doubleClickEnabled &&
+    elapsedSinceLastClick !== null &&
+    doubleClickCalibrator.isDoubleClick(elapsedSinceLastClick);
 
   if (isDoubleClick) {
     lastCaptureClickAt = 0;
@@ -1892,6 +2151,7 @@ function handleCaptureClick(event) {
   }
 
   const isNearMissDoubleClick =
+    doubleClickEnabled &&
     elapsedSinceLastClick !== null &&
     doubleClickCalibrator.isNearMiss(elapsedSinceLastClick, DOUBLE_CLICK_NEAR_MISS_MARGIN_MS);
 
@@ -1930,8 +2190,14 @@ document.addEventListener('click', handleCaptureClick);
 
 detectDevicesBtn.addEventListener('click', detectDevices);
 startBtn.addEventListener('click', startVideo);
-recordBtn.addEventListener('click', startRecording);
-stopRecordBtn.addEventListener('click', stopRecording);
+recordBtn.addEventListener('click', () => {
+  const isRecording = mediaRecorder && mediaRecorder.state !== 'inactive';
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
 backToAppBtn?.addEventListener('click', goBackToApp);
 
 brightnessInput.addEventListener('input', applyFilters);
@@ -1961,10 +2227,65 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-function bootstrap() {
+async function bootstrap() {
   renderConnection();
   setStatus('Listo', 'idle');
   addLog('Atajos activos: F8 o Espacio = foto, F9 = grabar, F10 = detener. El boton fisico del endoscopio (mouse) tambien toma foto.');
+
+  // Si llegamos desde "Vincular con código" en Pacientes, se fuerza mostrar
+  // la tarjeta de vinculacion aunque haya un patient_id residual guardado en
+  // sessionStorage de una sesion directa anterior.
+  const forcePairCard = new URLSearchParams(window.location.search).get('pair') === '1';
+
+  // Un patient_id explicito en la URL (clic fresco en "Iniciar estudio")
+  // siempre tiene prioridad sobre cualquier vinculacion de dispositivo
+  // residual de una sesion anterior con otro paciente.
+  const explicitPatientId = new URLSearchParams(window.location.search).get('patient_id');
+
+  // Si llegamos desde "Iniciar estudio" en Pacientes (patient_id en la URL),
+  // se salta la pantalla de vinculacion por codigo y se va directo a
+  // captura, usando la sesion del usuario ya logueado en Tauri.
+  const context = captureContext();
+
+  if (explicitPatientId && !forcePairCard) {
+    // Se limpia cualquier vinculacion de dispositivo anterior para no
+    // mezclar capturas de un paciente distinto bajo el mismo token/sesion.
+    sessionStorage.removeItem(DEVICE_TOKEN_KEY);
+    sessionStorage.removeItem(DEVICE_SESSION_KEY);
+  } else {
+    // Si el dispositivo ya se vinculo con el codigo desde el modal flotante
+    // en Pacientes (app.html), el token y la sesion ya estan en
+    // sessionStorage. Se reconoce esa vinculacion y se salta directo a
+    // captura sin volver a pedir el codigo ni llamar de nuevo al backend.
+    const deviceToken = sessionStorage.getItem(DEVICE_TOKEN_KEY);
+    const deviceSessionId = sessionStorage.getItem(DEVICE_SESSION_KEY);
+
+    if (deviceToken && deviceSessionId) {
+      captureAuthMode = 'device';
+      isDevicePaired = true;
+      showCaptureLayout();
+      addLog('Dispositivo vinculado. Ya puedes detectar la camara.', 'success');
+      detectDevices();
+      return;
+    }
+  }
+
+  if (context.patientId && !forcePairCard) {
+    // Se oculta la tarjeta de vinculacion de inmediato (antes del await) para
+    // que no se llegue a mostrar ni un instante mientras se inicia la sesion.
+    showCaptureLayout();
+
+    try {
+      await startDirectSession();
+      addLog(`Sesion iniciada. Las capturas se guardaran en el registro de ${context.patientName || `ID ${context.patientId}`}.`, 'success');
+    } catch (error) {
+      addLog(`No se pudo iniciar la sesion directa: ${error.message}`, 'error');
+    }
+
+    detectDevices();
+    return;
+  }
+
   addLog('Ingresa el codigo para vincular este equipo, o detecta la camara sin vincular.');
 }
 

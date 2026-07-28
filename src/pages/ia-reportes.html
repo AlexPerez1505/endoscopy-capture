@@ -65,44 +65,95 @@
           <tbody id="reportsTableBody"></tbody>
         </table>
       </div>
-      <a class="reports-link" href="#ia-reportes">Ver todos los reportes <span>-></span></a>
+      <a class="reports-link" href="#" id="verTodosReportesLink">Ver todos los reportes <span>-></span></a>
     </article>
 
     <article class="card rep-hall rise d6">
       <h3>HALLAZGOS</h3>
       <div class="find-empty">Sin hallazgos registrados</div>
-      <a class="reports-link" href="#ia-reportes">Ver todos los hallazgos <span>-></span></a>
+      <a class="reports-link" href="#ia-reportes">Ver todos los hallazgos <span></span></a>
     </article>
 
     <article class="card predictive-card rise d7">
-      <div class="predictive-profile">
-        <div class="ai-bulb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.1 14.5a6 6 0 1 1 7.8 0c-.8.6-.9 1.5-.9 2.5H9c0-1-.1-1.9-.9-2.5Z"/></svg></div>
-        <h3>Análisis predictivo IA</h3>
-        <div class="predictive-person">
-          <span class="mini" data-bind="predictive-initials">MG</span>
-          <strong data-bind="predictive-name">María González</strong>
+      <div>
+        <div class="pred-pat pred-fade">
+          <span class="mini" data-bind="pred-mini" id="predMini">—</span>
+          <b data-bind="pred-name" id="predName">Sin estudios pendientes</b>
         </div>
-        <p>Estudio: <span data-bind="predictive-study">Endoscopia digestiva alta</span></p>
-        <p>Fecha: <span data-bind="predictive-date">08/05/2025</span></p>
-      </div>
-
-      <div class="predictive-metric">
-        <span>Probabilidad de gastritis</span>
-        <strong>82%</strong>
-        <p>Basado en patrones detectados por IA</p>
-      </div>
-
-      <div class="risk-gauge" aria-label="Probabilidad de gastritis 82%">
-        <div class="gauge-ring">
-          <span class="stomach-mark">⌁</span>
+        <div class="pred-meta pred-fade" data-bind="pred-meta" id="predMeta">
+          Estudio: —<br>
+          Fecha: —
         </div>
       </div>
 
-      <div class="risk-copy">
-        <span>Nivel de riesgo</span>
-        <strong>Moderado</strong>
-        <p>Recomendación de seguimiento</p>
-        <a href="#ia-reportes">Ver análisis completo <span>-></span></a>
+      <div class="prob">
+        <div class="gauge">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="50"/>
+            <circle class="val" id="predGauge" cx="60" cy="60" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16" data-pct="0"/>
+          </svg>
+          <div class="gauge-center">
+            <div class="stomach">
+              <svg class="water" viewBox="0 0 62 62" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#9fe6ff"/>
+                    <stop offset="1" stop-color="#5ab4f3"/>
+                  </linearGradient>
+                  <filter id="bubbleGlow" x="-60%" y="-60%" width="220%" height="220%">
+                    <feGaussianBlur stdDeviation=".7" result="b"/>
+                    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+                <g id="waterLevel">
+                  <rect x="0" y="27" width="62" height="62" fill="url(#wg)"/>
+                  <path fill="#7fdcff" fill-opacity=".55" d="M-62 27 q15.5 -3.5 31 0 t31 0 t31 0 L124 64 L-62 64 Z">
+                    <animateTransform attributeName="transform" type="translate" from="0 0" to="-62 0" dur="5s" repeatCount="indefinite"/>
+                  </path>
+                  <path fill="#cdf2ff" fill-opacity=".7" d="M-62 28 q15.5 3.5 31 0 t31 0 t31 0 L124 64 L-62 64 Z">
+                    <animateTransform attributeName="transform" type="translate" from="-62 0" to="0 0" dur="4s" repeatCount="indefinite"/>
+                  </path>
+                  <g fill="#ffffff" filter="url(#bubbleGlow)">
+                    <circle cx="22" r="2.2" opacity="0">
+                      <animate attributeName="cy" values="60;28" dur="2.8s" repeatCount="indefinite"/>
+                      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.8s" repeatCount="indefinite"/>
+                      <animate attributeName="r" values="2.2;1.6" dur="2.8s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="36" r="1.7" opacity="0">
+                      <animate attributeName="cy" values="61;30" dur="3.3s" begin=".5s" repeatCount="indefinite"/>
+                      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="3.3s" begin=".5s" repeatCount="indefinite"/>
+                      <animate attributeName="r" values="1.7;1.2" dur="3.3s" begin=".5s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="44" r="1.5" opacity="0">
+                      <animate attributeName="cy" values="59;29" dur="2.5s" begin="1.1s" repeatCount="indefinite"/>
+                      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.5s" begin="1.1s" repeatCount="indefinite"/>
+                      <animate attributeName="r" values="1.5;1" dur="2.5s" begin="1.1s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="29" r="1.9" opacity="0">
+                      <animate attributeName="cy" values="60;28" dur="3.6s" begin="1.7s" repeatCount="indefinite"/>
+                      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="3.6s" begin="1.7s" repeatCount="indefinite"/>
+                      <animate attributeName="r" values="1.9;1.3" dur="3.6s" begin="1.7s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="50" r="1.3" opacity="0">
+                      <animate attributeName="cy" values="58;31" dur="3s" begin="2.2s" repeatCount="indefinite"/>
+                      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="3s" begin="2.2s" repeatCount="indefinite"/>
+                      <animate attributeName="r" values="1.3;.9" dur="3s" begin="2.2s" repeatCount="indefinite"/>
+                    </circle>
+                  </g>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="risk">
+        <div class="lvl pred-fade" id="predRisk">Sin reporte</div>
+        <div class="sub pred-fade" id="predRiskSub">Requiere elaborar el reporte clínico</div>
+        <a class="btn-line pred-fade" id="predLink" href="#ia-reportes-redactar?mode=normal" data-nav="ia-reportes-redactar?mode=normal">
+          Acceder a su estudio
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
       </div>
     </article>
 

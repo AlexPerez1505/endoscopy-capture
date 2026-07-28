@@ -15,11 +15,13 @@
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
-        "minHeight": 700
+        "minHeight": 700,
+        "useHttpsScheme": true,
+        "decorations": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:* http://127.0.0.1:* https://sistema.enclaii.com; media-src 'self' blob: https://sistema.enclaii.com; connect-src 'self' ipc: http://ipc.localhost https://sistema.enclaii.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-src 'self'"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://assetproxy.localhost http://localhost:* http://127.0.0.1:* https://sistema.enclaii.com; media-src 'self' blob: https://assetproxy.localhost https://sistema.enclaii.com; connect-src 'self' ipc: http://ipc.localhost https://assetproxy.localhost https://sistema.enclaii.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-src 'self'"
     }
   },
   "bundle": {
