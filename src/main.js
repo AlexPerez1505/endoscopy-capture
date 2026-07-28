@@ -85,7 +85,6 @@ const captureMediaModalClose = document.getElementById('captureMediaModalClose')
 const captureMediaModalImage = document.getElementById('captureMediaModalImage');
 const captureMediaModalVideo = document.getElementById('captureMediaModalVideo');
 const finishStudyBtn = document.getElementById('finishStudyBtn');
-const fullscreenFinishStudyBtn = document.getElementById('fullscreenFinishStudyBtn');
 const finishStudyModal = document.getElementById('finishStudyModal');
 const finishStudyThumbnails = document.getElementById('finishStudyThumbnails');
 const finishStudySummary = document.getElementById('finishStudySummary');
@@ -1769,14 +1768,6 @@ async function finishStudy() {
 
 finishStudyBtn?.addEventListener('click', finishStudy);
 
-// El modal de "Estudio finalizado" vive fuera de videoFrame, asi que en
-// pantalla completa nativa no se veria (el navegador solo muestra el
-// elemento en fullscreen y sus hijos). Por eso primero se sale de
-// fullscreen y despues se dispara finishStudy().
-fullscreenFinishStudyBtn?.addEventListener('click', async () => {
-  await setVideoFullscreen(false);
-  finishStudy();
-});
 
 finishStudyGalleryBtn?.addEventListener('click', () => {
   finishStudyModal?.classList.add('is-hidden');

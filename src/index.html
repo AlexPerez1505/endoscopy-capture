@@ -408,22 +408,60 @@
       border-color: rgba(143, 163, 207, 0.16) !important;
     }
 
-    html[data-theme="dark"] .capture-device-information p,
+    html[data-theme="dark"] .capture-device-information,
     html[data-theme="dark"] .capture-page .stat,
     html[data-theme="dark"] .capture-page .log-box {
       border-color: rgba(143, 163, 207, 0.18) !important;
       background: rgba(7, 16, 36, 0.7) !important;
     }
 
-    html[data-theme="dark"] .capture-device-information strong,
+    html[data-theme="dark"] .capture-device-information p,
     html[data-theme="dark"] .capture-page .stat span,
     html[data-theme="dark"] .capture-page .log-box p {
       color: #8fa3cf !important;
     }
 
-    html[data-theme="dark"] .capture-device-information span,
+    html[data-theme="dark"] .capture-device-information strong,
     html[data-theme="dark"] .capture-page .stat strong {
       color: #f8fafc !important;
+    }
+
+    html[data-theme="dark"] .capture-device-information span {
+      color: #f8fafc !important;
+    }
+
+    /* Indicador de grabación en dark mode */
+    html[data-theme="dark"] .recording-indicator {
+      background: rgba(7, 16, 36, 0.7) !important;
+      border: 1px solid rgba(143, 163, 207, 0.18) !important;
+      color: #8fa3cf !important;
+    }
+
+    html[data-theme="dark"] .recording-indicator span {
+      background: #64748b !important;
+    }
+
+    html[data-theme="dark"] .recording-indicator.is-recording {
+      background: rgba(239, 68, 68, 0.12) !important;
+      border-color: rgba(239, 68, 68, 0.3) !important;
+      color: #ef4444 !important;
+    }
+
+    html[data-theme="dark"] .recording-indicator.is-recording span {
+      background: #ef4444 !important;
+    }
+
+    /* Botón salir de pantalla completa en dark mode */
+    html[data-theme="dark"] .video-fullscreen-exit {
+      background: rgba(15, 27, 54, 0.92) !important;
+      color: #f8fafc !important;
+      border: 1px solid rgba(143, 163, 207, 0.25) !important;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    html[data-theme="dark"] .video-fullscreen-exit:hover:not(:disabled) {
+      background: rgba(20, 35, 68, 0.95) !important;
+      border-color: rgba(56, 199, 244, 0.4) !important;
     }
 
     html[data-theme="dark"] .capture-page .field select {
@@ -1259,14 +1297,6 @@
                     type="button"
                   >
                     Salir de pantalla completa (Esc)
-                  </button>
-
-                  <button
-                    class="btn video-fullscreen-finish"
-                    id="fullscreenFinishStudyBtn"
-                    type="button"
-                  >
-                    Finalizar estudio
                   </button>
 
                   <div
