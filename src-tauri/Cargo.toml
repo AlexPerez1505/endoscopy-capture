@@ -1,6 +1,6 @@
 [package]
 name = "enclaii-desktop"
-version = "0.1.8"
+version = "0.1.9"
 description = "ENCLAII Desktop"
 authors = ["Grupo MediBuy"]
 edition = "2021"
