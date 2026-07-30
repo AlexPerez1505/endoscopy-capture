@@ -51,6 +51,7 @@ const detectDevicesBtn = document.getElementById('detectDevicesBtn');
 const startBtn = document.getElementById('startBtn');
 const captureBtn = document.getElementById('captureBtn');
 const recordBtn = document.getElementById('recordBtn');
+const stopRecordBtn = document.getElementById('stopRecordBtn');
 const doubleClickToggle = document.getElementById('doubleClickToggle');
 const snapshotCanvas = document.getElementById('snapshotCanvas');
 const logBox = document.getElementById('logBox');
@@ -237,6 +238,7 @@ function renderLaravelConnection() {
 
   captureBtn.disabled = !currentStream;
   recordBtn.disabled = !currentStream;
+  if (stopRecordBtn) stopRecordBtn.disabled = !mediaRecorder || mediaRecorder.state === 'inactive';
 }
 
 function blobToBase64(blob) {
@@ -1757,6 +1759,10 @@ function startRecording() {
     recordBtn.textContent = 'Detener grabación';
     recordBtn.classList.remove('btn-danger-soft');
     recordBtn.classList.add('btn-danger');
+    if (stopRecordBtn) {
+      stopRecordBtn.disabled = false;
+      stopRecordBtn.style.display = '';
+    }
     captureBtn.disabled = false;
 
     recordingIndicator.classList.add('is-recording');
@@ -1833,6 +1839,10 @@ function stopRecording() {
   recordBtn.textContent = 'Iniciar grabación';
   recordBtn.classList.remove('btn-danger');
   recordBtn.classList.add('btn-danger-soft');
+  if (stopRecordBtn) {
+    stopRecordBtn.disabled = true;
+    stopRecordBtn.style.display = 'none';
+  }
 
   recordingIndicator.classList.remove('is-recording');
   if (recordingIndicatorText) recordingIndicatorText.textContent = 'Grabación detenida';
@@ -2198,6 +2208,7 @@ recordBtn.addEventListener('click', () => {
     startRecording();
   }
 });
+stopRecordBtn?.addEventListener('click', stopRecording);
 backToAppBtn?.addEventListener('click', goBackToApp);
 
 brightnessInput.addEventListener('input', applyFilters);
