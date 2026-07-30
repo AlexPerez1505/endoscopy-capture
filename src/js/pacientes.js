@@ -849,7 +849,6 @@ function rowHtml(patient, index) {
       class="patient-row"
       data-index="${index}"
       data-patient-id="${escapeHtml(patient.id)}"
-      onclick="openPanel(${index})"
     >
       <div class="patient-info">
         <div class="patient-avatar">
@@ -1490,10 +1489,27 @@ function handlePatientMenuClick(event) {
   }
 
   if (
-    !target.closest?.('.actions-wrapper')
+    target.closest?.('.actions-wrapper')
   ) {
-    closeAllPatientMenus();
+    return;
   }
+
+  closeAllPatientMenus();
+
+  const row =
+    target.closest?.(
+      '.patient-row[data-index]'
+    );
+
+  if (!row) {
+    return;
+  }
+
+  event.preventDefault();
+
+  openPanel(
+    Number(row.dataset.index)
+  );
 }
 
 function handlePatientMenuKeydown(event) {
@@ -1522,6 +1538,130 @@ function bindPatientMenuEvents() {
   document.addEventListener(
     'keydown',
     handlePatientMenuKeydown
+  );
+}
+
+function handlePatientsControlsClick(event) {
+  const target = event.target;
+
+  function handle(action) {
+    event.preventDefault();
+    event.stopPropagation();
+    action();
+  }
+
+  if (target.closest?.('#filterOverlay')) {
+    handle(closeFilters);
+    return;
+  }
+
+  if (target.closest?.('#btnClearAllFilters')) {
+    handle(clearFilters);
+    return;
+  }
+
+  if (target.closest?.('.filter-btn-cancel')) {
+    handle(closeFilters);
+    return;
+  }
+
+  if (target.closest?.('.filter-btn-apply')) {
+    handle(applyFilters);
+    return;
+  }
+
+  if (target.closest?.('#btnFiltros')) {
+    handle(openFilters);
+    return;
+  }
+
+  if (target.closest?.('#btnVincularCodigo')) {
+    handle(() => window.openPairCodeModal?.());
+    return;
+  }
+
+  if (target.closest?.('.btn-close-panel')) {
+    handle(closePanel);
+    return;
+  }
+
+  const tabButton = target.closest?.('.tab-btn');
+  if (tabButton) {
+    const label = tabButton.textContent.trim().toLowerCase();
+    const tabName =
+      label.includes('historial')
+        ? 'historial'
+        : label.includes('reporte')
+          ? 'reportes'
+          : 'resumen';
+
+    handle(() => showTab(tabName));
+    return;
+  }
+
+  const sortButton = target.closest?.('.ordenar-btn');
+  if (sortButton) {
+    const isStudySort = Boolean(sortButton.closest('span')?.querySelector('#ordenarEstudioDropdown'));
+    handle(() => toggleOrdenar(isStudySort ? 'estudio' : 'paciente'));
+    return;
+  }
+
+  const sortOption = target.closest?.('.ordenar-option');
+  if (sortOption) {
+    const dropdown = sortOption.closest('.ordenar-dropdown');
+    const type = dropdown?.id === 'ordenarEstudioDropdown' ? 'estudio' : 'paciente';
+    const text = sortOption.textContent.trim().toLowerCase();
+    let criterion = 'default';
+
+    if (type === 'paciente' && text.includes('a-z')) criterion = 'nombre-asc';
+    if (type === 'paciente' && text.includes('z-a')) criterion = 'nombre-desc';
+    if (type === 'estudio' && text.includes('reciente')) criterion = 'fecha-reciente';
+    if (type === 'estudio' && text.includes('antigua')) criterion = 'fecha-antigua';
+
+    handle(() => ordenarPor(type, criterion));
+    return;
+  }
+
+  if (target.closest?.('.estado-filter-btn')) {
+    handle(toggleEstadoFilter);
+    return;
+  }
+
+  const statusOption = target.closest?.('#estadoFilterDropdown .filter-option');
+  if (statusOption) {
+    const text = statusOption.textContent.trim().toLowerCase();
+    let status = 'all';
+
+    if (text.includes('completado')) status = 'completado';
+    if (text.includes('espera')) status = 'espera';
+    if (text.includes('cancelado')) status = 'cancelado';
+
+    handle(() => filterByEstado(status));
+    return;
+  }
+
+  const modalDeleteButton = target.closest?.('#modalEliminar button');
+  if (modalDeleteButton) {
+    const isDelete = modalDeleteButton.textContent.trim().toLowerCase().includes('eliminar');
+    handle(isDelete ? confirmarEliminar : cancelarEliminar);
+  }
+}
+
+function bindPatientsControlsEvents() {
+  if (
+    document.documentElement.dataset
+      .patientsControlsBound === 'true'
+  ) {
+    return;
+  }
+
+  document.documentElement.dataset
+    .patientsControlsBound = 'true';
+
+  document.addEventListener(
+    'click',
+    handlePatientsControlsClick,
+    true
   );
 }
 
@@ -1931,6 +2071,7 @@ function bindPageEvents() {
 
   bindPatientMenuEvents();
   bindPaginationEvents();
+  bindPatientsControlsEvents();
 }
 
 export async function initPacientes() {
