@@ -42,6 +42,7 @@ export const STUDY_PATIENT_NAME_STORAGE_KEY = 'enclaii-patient_name';
 export const STUDY_ID_STORAGE_KEY = 'enclaii-study_id';
 export const STUDY_LABEL_STORAGE_KEY = 'enclaii-study_label';
 export const OPEN_GALLERY_PATIENT_STORAGE_KEY = 'enclaii-open-gallery-patient';
+export const OPEN_GALLERY_STUDY_STORAGE_KEY = 'enclaii-open-gallery-study';
 
 /* ---- Navegación entre pantallas de pacientes/agenda ---- */
 export const EDIT_PATIENT_ID_STORAGE_KEY = 'enclaii-edit-patient-id';

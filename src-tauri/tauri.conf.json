@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ENCLAII",
-  "version": "0.1.11",
+  "version": "0.2.3",
   "identifier": "com.enclaii.desktop",
   "build": {
     "frontendDist": "../src"
@@ -32,7 +32,7 @@
     "longDescription": "Aplicacion de escritorio para conectar camaras de endoscopia, capturar imagenes, grabar videos y sincronizar estudios con ENCLAII.",
     "copyright": "Copyright (c) 2026 ENCLAII",
     "licenseFile": "installer/terminos-privacidad.rtf",
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,6 +41,17 @@
       "icons/icon.ico"
     ],
     "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "installer/nsis-header.bmp",
+        "uninstallerHeaderImage": "installer/nsis-header.bmp",
+        "sidebarImage": "installer/nsis-sidebar.bmp",
+        "languages": ["Spanish"],
+        "customLanguageFiles": {
+          "Spanish": "installer/nsis-es.nsh"
+        }
+      },
       "wix": {
         "language": {
           "es-ES": {

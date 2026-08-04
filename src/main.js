@@ -51,7 +51,6 @@ const detectDevicesBtn = document.getElementById('detectDevicesBtn');
 const startBtn = document.getElementById('startBtn');
 const captureBtn = document.getElementById('captureBtn');
 const recordBtn = document.getElementById('recordBtn');
-const stopRecordBtn = document.getElementById('stopRecordBtn');
 const doubleClickToggle = document.getElementById('doubleClickToggle');
 const snapshotCanvas = document.getElementById('snapshotCanvas');
 const logBox = document.getElementById('logBox');
@@ -238,7 +237,6 @@ function renderLaravelConnection() {
 
   captureBtn.disabled = !currentStream;
   recordBtn.disabled = !currentStream;
-  if (stopRecordBtn) stopRecordBtn.disabled = !mediaRecorder || mediaRecorder.state === 'inactive';
 }
 
 function blobToBase64(blob) {
@@ -1059,16 +1057,30 @@ let focusLiveCtx = null;
 let focusRawCanvas = null;
 let focusRawCtx = null;
 let focusRafId = null;
+let focusOverlay = null;
+let focusOverlayBox = null;
 let focusResizeHandle = null;
 let focusDragOffset = { x: 0, y: 0 };
+let focusActivePointerId = null;
 
 const FOCUS_HANDLE_SIZE = 12;
 const FOCUS_MIN_SELECTION = 40;
+const FOCUS_SELECTOR_EVENT_CAPTURE = true;
+
+async function tauriInvoke(command, args = {}) {
+  const globalInvoke = window.__TAURI__?.core?.invoke;
+
+  if (globalInvoke) {
+    return globalInvoke(command, args);
+  }
+
+  const module = await import('@tauri-apps/api/core');
+  return module.invoke(command, args);
+}
 
 async function loadRoiProfile(deviceName) {
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return await invoke('load_roi_profile', { deviceName: deviceName || null });
+    return await tauriInvoke('load_roi_profile', { deviceName: deviceName || null });
   } catch (error) {
     console.error('No se pudo cargar perfil ROI:', error);
     return null;
@@ -1077,9 +1089,8 @@ async function loadRoiProfile(deviceName) {
 
 async function saveRoiProfile(roi, deviceName) {
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     const profile = { ...roi, device_name: deviceName || undefined };
-    await invoke('save_roi_profile', { profile });
+    await tauriInvoke('save_roi_profile', { profile });
     return true;
   } catch (error) {
     console.error('No se pudo guardar perfil ROI:', error);
@@ -1102,9 +1113,12 @@ function deviceNameForRoi() {
 }
 
 function canvasToVideoCoordinates(rect) {
-  if (!preview.videoWidth || !focusCropCanvas.width) return rect;
-  const scaleX = preview.videoWidth / focusCropCanvas.clientWidth;
-  const scaleY = preview.videoHeight / focusCropCanvas.clientHeight;
+  const surface = focusSelectionSurface();
+  const surfaceWidth = surface?.width || focusCropCanvas?.width || 0;
+  const surfaceHeight = surface?.height || focusCropCanvas?.height || 0;
+  if (!preview.videoWidth || !surfaceWidth || !surfaceHeight) return rect;
+  const scaleX = preview.videoWidth / surfaceWidth;
+  const scaleY = preview.videoHeight / surfaceHeight;
   return {
     x: rect.x * scaleX,
     y: rect.y * scaleY,
@@ -1114,15 +1128,121 @@ function canvasToVideoCoordinates(rect) {
 }
 
 function videoToCanvasCoordinates(roi) {
-  if (!preview.videoWidth || !focusCropCanvas.clientWidth) return roi;
-  const scaleX = focusCropCanvas.clientWidth / preview.videoWidth;
-  const scaleY = focusCropCanvas.clientHeight / preview.videoHeight;
+  const surface = focusSelectionSurface();
+  const surfaceWidth = surface?.width || focusCropCanvas?.width || 0;
+  const surfaceHeight = surface?.height || focusCropCanvas?.height || 0;
+  if (!preview.videoWidth || !surfaceWidth || !surfaceHeight) return roi;
+  const scaleX = surfaceWidth / preview.videoWidth;
+  const scaleY = surfaceHeight / preview.videoHeight;
   return {
     x: roi.x * scaleX,
     y: roi.y * scaleY,
     width: roi.width * scaleX,
     height: roi.height * scaleY,
   };
+}
+
+function focusSelectorElement() {
+  return focusOverlay || videoCropWrapper || videoFrame || focusCropCanvas;
+}
+
+function focusSelectionSurface() {
+  const element = focusOverlay || videoCropWrapper || videoFrame || focusCropCanvas;
+  if (!element) return null;
+
+  const rect = element.getBoundingClientRect();
+  return {
+    element,
+    rect,
+    width: Math.max(1, Math.round(rect.width || element.clientWidth || preview.clientWidth || 1)),
+    height: Math.max(1, Math.round(rect.height || element.clientHeight || preview.clientHeight || 1)),
+  };
+}
+
+function focusEventInsideVideo(event) {
+  if (!focusRoiSelecting || !event?.target || !focusSelectorElement()) return false;
+  if (event.target.closest?.('button, a, input, select, textarea, label')) return false;
+  return focusSelectorElement().contains(event.target);
+}
+
+function resizeFocusCropCanvas() {
+  if (!focusCropCanvas) return;
+  const surface = focusSelectionSurface();
+  if (!surface) return;
+  if (focusCropCanvas.width !== surface.width) focusCropCanvas.width = surface.width;
+  if (focusCropCanvas.height !== surface.height) focusCropCanvas.height = surface.height;
+}
+
+function focusCanvasPoint(event) {
+  const surface = focusSelectionSurface();
+  const rect = surface?.rect || focusCropCanvas.getBoundingClientRect();
+  const scaleX = (surface?.width || focusCropCanvas.width) / (rect.width || focusCropCanvas.width || 1);
+  const scaleY = (surface?.height || focusCropCanvas.height) / (rect.height || focusCropCanvas.height || 1);
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  };
+}
+
+function ensureFocusOverlay() {
+  if (focusOverlay && focusOverlayBox) return;
+  if (!videoCropWrapper) return;
+
+  focusOverlay = document.createElement('div');
+  focusOverlay.className = 'focus-roi-overlay';
+  focusOverlay.setAttribute('aria-hidden', 'true');
+
+  focusOverlayBox = document.createElement('div');
+  focusOverlayBox.className = 'focus-roi-box';
+
+  focusOverlay.appendChild(focusOverlayBox);
+  videoCropWrapper.appendChild(focusOverlay);
+}
+
+function removeFocusOverlay() {
+  focusOverlay?.remove();
+  focusOverlay = null;
+  focusOverlayBox = null;
+}
+
+function bindRoiSelectorEvents() {
+  focusSelectorElement()?.addEventListener('pointerdown', startRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+  window.addEventListener('pointermove', moveRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+  window.addEventListener('pointerup', endRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+  window.addEventListener('pointercancel', endRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+}
+
+function unbindRoiSelectorEvents() {
+  focusSelectorElement()?.removeEventListener('pointerdown', startRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+  window.removeEventListener('pointermove', moveRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+  window.removeEventListener('pointerup', endRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+  window.removeEventListener('pointercancel', endRoiSelection, FOCUS_SELECTOR_EVENT_CAPTURE);
+}
+
+function hideRoiSelector() {
+  focusActivePointerId = null;
+  videoFrame?.classList.remove('is-focus-selecting');
+  unbindRoiSelectorEvents();
+  removeFocusOverlay();
+  focusCropCanvas?.classList.add('is-hidden');
+  if (focusCropCanvas) {
+    focusCropCanvas.style.pointerEvents = 'none';
+  }
+}
+
+function renderFocusOverlayBox(rect) {
+  if (!focusOverlay || !focusOverlayBox) return;
+
+  if (!rect || rect.width <= 0 || rect.height <= 0) {
+    focusOverlayBox.style.display = 'none';
+    return;
+  }
+
+  focusOverlayBox.style.display = 'block';
+  focusOverlayBox.style.left = `${Math.round(rect.x)}px`;
+  focusOverlayBox.style.top = `${Math.round(rect.y)}px`;
+  focusOverlayBox.style.width = `${Math.round(rect.width)}px`;
+  focusOverlayBox.style.height = `${Math.round(rect.height)}px`;
 }
 
 function focusCropHandleAt(x, y, canvasRect) {
@@ -1147,19 +1267,25 @@ function focusCropHandleAt(x, y, canvasRect) {
 }
 
 function drawSelectionOverlay() {
-  if (!focusCropCanvas || focusCropCanvas.classList.contains('is-hidden')) return;
-  const ctx = focusCropCanvas.getContext('2d');
-  const width = focusCropCanvas.width;
-  const height = focusCropCanvas.height;
-  ctx.clearRect(0, 0, width, height);
-
   const rect = focusSelectionStart && focusSelectionEnd
     ? canvasSelectionRect()
     : focusRoi
       ? videoToCanvasCoordinates(focusRoi)
       : null;
 
-  if (!rect) return;
+  renderFocusOverlayBox(rect);
+
+  if (!focusCropCanvas || focusCropCanvas.classList.contains('is-hidden')) return;
+  const ctx = focusCropCanvas.getContext('2d');
+  const width = focusCropCanvas.width;
+  const height = focusCropCanvas.height;
+  ctx.clearRect(0, 0, width, height);
+
+  if (!rect) {
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.28)';
+    ctx.fillRect(0, 0, width, height);
+    return;
+  }
 
   // Fondo semitransparente fuera del area
   ctx.fillStyle = 'rgba(2, 6, 23, 0.65)';
@@ -1202,9 +1328,18 @@ function canvasSelectionRect() {
 
 function startRoiSelection(event) {
   if (!focusRoiSelecting || !focusCropCanvas) return;
-  const rect = focusCropCanvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
+  if (event.button !== undefined && event.button !== 0) return;
+  if (!focusEventInsideVideo(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  resizeFocusCropCanvas();
+
+  if (event.pointerId !== undefined) {
+    focusActivePointerId = event.pointerId;
+    event.currentTarget?.setPointerCapture?.(event.pointerId);
+  }
+
+  const { x, y } = focusCanvasPoint(event);
 
   if (focusRoi) {
     const canvasRect = videoToCanvasCoordinates(focusRoi);
@@ -1229,11 +1364,13 @@ function startRoiSelection(event) {
 
 function moveRoiSelection(event) {
   if (!focusRoiSelecting || !focusCropCanvas) return;
-  const rect = focusCropCanvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-  const cw = focusCropCanvas.clientWidth;
-  const ch = focusCropCanvas.clientHeight;
+  if (event.pointerId !== undefined && focusActivePointerId !== null && event.pointerId !== focusActivePointerId) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  const { x, y } = focusCanvasPoint(event);
+  const cw = focusCropCanvas.width;
+  const ch = focusCropCanvas.height;
 
   if (!focusSelectionStart && !focusResizeHandle) return;
 
@@ -1276,8 +1413,16 @@ function moveRoiSelection(event) {
   drawSelectionOverlay();
 }
 
-function endRoiSelection() {
+function endRoiSelection(event) {
   if (!focusRoiSelecting) return;
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+
+  if (event?.pointerId !== undefined) {
+    event.currentTarget?.releasePointerCapture?.(event.pointerId);
+  }
+  focusActivePointerId = null;
+
   if (focusResizeHandle) {
     focusResizeHandle = null;
     return;
@@ -1300,10 +1445,7 @@ function confirmRoiSelection() {
   }
   focusRoiSelecting = false;
   focusModeEnabled = true;
-  focusCropCanvas?.classList.add('is-hidden');
-  focusCropCanvas?.removeEventListener('mousedown', startRoiSelection);
-  window.removeEventListener('mousemove', moveRoiSelection);
-  window.removeEventListener('mouseup', endRoiSelection);
+  hideRoiSelector();
   saveRoiProfile(focusRoi, focusSelectedDevice);
   localStorage.setItem(FOCUS_MODE_ENABLED_STORAGE_KEY, 'true');
   localStorage.setItem(FOCUS_MODE_ROI_STORAGE_KEY, JSON.stringify(focusRoi));
@@ -1314,10 +1456,7 @@ function confirmRoiSelection() {
 
 function cancelRoiSelection() {
   focusRoiSelecting = false;
-  focusCropCanvas?.classList.add('is-hidden');
-  focusCropCanvas?.removeEventListener('mousedown', startRoiSelection);
-  window.removeEventListener('mousemove', moveRoiSelection);
-  window.removeEventListener('mouseup', endRoiSelection);
+  hideRoiSelector();
   drawSelectionOverlay();
   if (!focusModeEnabled) stopFocusModeLive();
   updateFocusModeUI(focusModeEnabled);
@@ -1329,13 +1468,20 @@ function showRoiSelector() {
     return;
   }
   focusRoiSelecting = true;
+  focusSelectionStart = null;
+  focusSelectionEnd = null;
+  focusResizeHandle = null;
+  videoFrame?.classList.add('is-focus-selecting');
+  ensureFocusOverlay();
   focusCropCanvas.classList.remove('is-hidden');
-  focusCropCanvas.width = focusCropCanvas.clientWidth;
-  focusCropCanvas.height = focusCropCanvas.clientHeight;
+  focusCropCanvas.style.display = 'block';
+  focusCropCanvas.style.pointerEvents = 'auto';
+  focusCropCanvas.style.zIndex = '60';
+  focusCropCanvas.style.touchAction = 'none';
+  resizeFocusCropCanvas();
   drawSelectionOverlay();
-  focusCropCanvas.addEventListener('mousedown', startRoiSelection);
-  window.addEventListener('mousemove', moveRoiSelection);
-  window.addEventListener('mouseup', endRoiSelection);
+  bindRoiSelectorEvents();
+  updateFocusModeUI(false);
   addLog('Dibuja el área de la cámara. Arrastra bordes/esquinas para ajustar.');
 }
 
@@ -1399,6 +1545,16 @@ function applyFocusModeVisual() {
 
 function updateFocusModeUI(enabled) {
   const hasRoi = Boolean(focusRoi && focusRoi.width && focusRoi.height);
+  if (focusRoiSelecting) {
+    focusModeToggleBtn.textContent = 'Guardar área de enfoque';
+    focusModeToggleBtn.classList.add('btn-primary');
+    focusModeToggleBtn.classList.remove('btn-outline');
+    if (focusModeCalibrateBtn) focusModeCalibrateBtn.style.display = 'none';
+    if (focusModeHelp) {
+      focusModeHelp.textContent = 'Arrastra sobre el video para marcar el área y luego guarda.';
+    }
+    return;
+  }
   focusModeToggleBtn.textContent = enabled ? 'Desactivar modo enfoque' : (hasRoi ? 'Activar modo enfoque' : 'Seleccionar área de enfoque');
   focusModeToggleBtn.classList.toggle('btn-primary', enabled || !hasRoi);
   focusModeToggleBtn.classList.toggle('btn-outline', !enabled && hasRoi);
@@ -1436,7 +1592,7 @@ function handleFocusToggleClick() {
     if (focusRoi && focusRoi.width && focusRoi.height) {
       confirmRoiSelection();
     } else {
-      cancelRoiSelection();
+      addLog('Dibuja un área sobre el video antes de guardar.', 'error');
     }
     return;
   }
@@ -1759,10 +1915,6 @@ function startRecording() {
     recordBtn.textContent = 'Detener grabación';
     recordBtn.classList.remove('btn-danger-soft');
     recordBtn.classList.add('btn-danger');
-    if (stopRecordBtn) {
-      stopRecordBtn.disabled = false;
-      stopRecordBtn.style.display = '';
-    }
     captureBtn.disabled = false;
 
     recordingIndicator.classList.add('is-recording');
@@ -1839,10 +1991,6 @@ function stopRecording() {
   recordBtn.textContent = 'Iniciar grabación';
   recordBtn.classList.remove('btn-danger');
   recordBtn.classList.add('btn-danger-soft');
-  if (stopRecordBtn) {
-    stopRecordBtn.disabled = true;
-    stopRecordBtn.style.display = 'none';
-  }
 
   recordingIndicator.classList.remove('is-recording');
   if (recordingIndicatorText) recordingIndicatorText.textContent = 'Grabación detenida';
@@ -1860,6 +2008,8 @@ function canTriggerRemoteCapture() {
 }
 
 function handleRemoteKey(event) {
+  if (focusRoiSelecting) return;
+
   if (event.code === 'F8' || event.code === 'Space') {
     event.preventDefault();
     if (canTriggerRemoteCapture()) captureImage();
@@ -1882,6 +2032,7 @@ function handleRemoteKey(event) {
 // nivel de document/window y no solo en el boton en pantalla: asi funciona
 // igual con el mouse, con el boton en pantalla y con el remoto.
 function isRemoteCaptureTarget(target) {
+  if (focusRoiSelecting) return false;
   if (!isDevicePaired || !currentStream || captureLayout?.classList.contains('is-hidden')) return false;
 
   const interactive = target.closest?.('button, a, input, select, textarea, label');
@@ -2208,7 +2359,6 @@ recordBtn.addEventListener('click', () => {
     startRecording();
   }
 });
-stopRecordBtn?.addEventListener('click', stopRecording);
 backToAppBtn?.addEventListener('click', goBackToApp);
 
 brightnessInput.addEventListener('input', applyFilters);

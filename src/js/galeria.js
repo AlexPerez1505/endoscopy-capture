@@ -1,7 +1,15 @@
-import { apiBaseUrl, laravelFetch } from './laravel.js';
+import {
+  apiBaseUrl,
+  authenticatedLaravelAssetUrl,
+  firstLaravelAssetUrl,
+  laravelFetch,
+} from './laravel.js';
 import { authHeader, getAuthToken, setAuthToken } from './auth.js';
 import { escapeHtml } from './html.js';
-import { OPEN_GALLERY_PATIENT_STORAGE_KEY as OPEN_PATIENT_STORAGE_KEY } from './storage-keys.js';
+import {
+  OPEN_GALLERY_PATIENT_STORAGE_KEY as OPEN_PATIENT_STORAGE_KEY,
+  OPEN_GALLERY_STUDY_STORAGE_KEY as OPEN_STUDY_STORAGE_KEY,
+} from './storage-keys.js';
 
 const LOGIN_ENDPOINT = `${apiBaseUrl()}/api/tauri/login`;
 const GALLERY_ENDPOINT = `${apiBaseUrl()}/api/tauri/galeria`;
@@ -27,6 +35,7 @@ let activeDatePreset = 'month';
 let dateFilterEnabled = false;
 let currentDetailPatient = null;
 let currentViewerMedia = null;
+let currentDetailStudyKey = '';
 let defaultGallerySub = '';
 let pendingImageFilter = 'none';
 let appliedImageFilter = 'none';
@@ -37,28 +46,402 @@ function safeCssToken(value, fallback) {
   return /^[a-z0-9_-]+$/i.test(token) ? token : fallback;
 }
 
-function normalizeGalleryMedia(media = {}, index = 0) {
-  const type = media.type === 'video' ? 'video' : 'image';
+const MEDIA_URL_FIELDS = [
+  'src',
+  'url',
+  'public_url',
+  'temporary_url',
+  'signed_url',
+  'full_url',
+  'original_url',
+  'preview_url',
+  'thumb_url',
+  'thumbnail_url',
+  'path',
+  'ruta',
+  'archivo_url',
+  'file_url',
+  'video_url',
+  'imagen_url',
+  'foto_url',
+];
+
+function arrayFrom(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  return [];
+}
+
+function compactKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '');
+}
+
+function numericKey(value) {
+  const match = String(value || '').match(/\d+/g);
+  if (!match) return '';
+
+  const number = Number(match[match.length - 1]);
+  return Number.isFinite(number) ? String(number) : '';
+}
+
+function keysMatch(left, right) {
+  const leftCompact = compactKey(left);
+  const rightCompact = compactKey(right);
+
+  if (!leftCompact || !rightCompact) return false;
+  if (leftCompact === rightCompact) return true;
+
+  const leftNumber = numericKey(left);
+  const rightNumber = numericKey(right);
+
+  return Boolean(leftNumber && rightNumber && leftNumber === rightNumber);
+}
+
+function detectMediaType(media = {}) {
+  const value = String(
+    media.type ||
+    media.tipo ||
+    media.file_type ||
+    media.mime ||
+    media.mime_type ||
+    media.extension ||
+    media.ext ||
+    media.src ||
+    media.url ||
+    media.path ||
+    media.ruta ||
+    media.file ||
+    ''
+  ).toLowerCase();
+
+  if (
+    value.includes('video') ||
+    /\.(mp4|mov|m4v|webm|avi|mkv)(?:[?#].*)?$/i.test(value)
+  ) {
+    return 'video';
+  }
+
+  return 'image';
+}
+
+function studyDate(study = {}) {
+  return String(
+    study.fecha ||
+    study.fecha_estudio ||
+    study.study_date ||
+    study.date ||
+    study.created_at ||
+    ''
+  );
+}
+
+function normalizeGalleryStudy(study = {}, index = 0) {
+  const source =
+    study && typeof study === 'object'
+      ? study
+      : {};
+
+  const id = String(
+    source.id ||
+    source.estudio_id ||
+    source.study_id ||
+    ''
+  ).trim();
+
+  const folio = String(
+    source.folio ||
+    source.codigo ||
+    source.code ||
+    source.estudio_folio ||
+    source.study_folio ||
+    (
+      id
+        ? `E-${String(id).padStart(4, '0')}`
+        : ''
+    )
+  ).trim();
+
+  const label = String(
+    source.procedimiento ||
+    source.tipo ||
+    source.nombre ||
+    source.nombre_estudio ||
+    source.study_label ||
+    source.estudio ||
+    'Estudio'
+  );
+
+  const key = String(
+    id ||
+    folio ||
+    `${label}-${index + 1}`
+  );
 
   return {
-    id: String(media.id ?? `${type}-${index + 1}`),
+    key,
+    id,
+    folio,
+    label,
+    date: studyDate(source),
+    status: String(source.estado || source.status || source.estatus || ''),
+  };
+}
+
+function galleryStudyList(patient = {}) {
+  return (
+    arrayFrom(patient.estudios).length
+      ? arrayFrom(patient.estudios)
+      : arrayFrom(patient.studies).length
+        ? arrayFrom(patient.studies)
+        : arrayFrom(patient.historial).length
+          ? arrayFrom(patient.historial)
+          : arrayFrom(patient.history).length
+            ? arrayFrom(patient.history)
+            : arrayFrom(patient.estudios_realizados)
+  );
+}
+
+function collectMediaItems(source = {}) {
+  function withType(item, type) {
+    if (item && typeof item === 'object') {
+      return {
+        ...item,
+        type: item.type || type,
+      };
+    }
+
+    return {
+      src: item,
+      file: String(item || '').split(/[\\/]/).pop() || 'Captura',
+      type,
+    };
+  }
+
+  const media = [
+    ...arrayFrom(source.media).map(item => withType(item, '')),
+    ...arrayFrom(source.archivos).map(item => withType(item, '')),
+    ...arrayFrom(source.files).map(item => withType(item, '')),
+    ...arrayFrom(source.capturas).map(item => withType(item, '')),
+    ...arrayFrom(source.captures).map(item => withType(item, '')),
+  ];
+
+  arrayFrom(source.imagenes)
+    .forEach(item => media.push(withType(item, 'image')));
+  arrayFrom(source.images)
+    .forEach(item => media.push(withType(item, 'image')));
+  arrayFrom(source.fotos)
+    .forEach(item => media.push(withType(item, 'image')));
+  arrayFrom(source.photos)
+    .forEach(item => media.push(withType(item, 'image')));
+  arrayFrom(source.videos)
+    .forEach(item => media.push(withType(item, 'video')));
+
+  return media;
+}
+
+function normalizeGalleryMedia(media = {}, index = 0, study = {}) {
+  const type = detectMediaType(media);
+  const src = firstLaravelAssetUrl(media, MEDIA_URL_FIELDS);
+  const studyId = String(
+    media.estudio_id ||
+    media.study_id ||
+    media.session_id ||
+    study.id ||
+    ''
+  ).trim();
+
+  const studyFolio = String(
+    media.estudio_folio ||
+    media.study_folio ||
+    media.folio_estudio ||
+    study.folio ||
+    ''
+  ).trim();
+
+  const studyLabel = String(
+    media.study ||
+    media.estudio ||
+    media.study_label ||
+    media.procedimiento ||
+    study.label ||
+    'Captura del estudio'
+  );
+  const mediaStudyKey = String(
+    studyId ||
+    studyFolio ||
+    study.key ||
+    studyLabel
+  );
+  const baseMediaId = String(
+    media.id ??
+    media.media_id ??
+    media.archivo_id ??
+    `${study.key || studyId || studyFolio || 'study'}-${type}-${index + 1}`
+  );
+  const mediaId = mediaStudyKey
+    ? `${mediaStudyKey}:${baseMediaId}`
+    : baseMediaId;
+
+  return {
+    id: mediaId,
     type,
-    file: String(media.file || media.filename || media.nombre_original || 'Captura'),
-    study: String(media.study || media.estudio || media.study_label || 'Captura del estudio'),
-    date: String(media.date || media.fecha || '--'),
-    studyDate: String(media.studyDate || media.study_date || media.fecha_estudio || ''),
-    time: String(media.time || media.hora || ''),
+    file: String(media.file || media.filename || media.nombre_original || media.nombre || 'Captura'),
+    study: studyLabel,
+    studyId,
+    studyFolio,
+    studyKey: mediaStudyKey,
+    studyStatus: String(media.study_status || media.estado_estudio || study.status || ''),
+    date: String(media.date || media.fecha || media.created_at || '--'),
+    studyDate: String(media.studyDate || media.study_date || media.fecha_estudio || study.date || ''),
+    time: String(media.time || media.hora || media.capture_time || ''),
     theme: String(media.theme || `theme-${(index % 4) + 1}`),
-    src: String(media.src || media.url || ''),
+    src,
+  };
+}
+
+function dedupeMedia(media = []) {
+  const seen = new Set();
+
+  return media.filter(item => {
+    const key = [
+      item.type,
+      item.id,
+      item.src,
+      item.studyKey,
+    ].map(value => String(value || '')).join('|');
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function ensureStudyGroup(map, study = {}) {
+  const normalized =
+    study.key
+      ? study
+      : normalizeGalleryStudy(study, map.size);
+
+  const key = String(normalized.key || `study-${map.size + 1}`);
+
+  if (!map.has(key)) {
+    map.set(key, {
+      ...normalized,
+      key,
+      media: [],
+    });
+  }
+
+  return map.get(key);
+}
+
+function buildStudyGroups(studies = [], media = []) {
+  const groups = new Map();
+
+  studies.forEach(study => {
+    ensureStudyGroup(groups, study);
+  });
+
+  media.forEach(item => {
+    const group = ensureStudyGroup(groups, {
+      key: item.studyKey,
+      id: item.studyId,
+      folio: item.studyFolio,
+      label: item.study,
+      date: item.studyDate || item.date,
+      status: item.studyStatus,
+    });
+
+    group.media.push(item);
+  });
+
+  return [...groups.values()].sort((left, right) => {
+    const leftDate = new Date(left.date || 0).getTime() || 0;
+    const rightDate = new Date(right.date || 0).getTime() || 0;
+    return rightDate - leftDate;
+  });
+}
+
+function studyMatches(group, key) {
+  if (!key) return false;
+
+  return [
+    group.key,
+    group.id,
+    group.folio,
+    group.label,
+  ].some(value => keysMatch(value, key));
+}
+
+function mediaMatchesStudy(media, key) {
+  if (!key) return false;
+
+  return [
+    media.studyKey,
+    media.studyId,
+    media.studyFolio,
+    media.study,
+  ].some(value => keysMatch(value, key));
+}
+
+async function hydrateGalleryAssets(patient) {
+  const media = await Promise.all(
+    patient.media.map(async item => {
+      if (!item.src) return item;
+
+      try {
+        return {
+          ...item,
+          src: await authenticatedLaravelAssetUrl(item.src, {
+            accept: item.type === 'video' ? 'video/*,*/*' : 'image/*,*/*',
+          }),
+        };
+      } catch {
+        return item;
+      }
+    })
+  );
+
+  return {
+    ...patient,
+    media,
+    studyGroups: buildStudyGroups(patient.studySummaries, media),
   };
 }
 
 function normalizeGalleryPatient(patient = {}, index = 0) {
-  const media = Array.isArray(patient.media)
-    ? patient.media.map((item, mediaIndex) => normalizeGalleryMedia(item, mediaIndex))
-    : [];
+  const rawStudies = galleryStudyList(patient);
+  const studySummaries = rawStudies.map((study, studyIndex) =>
+    normalizeGalleryStudy(study, studyIndex)
+  );
+
+  const nestedMedia = rawStudies.flatMap((study, studyIndex) => {
+    const studyMeta = studySummaries[studyIndex];
+    return collectMediaItems(study).map((item, mediaIndex) =>
+      normalizeGalleryMedia(item, mediaIndex, studyMeta)
+    );
+  });
+
+  const flatMedia = collectMediaItems(patient).map((item, mediaIndex) =>
+    normalizeGalleryMedia(item, mediaIndex)
+  );
+
+  const media = dedupeMedia([...nestedMedia, ...flatMedia]);
+  const studyGroups = buildStudyGroups(studySummaries, media);
   const photos = Number(patient.photos ?? patient.fotos ?? media.filter(item => item.type === 'image').length) || 0;
   const videos = Number(patient.videos ?? media.filter(item => item.type === 'video').length) || 0;
+  const explicitStudies = Number(
+    patient.studies_count ??
+    patient.estudios_count ??
+    patient.detailStudies ??
+    patient.detail_studies
+  );
+  const studiesCount = Number.isFinite(explicitStudies) && explicitStudies > 0
+    ? explicitStudies
+    : studyGroups.length;
 
   return {
     id: String(patient.id ?? patient.patient_id ?? `P-${String(index + 1).padStart(3, '0')}`),
@@ -67,9 +450,9 @@ function normalizeGalleryPatient(patient = {}, index = 0) {
     initials: String(patient.initials || patient.ini || 'PX').slice(0, 3),
     age: String(patient.age || patient.edad || '--'),
     gender: String(patient.gender || patient.sexo || '--'),
-    lastStudy: String(patient.lastStudy || patient.ultimo || '--'),
-    studyDate: String(patient.studyDate || patient.study_date || ''),
-    studies: Number(patient.studies ?? patient.estudios) || 0,
+    lastStudy: String(patient.lastStudy || patient.ultimo || patient.ultimo_estudio?.procedimiento || patient.ultimo_estudio?.tipo || '--'),
+    studyDate: String(patient.studyDate || patient.study_date || patient.ultimo_estudio?.fecha || ''),
+    studies: studiesCount,
     photos,
     videos,
     status: String(patient.status || patient.estado || 'Activo'),
@@ -78,7 +461,9 @@ function normalizeGalleryPatient(patient = {}, index = 0) {
     procedure: String(patient.procedure || patient.procedimiento || 'Estudio'),
     tone: String(patient.tone || ['is-purple', 'is-blue', 'is-pink', 'is-mint'][index % 4]),
     phone: String(patient.phone || patient.telefono || ''),
-    detailStudies: Number(patient.detailStudies ?? patient.detail_studies ?? patient.studies ?? patient.estudios) || 0,
+    detailStudies: studiesCount,
+    studySummaries,
+    studyGroups,
     media,
   };
 }
@@ -86,6 +471,11 @@ function normalizeGalleryPatient(patient = {}, index = 0) {
 function setGalleryEmptyText(message) {
   const empty = document.getElementById('galleryEmptyState');
   if (empty) empty.textContent = message;
+}
+
+function galleryHashParams() {
+  const query = String(window.location.hash || '').split('?')[1] || '';
+  return new URLSearchParams(query);
 }
 
 async function loginToLaravel(email, password) {
@@ -163,9 +553,22 @@ async function loadGalleryData() {
     }
 
     const payload = await response.json();
-    const patients = payload.patients || payload.pacientes || payload.data || [];
+    const patients =
+      payload.patients ||
+      payload.pacientes ||
+      payload.data?.patients ||
+      payload.data?.pacientes ||
+      payload.data?.data ||
+      payload.data ||
+      [];
     GALLERY_PATIENTS = Array.isArray(patients)
-      ? patients.map((patient, index) => normalizeGalleryPatient(patient, index))
+      ? await Promise.all(
+          patients
+            .map((patient, index) =>
+              normalizeGalleryPatient(patient, index)
+            )
+            .map(hydrateGalleryAssets)
+        )
       : [];
     return true;
   })().catch(error => {
@@ -413,12 +816,16 @@ function mediaCard(media) {
   const label = media.type === 'video' ? 'VID' : 'IMG';
   const action = media.type === 'video' ? 'Ver video' : 'Ver imagen';
   const assetClass = media.src ? ' has-asset' : '';
-  const assetStyle = media.src ? ` style="background-image:url(&quot;${escapeHtml(media.src)}&quot;)"` : '';
+  const assetStyle = media.src && media.type !== 'video' ? ` style="background-image:url(&quot;${escapeHtml(media.src)}&quot;)"` : '';
+  const videoPreview = media.src && media.type === 'video'
+    ? `<video src="${escapeHtml(media.src)}" muted preload="metadata" playsinline></video>`
+    : '';
   const theme = safeCssToken(media.theme, 'theme-1');
 
   return `
     <article class="gallery-media-card">
       <div class="gallery-media-thumb gallery-thumb-${theme}${assetClass}"${assetStyle}>
+        ${videoPreview}
         <span class="gallery-media-badge">${label}</span>
         <span class="gallery-media-time">${escapeHtml(media.time)}</span>
       </div>
@@ -489,44 +896,150 @@ function updateAdjustmentLabels() {
   updateFilterPreviewVisual();
 }
 
+function mediaMatchesSearch(media, search) {
+  if (!search) return true;
+
+  return [
+    media.file,
+    media.study,
+    media.studyFolio,
+    media.date,
+  ].some(value => normalizeText(value).includes(search));
+}
+
+function studyMatchesSearch(group, search) {
+  if (!search) return true;
+
+  return [
+    group.label,
+    group.folio,
+    group.date,
+  ].some(value => normalizeText(value).includes(search));
+}
+
+function mediaColumnHtml(items, title, emptyText) {
+  return `
+    <div class="gallery-study-media-column">
+      <div class="gallery-study-column-head">
+        <h4>${escapeHtml(title)}</h4>
+        <span>${escapeHtml(countText(items.length))}</span>
+      </div>
+      ${
+        items.length
+          ? `<div class="gallery-media-grid">${items.map(mediaCard).join('')}</div>`
+          : `<p class="gallery-section-empty">${escapeHtml(emptyText)}</p>`
+      }
+    </div>
+  `;
+}
+
+function studyGroupHtml(group) {
+  const videos = group.media.filter(item => item.type === 'video');
+  const images = group.media.filter(item => item.type === 'image');
+  const selectedClass =
+    currentDetailStudyKey &&
+    studyMatches(group, currentDetailStudyKey)
+      ? ' is-selected'
+      : '';
+  const meta = [
+    group.folio ? `Folio: ${group.folio}` : '',
+    group.date || '',
+    group.status || '',
+  ].filter(Boolean);
+
+  return `
+    <section class="gallery-study-group${selectedClass}" data-gallery-study-key="${escapeHtml(group.key)}">
+      <div class="gallery-study-group-head">
+        <div>
+          <h3>${escapeHtml(group.label)}</h3>
+          <p>${meta.map(escapeHtml).join(' &middot; ') || 'Sin datos del estudio'}</p>
+        </div>
+        <span>${escapeHtml(countText(group.media.length))}</span>
+      </div>
+
+      <div class="gallery-study-media-columns">
+        ${mediaColumnHtml(videos, 'Videos', 'No hay videos en este estudio.')}
+        ${mediaColumnHtml(images, 'Imagenes', 'No hay imagenes en este estudio.')}
+      </div>
+    </section>
+  `;
+}
+
+function sortedDetailGroups(groups = []) {
+  return [...groups].sort((left, right) => {
+    const leftSelected =
+      currentDetailStudyKey &&
+      studyMatches(left, currentDetailStudyKey);
+    const rightSelected =
+      currentDetailStudyKey &&
+      studyMatches(right, currentDetailStudyKey);
+
+    if (leftSelected !== rightSelected) {
+      return leftSelected ? -1 : 1;
+    }
+
+    return 0;
+  });
+}
+
 function currentImageMedia() {
-  return (currentDetailPatient?.media || []).filter(item => item.type === 'image');
+  const images = (currentDetailPatient?.media || [])
+    .filter(item => item.type === 'image');
+
+  const studyKey =
+    currentViewerMedia?.studyKey ||
+    currentDetailStudyKey;
+
+  if (!studyKey) return images;
+
+  const sameStudy = images.filter(item =>
+    mediaMatchesStudy(item, studyKey)
+  );
+
+  return sameStudy.length ? sameStudy : images;
 }
 
 function renderPatientMedia() {
-  const videoGrid = document.getElementById('galleryVideoGrid');
-  const imageGrid = document.getElementById('galleryImageGrid');
-  const videoEmpty = document.getElementById('galleryVideoEmpty');
-  const imageEmpty = document.getElementById('galleryImageEmpty');
-  const videoCount = document.getElementById('galleryVideoCount');
-  const imageCount = document.getElementById('galleryImageCount');
+  const mediaList = document.getElementById('galleryStudyMediaList');
+  const empty = document.getElementById('galleryStudyMediaEmpty');
   const search = normalizeText(document.getElementById('galleryDetailSearch')?.value);
 
-  if (!currentDetailPatient || !videoGrid || !imageGrid || !videoEmpty || !imageEmpty) return;
+  if (!currentDetailPatient || !mediaList || !empty) return;
 
-  const media = currentDetailPatient.media || [];
-  const filteredMedia = media.filter(item => {
-    if (!search) return true;
-    return [item.file, item.study, item.date].some(value => normalizeText(value).includes(search));
-  });
-  const videos = filteredMedia.filter(item => item.type === 'video');
-  const images = filteredMedia.filter(item => item.type === 'image');
+  const groups = sortedDetailGroups(
+    currentDetailPatient.studyGroups || []
+  )
+    .map(group => ({
+      ...group,
+      media: group.media.filter(item =>
+        mediaMatchesSearch(item, search)
+      ),
+    }))
+    .filter(group =>
+      group.media.length ||
+      studyMatchesSearch(group, search)
+    );
 
-  videoGrid.innerHTML = videos.map(mediaCard).join('');
-  imageGrid.innerHTML = images.map(mediaCard).join('');
+  mediaList.innerHTML = groups.map(studyGroupHtml).join('');
+  empty.style.display = groups.length ? 'none' : 'block';
 
-  videoEmpty.style.display = videos.length ? 'none' : 'block';
-  imageEmpty.style.display = images.length ? 'none' : 'block';
-
-  if (videoCount) videoCount.textContent = countText(videos.length);
-  if (imageCount) imageCount.textContent = countText(images.length);
+  if (currentDetailStudyKey) {
+    requestAnimationFrame(() => {
+      document
+        .querySelector('.gallery-study-group.is-selected')
+        ?.scrollIntoView({
+          block: 'nearest',
+        });
+    });
+  }
 }
 
-function openPatientGallery(patientId) {
+function openPatientGallery(patientId, studyKey = '') {
   const patient = GALLERY_PATIENTS.find(item => item.id === patientId || item.patientId === patientId);
   if (!patient) return;
 
   currentDetailPatient = patient;
+  currentDetailStudyKey = String(studyKey || '');
 
   document.getElementById('galleryListView')?.classList.add('is-hidden');
   document.getElementById('galleryDetailView')?.classList.remove('is-hidden');
@@ -550,14 +1063,22 @@ function openPatientGallery(patientId) {
 
   if (name) name.textContent = patient.name;
   if (meta) {
-    meta.innerHTML = `ID: ${escapeHtml(patient.id)} &middot; ${escapeHtml(patient.age)} &middot; ${escapeHtml(patient.gender)} &middot; &Uacute;ltimo estudio: ${escapeHtml(patient.lastStudy)}`;
+    meta.innerHTML = `ID: ${escapeHtml(patient.id)} &middot; ${escapeHtml(patient.age)} &middot; ${escapeHtml(patient.gender)} &middot; ${escapeHtml(patient.doctor)} &middot; &Uacute;ltimo estudio: ${escapeHtml(patient.lastStudy)}`;
   }
   if (studies) studies.textContent = patient.detailStudies ?? patient.studies;
   if (photos) photos.textContent = imageTotal;
   if (videos) videos.textContent = videoTotal;
 
   const headSub = document.getElementById('headSub');
-  if (headSub) headSub.textContent = `Galeria de pacientes > ${patient.name}`;
+  if (headSub) {
+    const selectedGroup = patient.studyGroups?.find(group =>
+      studyMatches(group, currentDetailStudyKey)
+    );
+
+    headSub.textContent = selectedGroup
+      ? `Galeria de pacientes > ${patient.name} > ${selectedGroup.label}`
+      : `Galeria de pacientes > ${patient.name}`;
+  }
 
   renderPatientMedia();
 }
@@ -565,6 +1086,7 @@ function openPatientGallery(patientId) {
 function closePatientGallery() {
   currentDetailPatient = null;
   currentViewerMedia = null;
+  currentDetailStudyKey = '';
 
   document.getElementById('galleryImageViewer')?.classList.add('is-hidden');
   document.getElementById('galleryDetailView')?.classList.add('is-hidden');
@@ -613,8 +1135,8 @@ function renderImageViewer(mediaId) {
   if (infoId) infoId.textContent = `IMG-${String(index + 1).padStart(4, '0')}`;
   if (infoDate) infoDate.textContent = `${media.date} - ${media.time}`;
   if (infoFrame) infoFrame.textContent = media.time;
-  if (stripTitle) stripTitle.textContent = `Imagenes del estudio (${Math.min(images.length, 3)})`;
-  if (thumbs) thumbs.innerHTML = images.slice(0, 3).map((item, thumbIndex) => viewerThumb(item, thumbIndex, media.id)).join('');
+  if (stripTitle) stripTitle.textContent = `Imagenes del estudio (${images.length})`;
+  if (thumbs) thumbs.innerHTML = images.map((item, thumbIndex) => viewerThumb(item, thumbIndex, media.id)).join('');
 
   const headSub = document.getElementById('headSub');
   if (headSub && currentDetailPatient) {
@@ -689,6 +1211,10 @@ function openVideoViewer(media) {
 function openMediaViewer(mediaId) {
   const media = currentDetailPatient?.media?.find(item => item.id === mediaId);
   if (!media) return;
+
+  if (media.studyKey) {
+    currentDetailStudyKey = media.studyKey;
+  }
 
   if (media.type === 'video' && media.src) {
     openVideoViewer(media);
@@ -863,8 +1389,7 @@ export function initGaleria() {
   const applyButton = document.getElementById('galleryApplyFilters');
   const backButton = document.getElementById('galleryBackBtn');
   const detailSearch = document.getElementById('galleryDetailSearch');
-  const imageGrid = document.getElementById('galleryImageGrid');
-  const videoGrid = document.getElementById('galleryVideoGrid');
+  const mediaList = document.getElementById('galleryStudyMediaList');
   const viewerBack = document.getElementById('galleryViewerBack');
   const viewerPrev = document.getElementById('galleryViewerPrev');
   const viewerNext = document.getElementById('galleryViewerNext');
@@ -880,6 +1405,7 @@ export function initGaleria() {
   galleryCurrentPage = 1;
   currentDetailPatient = null;
   currentViewerMedia = null;
+  currentDetailStudyKey = '';
   pendingImageFilter = 'none';
   appliedImageFilter = 'none';
   defaultGallerySub = document.getElementById('headSub')?.textContent || '';
@@ -908,11 +1434,11 @@ export function initGaleria() {
   backButton?.addEventListener('click', closePatientGallery);
   detailSearch?.addEventListener('input', renderPatientMedia);
 
-  [imageGrid, videoGrid].forEach(grid => {
-    grid?.addEventListener('click', event => {
-      const button = event.target.closest('[data-view-media]');
-      if (button) openMediaViewer(button.dataset.viewMedia);
-    });
+  mediaList?.addEventListener('click', event => {
+    const button = event.target.closest('[data-view-media]');
+    if (button) {
+      openMediaViewer(button.dataset.viewMedia);
+    }
   });
 
   viewerBack?.addEventListener('click', closeImageViewer);
@@ -980,10 +1506,21 @@ export function initGaleria() {
     fillSelect('filterProcedure', uniqueValues('procedure'));
     renderGalleryPatients();
 
-    const pendingPatientId = sessionStorage.getItem(OPEN_PATIENT_STORAGE_KEY);
+    const routeParams = galleryHashParams();
+    const pendingPatientId =
+      sessionStorage.getItem(OPEN_PATIENT_STORAGE_KEY) ||
+      routeParams.get('paciente') ||
+      routeParams.get('paciente_id') ||
+      routeParams.get('patient_id');
+    const pendingStudyId =
+      sessionStorage.getItem(OPEN_STUDY_STORAGE_KEY) ||
+      routeParams.get('estudio_id') ||
+      routeParams.get('study_id');
+
     if (pendingPatientId) {
       sessionStorage.removeItem(OPEN_PATIENT_STORAGE_KEY);
-      openPatientGallery(pendingPatientId);
+      sessionStorage.removeItem(OPEN_STUDY_STORAGE_KEY);
+      openPatientGallery(pendingPatientId, pendingStudyId);
     }
   });
 }

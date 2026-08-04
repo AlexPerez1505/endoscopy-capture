@@ -5,6 +5,7 @@
 import { initDashboard } from './dashboard.js';
 import { initPacientes } from './pacientes.js';
 import { initPacienteForm } from './pacientes-form.js';
+import { initEstudioPaciente } from './estudio-paciente.js';
 import { initAgenda } from './agenda/index.js';
 import { initAgendar } from './agenda/agendar/index.js';
 
@@ -28,7 +29,6 @@ import { escapeHtml } from './html.js';
 import {
   apiBaseUrl,
   authenticatedLaravelAssetUrl,
-  clearAuthenticatedAssetCache,
   firstLaravelAssetUrl,
   laravelFetch,
 } from './laravel.js';
@@ -82,6 +82,11 @@ const HEAD = {
   pacientes: {
     title: 'Pacientes',
     sub: 'Expedientes y datos clínicos',
+  },
+
+  'estudio-paciente': {
+    title: 'Estudio del paciente',
+    sub: 'InformaciÃ³n del paciente y reporte del estudio',
   },
 
   'pacientes-crear': {
@@ -148,6 +153,7 @@ const AVAILABLE = new Set([
   'agenda',
   'agendar',
   'pacientes',
+  'estudio-paciente',
   'pacientes-crear',
   'pacientes-editar',
   'qr',
@@ -187,6 +193,9 @@ const PAGE_FILES = {
 
   pacientes:
     './pages/pacientes.html',
+
+  'estudio-paciente':
+    './pages/estudio-paciente.html',
 
   'pacientes-crear':
     './pages/pacientes/form.html',
@@ -261,7 +270,8 @@ function currentRoute() {
 function navRouteFor(route) {
   if (
     route === 'pacientes-crear' ||
-    route === 'pacientes-editar'
+    route === 'pacientes-editar' ||
+    route === 'estudio-paciente'
   ) {
     return 'pacientes';
   }
@@ -531,6 +541,12 @@ async function initializeRoute(
 
     case 'pacientes':
       await initPacientes({
+        signal,
+      });
+      break;
+
+    case 'estudio-paciente':
+      await initEstudioPaciente({
         signal,
       });
       break;
@@ -893,13 +909,62 @@ window.addEventListener(
 
 /* =========================================================
    ACTUALIZAR PACIENTES AL VOLVER
-   NOTA: pacientes.js ya registra sus propios listeners de
-   'focus'/'visibilitychange'/'online' (ver bindRealtimeEvents)
-   que llaman a syncPatientsFromLaravel con la misma condicion
-   de ruta. Tenerlos tambien aqui duplicaba cada peticion (se
-   disparaban dos sincronizaciones completas por cada cambio de
-   ventana).
 ========================================================= */
+
+window.addEventListener(
+  'focus',
+  () => {
+    if (
+      currentRoute() ===
+        'pacientes' &&
+      typeof window
+        .syncPatientsFromLaravel ===
+        'function'
+    ) {
+      window
+        .syncPatientsFromLaravel({
+          force: true,
+        })
+        .catch((error) => {
+          console.error(
+            'Error actualizando pacientes:',
+            error
+          );
+        });
+    }
+  }
+);
+
+document.addEventListener(
+  'visibilitychange',
+  () => {
+    if (
+      document.visibilityState !==
+      'visible'
+    ) {
+      return;
+    }
+
+    if (
+      currentRoute() ===
+        'pacientes' &&
+      typeof window
+        .syncPatientsFromLaravel ===
+        'function'
+    ) {
+      window
+        .syncPatientsFromLaravel({
+          force: true,
+        })
+        .catch((error) => {
+          console.error(
+            'Error sincronizando pacientes:',
+            error
+          );
+        });
+    }
+  }
+);
 
 /* =========================================================
    EVENTO DE PACIENTE GUARDADO
@@ -1243,7 +1308,7 @@ async function setHeaderAvatarPhoto(
 
     if (!localUrl) {
       throw new Error(
-        'No se devolvio una imagen de perfil usable.'
+        'Laravel no devolvió una imagen de perfil usable.'
       );
     }
 
@@ -1491,7 +1556,6 @@ if (logoutBtn) {
       }
 
       clearAuthToken();
-      clearAuthenticatedAssetCache();
 
       sessionStorage.removeItem(
         ACCOUNT_NAME_STORAGE_KEY

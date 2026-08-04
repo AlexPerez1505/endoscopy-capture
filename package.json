@@ -1,10 +1,11 @@
 {
   "name": "enclaii-desktop",
   "private": true,
-  "version": "0.1.11",
+  "version": "0.2.3",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
+    "build": "tauri build",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:duplicated-helpers": "node scripts/check-duplicated-helpers.js",

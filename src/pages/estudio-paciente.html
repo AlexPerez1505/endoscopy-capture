@@ -1,0 +1,187 @@
+<section class="study-detail-page rise d2">
+  <div class="study-detail-top">
+    <div>
+      <h2 id="studyDetailTitle">Estudio del paciente</h2>
+      <p id="studyDetailSubtitle">Cargando estudio...</p>
+    </div>
+
+    <button class="study-back-btn" id="studyBackBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      <span>Volver a pacientes</span>
+    </button>
+  </div>
+
+  <div class="study-tabs" role="tablist" aria-label="Apartados del estudio">
+    <button class="study-tab active" type="button" role="tab" aria-selected="true" data-study-tab="patient">Paciente</button>
+    <button class="study-tab" type="button" role="tab" aria-selected="false" data-study-tab="report">Reporte</button>
+  </div>
+
+  <div class="study-status" id="studyDetailStatus" hidden></div>
+
+  <section class="study-tab-panel active" id="studyTabPatient" role="tabpanel">
+    <div class="study-patient-layout">
+      <article class="study-patient-card">
+        <h3>Informaci&oacute;n del paciente</h3>
+
+        <div class="study-patient-body">
+          <div class="study-patient-photo" id="studyPatientPhoto">
+            <span id="studyPatientInitials">PX</span>
+          </div>
+
+          <div class="study-info-grid">
+            <div class="study-info-item">
+              <span>Nombre completo</span>
+              <strong id="studyPatientName">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Edad</span>
+              <strong id="studyPatientAge">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Sexo</span>
+              <strong id="studyPatientGender">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Fecha nacimiento</span>
+              <strong id="studyPatientBirthDate">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Folio</span>
+              <strong id="studyPatientFolio">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Tel&eacute;fono</span>
+              <strong id="studyPatientPhone">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Correo electr&oacute;nico</span>
+              <strong id="studyPatientEmail">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Procedimiento</span>
+              <strong id="studyPatientProcedure">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Fecha de registro</span>
+              <strong id="studyPatientCreatedAt">--</strong>
+            </div>
+            <div class="study-info-item">
+              <span>Estudio seleccionado</span>
+              <strong id="studySelectedLabel">--</strong>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="study-action-card">
+        <button class="study-start-btn" id="studyStartBtn" type="button">
+          <span class="study-start-icon" aria-hidden="true"></span>
+          <span>Iniciar estudio</span>
+        </button>
+      </aside>
+    </div>
+  </section>
+
+  <section class="study-tab-panel" id="studyTabReport" role="tabpanel">
+    <div class="study-gallery-head">
+      <div>
+        <h3>Reporte del estudio</h3>
+        <p id="studyGallerySubtitle">Fotos, videos y reportes del estudio seleccionado.</p>
+      </div>
+
+      <div class="study-gallery-actions">
+        <button class="study-share-btn" id="studyShareBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+            <polyline points="3 7 12 13 21 7"></polyline>
+          </svg>
+          <span>Compartir por correo</span>
+        </button>
+
+        <label class="study-gallery-search" for="studyGallerySearch">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input id="studyGallerySearch" type="search" placeholder="Buscar archivo o reporte...">
+        </label>
+      </div>
+    </div>
+
+    <div class="study-gallery-groups" id="studyGalleryGroups"></div>
+    <p class="study-empty" id="studyGalleryEmpty">Este estudio no tiene fotos, videos ni reportes guardados.</p>
+  </section>
+
+  <div class="study-share-modal" id="studyShareModal" hidden>
+    <div class="study-share-backdrop" data-close-study-share></div>
+    <form class="study-share-dialog" id="studyShareForm">
+      <div class="study-share-head">
+        <div>
+          <h3>Compartir estudio por correo</h3>
+          <p>Envia reportes PDF, capturas JPG/PNG y videos de este estudio.</p>
+        </div>
+
+        <button class="study-share-close" type="button" data-close-study-share aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="study-share-body">
+        <div class="study-share-summary">
+          <span id="studyShareReportsCount">0 reporte(s)</span>
+          <span id="studyShareImagesCount">0 imagen(es)</span>
+          <span id="studyShareVideosCount">0 video(s)</span>
+        </div>
+
+        <label class="study-share-field" for="studyShareRecipients">
+          <span>Destinatarios</span>
+          <input id="studyShareRecipients" type="text" inputmode="email" autocomplete="email" placeholder="correo@ejemplo.com, otro@ejemplo.com">
+        </label>
+
+        <label class="study-share-field" for="studyShareSubject">
+          <span>Asunto</span>
+          <input id="studyShareSubject" type="text">
+        </label>
+
+        <label class="study-share-field" for="studyShareMessage">
+          <span>Mensaje</span>
+          <textarea id="studyShareMessage" rows="5"></textarea>
+        </label>
+
+        <div class="study-share-status" id="studyShareStatus" hidden></div>
+      </div>
+
+      <div class="study-share-actions">
+        <button class="study-share-cancel" type="button" data-close-study-share>Cancelar</button>
+        <button class="study-share-submit" id="studyShareSubmitBtn" type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+            <polyline points="3 7 12 13 21 7"></polyline>
+          </svg>
+          <span id="studyShareSubmitText">Enviar correo</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="study-media-viewer" id="studyMediaViewer" hidden>
+    <div class="study-media-backdrop" data-close-study-media></div>
+    <div class="study-media-dialog">
+      <button class="study-media-close" type="button" data-close-study-media aria-label="Cerrar visor">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+
+      <div class="study-media-body" id="studyMediaBody"></div>
+      <div class="study-media-meta" id="studyMediaMeta"></div>
+    </div>
+  </div>
+</section>

@@ -139,17 +139,23 @@
 .tab-content{display:none}
 .tab-content.active{display:block}
 .historial-section h4{font-size:14px;font-weight:600;margin-bottom:16px;color:var(--txt)}
-.historial-list{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
-.historial-item{display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--panel-2);border:1px solid var(--stroke);border-radius:var(--r-md);transition:all 150ms ease}
+.historial-list{display:flex;flex-direction:column;gap:12px;max-height:460px;margin-bottom:20px;overflow-y:auto;padding-right:4px}
+.historial-item{width:100%;display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--panel-2);border:1px solid var(--stroke);border-radius:var(--r-md);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:all 150ms ease}
 .historial-item:hover{border-color:var(--stroke-strong);background:var(--card)}
 .historial-icon{width:36px;height:36px;border-radius:50%;background:rgba(56,199,244,.15);display:grid;place-items:center;flex:none}
 .historial-icon svg{width:18px;height:18px;color:var(--cyan)}
-.historial-info{flex:1}
+.historial-info{flex:1;min-width:0}
 .historial-title{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:4px}
-.historial-doctor{font-size:12px;color:var(--txt-soft)}
-.historial-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.historial-doctor{font-size:12px;color:var(--txt-soft);line-height:1.4}
+.historial-right{display:flex;flex:none;flex-direction:column;align-items:flex-end;gap:6px;min-width:82px}
 .historial-date{font-size:12px;color:var(--txt-soft)}
+.historial-status{display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:4px 10px;border-radius:7px;background:rgba(43,127,255,.14);color:#8db6ff;font-size:11px;font-weight:700;white-space:nowrap}
+.historial-status.is-in-progress{background:rgba(245,158,11,.16);color:#fbbf24}
+.historial-status.is-completed{background:rgba(34,197,94,.15);color:#86efac}
+.historial-status.is-waiting{background:rgba(148,163,184,.14);color:#cbd5e1}
+.historial-status.is-cancelled{background:rgba(248,72,85,.14);color:#ff7d88}
 .btn-view-all{width:100%;padding:12px;border-radius:var(--r-md);border:1px solid var(--stroke);background:transparent;color:var(--cyan);font-size:13px;font-weight:600;cursor:pointer;transition:all 150ms ease;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-view-all[hidden]{display:none}
 .btn-view-all:hover{background:rgba(56,199,244,.1);border-color:var(--cyan)}
 
 /* Ordenar / filtro estado (header de tabla) */

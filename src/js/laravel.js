@@ -325,7 +325,7 @@ function normalizeLaravelAssetPath(
     !DIRECT_PUBLIC_PATH_PREFIXES.some(
       (prefix) => path.startsWith(prefix)
     ) &&
-    /\.(avif|bmp|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(path)
+    /\.(avif|bmp|gif|jpe?g|png|svg|webp|mp4|m4v|mov|webm|avi|mkv)(?:[?#].*)?$/i.test(path)
   ) {
     path = `storage/${path}`;
   }

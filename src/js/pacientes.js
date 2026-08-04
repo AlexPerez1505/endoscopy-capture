@@ -12,6 +12,8 @@ import {
   REPORT_PATIENT_ID_STORAGE_KEY,
   STUDY_PATIENT_ID_STORAGE_KEY,
   STUDY_PATIENT_NAME_STORAGE_KEY,
+  STUDY_ID_STORAGE_KEY,
+  STUDY_LABEL_STORAGE_KEY,
   PATIENTS_REFRESH_STORAGE_KEY,
 } from './storage-keys.js';
 
@@ -60,7 +62,19 @@ function endpoint(path = '') {
   return `${base}${cleanPath ? `/${cleanPath}` : ''}`;
 }
 
-async function request(path = '', options = {}) {
+function galleryEndpoint(path = '') {
+  const cleanPath = String(path || '').replace(/^\/+/, '');
+  const base =
+    `${apiBaseUrl()}/api/tauri/galeria`;
+
+  if (cleanPath.startsWith('?')) {
+    return `${base}${cleanPath}`;
+  }
+
+  return `${base}${cleanPath ? `/${cleanPath}` : ''}`;
+}
+
+async function requestUrl(url, options = {}) {
   const authToken = getAuthToken();
 
   if (!authToken) {
@@ -72,7 +86,7 @@ async function request(path = '', options = {}) {
     throw error;
   }
 
-  const response = await laravelFetch(endpoint(path), {
+  const response = await laravelFetch(url, {
     ...options,
 
     headers: {
@@ -117,6 +131,10 @@ async function request(path = '', options = {}) {
   return payload;
 }
 
+async function request(path = '', options = {}) {
+  return requestUrl(endpoint(path), options);
+}
+
 function initials(name) {
   const words = String(name || '')
     .trim()
@@ -154,20 +172,354 @@ function formatDate(value) {
   }).format(date);
 }
 
+function patientStudyList(patient = {}) {
+  if (Array.isArray(patient.estudios)) {
+    return patient.estudios;
+  }
+
+  if (Array.isArray(patient.estudios?.data)) {
+    return patient.estudios.data;
+  }
+
+  if (Array.isArray(patient.studies)) {
+    return patient.studies;
+  }
+
+  if (Array.isArray(patient.studies?.data)) {
+    return patient.studies.data;
+  }
+
+  if (Array.isArray(patient.historial)) {
+    return patient.historial;
+  }
+
+  if (Array.isArray(patient.historial?.data)) {
+    return patient.historial.data;
+  }
+
+  if (Array.isArray(patient.history)) {
+    return patient.history;
+  }
+
+  if (Array.isArray(patient.history?.data)) {
+    return patient.history.data;
+  }
+
+  if (Array.isArray(patient.estudios_realizados)) {
+    return patient.estudios_realizados;
+  }
+
+  if (Array.isArray(patient.estudios_realizados?.data)) {
+    return patient.estudios_realizados.data;
+  }
+
+  if (Array.isArray(patient.study_summaries)) {
+    return patient.study_summaries;
+  }
+
+  if (Array.isArray(patient.studySummaries)) {
+    return patient.studySummaries;
+  }
+
+  if (Array.isArray(patient.study_groups)) {
+    return patient.study_groups;
+  }
+
+  if (Array.isArray(patient.studyGroups)) {
+    return patient.studyGroups;
+  }
+
+  return null;
+}
+
+function optionalCount(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const count = Number(value);
+
+  return Number.isFinite(count) && count >= 0
+    ? count
+    : null;
+}
+
+function patientStudyCount(patient = {}) {
+  return (
+    optionalCount(patient.estudios_count) ??
+    optionalCount(patient.studies_count) ??
+    optionalCount(patient.historial_count) ??
+    optionalCount(patient.history_count) ??
+    optionalCount(patient.detailStudies) ??
+    optionalCount(patient.detail_studies) ??
+    optionalCount(patient.estudios?.total) ??
+    optionalCount(patient.studies?.total) ??
+    optionalCount(patient.historial?.total) ??
+    optionalCount(patient.history?.total) ??
+    optionalCount(patient.estudios_realizados?.total)
+  );
+}
+
+function arrayFrom(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (Array.isArray(value?.data)) {
+    return value.data;
+  }
+
+  return [];
+}
+
+function mediaStudyList(source = {}) {
+  const media = [
+    ...arrayFrom(source.media),
+    ...arrayFrom(source.archivos),
+    ...arrayFrom(source.files),
+    ...arrayFrom(source.capturas),
+    ...arrayFrom(source.captures),
+    ...arrayFrom(source.imagenes),
+    ...arrayFrom(source.images),
+    ...arrayFrom(source.fotos),
+    ...arrayFrom(source.photos),
+    ...arrayFrom(source.videos),
+  ];
+
+  const groups = new Map();
+
+  media.forEach((item, index) => {
+    if (!item || typeof item !== 'object') {
+      return;
+    }
+
+    const id =
+      item.estudio_id ||
+      item.study_id ||
+      item.session_id ||
+      '';
+    const folio =
+      item.estudio_folio ||
+      item.study_folio ||
+      item.folio_estudio ||
+      '';
+    const label =
+      item.procedimiento ||
+      item.study_label ||
+      item.estudio ||
+      item.study ||
+      item.tipo ||
+      '';
+    const date =
+      item.fecha_estudio ||
+      item.study_date ||
+      item.date ||
+      item.fecha ||
+      item.created_at ||
+      '';
+    const key = String(
+      id ||
+      folio ||
+      (
+        label || date
+          ? `${label}-${date || index}`
+          : ''
+      )
+    ).trim();
+
+    if (!key) {
+      return;
+    }
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        id,
+        folio,
+        procedimiento: label,
+        fecha: date,
+        estado:
+          item.estado_estudio ||
+          item.study_status ||
+          item.estado ||
+          item.status ||
+          '',
+        archivos_count: 0,
+      });
+    }
+
+    groups.get(key).archivos_count += 1;
+  });
+
+  return [...groups.values()];
+}
+
+function availableStudyList(source = {}) {
+  const directStudies = patientStudyList(source);
+  const mediaStudies = mediaStudyList(source);
+
+  if (!directStudies?.length) {
+    return mediaStudies;
+  }
+
+  if (!mediaStudies.length) {
+    return directStudies;
+  }
+
+  const byKey = new Map();
+
+  [...directStudies, ...mediaStudies].forEach((study, index) => {
+    const normalized = normalizeStudy(study);
+    const key = String(
+      normalized.id ||
+      normalized.folio ||
+      `${normalized.tipo}-${normalized.fecha || index}`
+    );
+
+    if (!byKey.has(key)) {
+      byKey.set(key, study);
+      return;
+    }
+
+    byKey.set(key, {
+      ...byKey.get(key),
+      ...study,
+    });
+  });
+
+  return [...byKey.values()];
+}
+
+function studyFilesCount(study = {}) {
+  const directCount =
+    optionalCount(study.archivos_count) ??
+    optionalCount(study.files_count) ??
+    optionalCount(study.media_count) ??
+    optionalCount(study.capturas_count);
+
+  if (directCount !== null) {
+    return directCount;
+  }
+
+  const imageCount =
+    optionalCount(study.imagenes_count) ??
+    optionalCount(study.images_count) ??
+    optionalCount(study.fotos_count) ??
+    optionalCount(study.photos_count) ??
+    0;
+
+  const videoCount =
+    optionalCount(study.videos_count) ??
+    optionalCount(study.video_count) ??
+    0;
+
+  if (imageCount + videoCount > 0) {
+    return imageCount + videoCount;
+  }
+
+  const collections = [
+    study.archivos,
+    study.files,
+    study.media,
+    study.capturas,
+  ];
+
+  for (const collection of collections) {
+    if (Array.isArray(collection)) {
+      return collection.length;
+    }
+  }
+
+  return null;
+}
+
+function studyFolio(study = {}) {
+  const id =
+    study.id ||
+    study.estudio_id ||
+    study.study_id;
+
+  return (
+    study.folio ||
+    study.codigo ||
+    study.code ||
+    study.estudio_folio ||
+    study.study_folio ||
+    study.numero_folio ||
+    study.numero ||
+    (
+      id
+        ? `E-${String(id).padStart(4, '0')}`
+        : ''
+    )
+  );
+}
+
+function studyDateValue(study = {}) {
+  return (
+    study.fecha ||
+    study.fecha_estudio ||
+    study.study_date ||
+    study.date ||
+    study.created_at ||
+    study.updated_at ||
+    ''
+  );
+}
+
+function studyTimestamp(study = {}) {
+  const value = studyDateValue(study);
+
+  if (!value) {
+    return 0;
+  }
+
+  const date = new Date(
+    String(value).length === 10
+      ? `${value}T00:00:00`
+      : value
+  );
+
+  return Number.isNaN(date.getTime())
+    ? 0
+    : date.getTime();
+}
+
+function sortStudiesByDate(studies = []) {
+  return [...studies].sort(
+    (left, right) =>
+      studyTimestamp(right) - studyTimestamp(left)
+  );
+}
+
 function normalizeStudy(study = {}) {
   return {
-    id: study.id,
+    id:
+      study.id ||
+      study.estudio_id ||
+      study.study_id,
+    folio: studyFolio(study),
     tipo:
       study.procedimiento ||
+      study.procedure ||
+      study.nombre ||
+      study.nombre_estudio ||
+      study.study_label ||
+      study.label ||
+      study.estudio ||
       study.tipo ||
       'Estudio',
-    fecha:
-      study.fecha ||
-      study.created_at ||
-      '',
+    fecha: studyDateValue(study),
     estado:
       study.estado ||
+      study.estado_estudio ||
+      study.estatus ||
+      study.study_status ||
+      study.studyStatus ||
       study.status ||
+      '',
+    archivos_count: studyFilesCount(study),
+    updated_at:
+      study.updated_at ||
       '',
   };
 }
@@ -211,6 +563,7 @@ function patientPhotoUrl(patient = {}) {
 function normalizePatient(patient = {}) {
   const name =
     patient.nombre_completo ||
+    patient.nombre ||
     patient.name ||
     'Paciente sin nombre';
 
@@ -219,11 +572,46 @@ function normalizePatient(patient = {}) {
     patient.latest_study ||
     null;
 
-  const studies = Array.isArray(patient.estudios)
-    ? patient.estudios.map(normalizeStudy)
+  const rawStudies = patientStudyList(patient);
+  const hasExplicitStudyList = rawStudies !== null;
+  const usesLatestStudyFallback =
+    !hasExplicitStudyList && Boolean(latest);
+
+  const studies = rawStudies
+    ? sortStudiesByDate(
+        rawStudies.map(normalizeStudy)
+      )
     : latest
       ? [normalizeStudy(latest)]
       : [];
+
+  const latestNormalizedStudy =
+    studies[0] || null;
+
+  const explicitStudyCount =
+    patientStudyCount(patient);
+  const hasExplicitStudyCount =
+    explicitStudyCount !== null ||
+    patient.studies_count_is_explicit === true;
+
+  const totalStudies =
+    explicitStudyCount ??
+    studies.length;
+
+  const hasCompleteHistory =
+    Boolean(patient.history_loaded) ||
+    (
+      hasExplicitStudyList &&
+      (
+        explicitStudyCount === null ||
+        studies.length >= totalStudies
+      )
+    ) ||
+    (
+      !hasExplicitStudyList &&
+      !latest &&
+      explicitStudyCount === 0
+    );
 
   return {
     ...patient,
@@ -289,26 +677,41 @@ function normalizePatient(patient = {}) {
 
     status:
       latest?.estado ||
+      latest?.estatus ||
       patient.estado ||
       patient.status ||
+      latestNormalizedStudy?.estado ||
       '',
 
     study_date:
       latest?.fecha ||
+      latest?.fecha_estudio ||
+      latest?.study_date ||
       latest?.created_at ||
+      latestNormalizedStudy?.fecha ||
       '',
 
     study_type:
       latest?.procedimiento ||
+      latest?.procedure ||
+      latest?.nombre ||
+      latest?.nombre_estudio ||
+      latest?.study_label ||
+      latest?.label ||
+      latest?.estudio ||
       latest?.tipo ||
       patient.procedimiento ||
+      patient.procedure ||
+      latestNormalizedStudy?.tipo ||
       '',
 
     estudios: studies,
 
-    estudios_count:
-      patient.estudios_count ??
-      studies.length,
+    estudios_count: totalStudies,
+    studies_count_is_explicit: hasExplicitStudyCount,
+
+    history_loaded: hasCompleteHistory,
+    history_from_latest: usesLatestStudyFallback,
 
     updated_at:
       patient.updated_at ||
@@ -430,6 +833,433 @@ function normalizePayload(payload) {
   }
 
   return list.map(normalizePatient);
+}
+
+function galleryPatientsPayload(payload) {
+  const list =
+    payload?.patients ||
+    payload?.pacientes ||
+    payload?.data?.patients ||
+    payload?.data?.pacientes ||
+    payload?.data?.data ||
+    payload?.data;
+
+  if (Array.isArray(list)) {
+    return list;
+  }
+
+  const single =
+    payload?.patient ||
+    payload?.paciente ||
+    payload?.data?.patient ||
+    payload?.data?.paciente ||
+    null;
+
+  return single ? [single] : [];
+}
+
+function compactIdentity(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '');
+}
+
+function identitiesMatch(left, right) {
+  const leftValue = compactIdentity(left);
+  const rightValue = compactIdentity(right);
+
+  return Boolean(
+    leftValue &&
+    rightValue &&
+    leftValue === rightValue
+  );
+}
+
+function patientStrongIdentityValues(patient = {}) {
+  return [
+    patient.id,
+    patient.patient_id,
+    patient.paciente_id,
+    patient.folio,
+    patient.identificacion,
+  ].filter(Boolean);
+}
+
+function patientNameValue(patient = {}) {
+  return (
+    patient.nombre_completo ||
+    patient.nombre ||
+    patient.name ||
+    ''
+  );
+}
+
+function patientPayloadMatches(patient, payload) {
+  const patientStrongValues =
+    patientStrongIdentityValues(patient);
+  const payloadStrongValues =
+    patientStrongIdentityValues(payload);
+
+  if (
+    patientStrongValues.some((left) =>
+      payloadStrongValues.some((right) =>
+        identitiesMatch(left, right)
+      )
+    )
+  ) {
+    return true;
+  }
+
+  return identitiesMatch(
+    patientNameValue(patient),
+    patientNameValue(payload)
+  );
+}
+
+function findGalleryPatient(patient, galleryPatients = []) {
+  return galleryPatients.find((payload) =>
+    patientPayloadMatches(patient, payload)
+  ) || null;
+}
+
+function patientHistoryNeedsMore(patient = {}) {
+  if (!patient?.id) {
+    return false;
+  }
+
+  const studies = Array.isArray(patient.estudios)
+    ? patient.estudios
+    : [];
+
+  if (patient.history_from_latest) {
+    return !patient.history_loaded;
+  }
+
+  const expectedCount =
+    optionalCount(patient.estudios_count);
+
+  if (
+    expectedCount !== null &&
+    patient.studies_count_is_explicit === true
+  ) {
+    return studies.length < expectedCount;
+  }
+
+  return (
+    !patient.history_loaded ||
+    Boolean(patient.history_from_latest) ||
+    (
+      studies.length <= 1 &&
+      !patient.history_gallery_loaded
+    )
+  );
+}
+
+function studyPayload(payload, patient) {
+  if (!payload) {
+    return null;
+  }
+
+  if (Array.isArray(payload)) {
+    return {
+      ...patient,
+      estudios: payload,
+      estudios_count: payload.length,
+    };
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return {
+      ...patient,
+      estudios: payload.data,
+      estudios_count:
+        patientStudyCount(payload) ??
+        payload.data.length,
+    };
+  }
+
+  if (
+    availableStudyList(payload).length ||
+    patientStudyList(payload) !== null
+  ) {
+    return payload;
+  }
+
+  return patientDetailPayload(payload);
+}
+
+function applyPatientHistoryPayload(patient, payload) {
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+
+  const studiesFromPayload =
+    availableStudyList(payload);
+  const hasStudyPayload =
+    studiesFromPayload.length > 0 ||
+    patientStudyList(payload) !== null;
+  const expectedCount =
+    patientStudyCount(payload) ??
+    (
+      patient.studies_count_is_explicit === true
+        ? optionalCount(patient.estudios_count)
+        : null
+    );
+
+  const source = {
+    ...patient,
+    ...payload,
+  };
+
+  if (expectedCount === null) {
+    delete source.estudios_count;
+    delete source.studies_count;
+    delete source.historial_count;
+    delete source.history_count;
+    delete source.detailStudies;
+    delete source.detail_studies;
+  }
+
+  const normalized = normalizePatient(source);
+
+  if (hasStudyPayload) {
+    normalized.estudios = sortStudiesByDate(
+      studiesFromPayload.map(normalizeStudy)
+    );
+  } else {
+    normalized.estudios = Array.isArray(patient.estudios)
+      ? patient.estudios
+      : [];
+  }
+
+  normalized.estudios_count =
+    expectedCount ??
+    normalized.estudios.length;
+  normalized.studies_count_is_explicit =
+    expectedCount !== null;
+
+  normalized.history_from_latest =
+    !hasStudyPayload &&
+    Boolean(patient.history_from_latest);
+
+  normalized.history_loaded =
+    optionalCount(normalized.estudios_count) !== null
+      ? normalized.estudios.length >= normalized.estudios_count
+      : hasStudyPayload;
+
+  Object.assign(patient, normalized);
+  selectedPatient = patient;
+}
+
+async function loadPatientHistoryFromGallery(patient) {
+  const patientId =
+    encodeURIComponent(patient.id);
+  const patientFolio =
+    patient.folio && patient.folio !== 'Sin folio'
+      ? encodeURIComponent(patient.folio)
+      : '';
+  const candidates = [
+    galleryEndpoint(`?paciente_id=${patientId}`),
+    galleryEndpoint(`?patient_id=${patientId}`),
+    `${apiBaseUrl()}/api/tauri/estudios?paciente_id=${patientId}`,
+    `${apiBaseUrl()}/api/tauri/estudios?patient_id=${patientId}`,
+    endpoint(`${patientId}/estudios`),
+    endpoint(`${patientId}/historial`),
+    galleryEndpoint(),
+  ];
+
+  if (patientFolio) {
+    candidates.splice(
+      2,
+      0,
+      galleryEndpoint(`?folio=${patientFolio}`)
+    );
+  }
+
+  let bestPayload = null;
+  let bestCount = Array.isArray(patient.estudios)
+    ? patient.estudios.length
+    : 0;
+
+  for (const url of candidates) {
+    try {
+      const payload = await requestUrl(url);
+      const galleryPatient =
+        findGalleryPatient(
+          patient,
+          galleryPatientsPayload(payload)
+        );
+      const candidate =
+        studyPayload(galleryPatient || payload, patient);
+
+      if (!candidate) {
+        continue;
+      }
+
+      const count =
+        availableStudyList(candidate).length;
+
+      if (count > bestCount) {
+        bestPayload = candidate;
+        bestCount = count;
+      }
+
+      const expectedCount =
+        optionalCount(patient.estudios_count);
+
+      if (
+        expectedCount === null ||
+        bestCount >= expectedCount
+      ) {
+        break;
+      }
+    } catch (error) {
+      console.debug(
+        'Fuente de historial no disponible:',
+        url,
+        error
+      );
+    }
+  }
+
+  patient.history_gallery_loaded = true;
+
+  if (bestPayload) {
+    applyPatientHistoryPayload(patient, bestPayload);
+    patient.history_gallery_loaded = true;
+  }
+}
+
+function patientDetailPayload(payload) {
+  if (!payload || Array.isArray(payload)) {
+    return null;
+  }
+
+  const withStudyPayload = (detail, source) => {
+    if (!detail || Array.isArray(detail)) {
+      return detail;
+    }
+
+    const sourceStudies = patientStudyList(source);
+    const detailStudies = patientStudyList(detail);
+    const sourceCount = patientStudyCount(source);
+    const detailCount = patientStudyCount(detail);
+    const merged = { ...detail };
+
+    if (sourceStudies && !detailStudies) {
+      merged.estudios = sourceStudies;
+    }
+
+    if (sourceCount !== null && detailCount === null) {
+      merged.estudios_count = sourceCount;
+    }
+
+    return merged;
+  };
+
+  if (payload.paciente) {
+    return withStudyPayload(
+      payload.paciente,
+      payload
+    );
+  }
+
+  if (payload.patient) {
+    return withStudyPayload(
+      payload.patient,
+      payload
+    );
+  }
+
+  if (payload.data?.paciente) {
+    return withStudyPayload(
+      payload.data.paciente,
+      payload.data
+    );
+  }
+
+  if (payload.data?.patient) {
+    return withStudyPayload(
+      payload.data.patient,
+      payload.data
+    );
+  }
+
+  if (payload.data && !Array.isArray(payload.data)) {
+    return withStudyPayload(
+      payload.data,
+      payload.data
+    );
+  }
+
+  return withStudyPayload(payload, payload);
+}
+
+async function loadFullPatientHistory(patient) {
+  if (!patient?.id || !patientHistoryNeedsMore(patient)) {
+    return;
+  }
+
+  try {
+    const payload = await request(
+      encodeURIComponent(patient.id)
+    );
+
+    if (
+      String(selectedPatient?.id || '') !==
+      String(patient.id)
+    ) {
+      return;
+    }
+
+    const detail =
+      patientDetailPayload(payload);
+
+    if (detail) {
+      applyPatientHistoryPayload(patient, detail);
+    }
+  } catch (error) {
+    console.warn(
+      'No se pudo cargar el detalle del historial del paciente:',
+      error
+    );
+  }
+
+  if (
+    String(selectedPatient?.id || '') !==
+    String(patient.id)
+  ) {
+    return;
+  }
+
+  if (patientHistoryNeedsMore(patient)) {
+    try {
+      await loadPatientHistoryFromGallery(patient);
+    } catch (error) {
+      console.warn(
+        'No se pudo completar el historial desde galeria:',
+        error
+      );
+    }
+  }
+
+  if (
+    String(selectedPatient?.id || '') !==
+    String(patient.id)
+  ) {
+    return;
+  }
+
+  setPanelText(
+    'panelLastStudy',
+    patient.study_type || 'Sin estudios'
+  );
+  setPanelText(
+    'panelTotalStudies',
+    patient.estudios_count
+  );
+  renderHistory(patient);
 }
 
 // Algunas fotos de Laravel llegan con URLs firmadas (token/expiración que
@@ -722,9 +1552,20 @@ function normalizeStatus(status) {
   const statuses = {
     completado: 'completed',
     completed: 'completed',
+    finalizado: 'completed',
     espera: 'waiting',
     esperando: 'waiting',
+    pendiente: 'waiting',
     waiting: 'waiting',
+    'en proceso': 'in_progress',
+    en_proceso: 'in_progress',
+    proceso: 'in_progress',
+    procesando: 'in_progress',
+    activo: 'in_progress',
+    active: 'in_progress',
+    progress: 'in_progress',
+    in_progress: 'in_progress',
+    'in-progress': 'in_progress',
     cancelado: 'cancelled',
     cancelled: 'cancelled',
   };
@@ -736,8 +1577,22 @@ function statusLabel(status) {
   return {
     completed: 'Completado',
     waiting: 'En espera',
+    in_progress: 'En proceso',
     cancelled: 'Cancelado',
   }[status] || '';
+}
+
+function humanizeStatus(status) {
+  const value = String(status || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!value) {
+    return '';
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function patientAvatarHtml(patient) {
@@ -1260,10 +2115,138 @@ function openPanel(index) {
   }
 
   renderHistory(patient);
+  loadFullPatientHistory(patient);
 
   document
     .getElementById('contentWrapper')
     ?.classList.add('panel-open');
+}
+
+function studyFilesLabel(count) {
+  const value = optionalCount(count);
+
+  if (value === null) {
+    return '';
+  }
+
+  return `${value} archivo(s)`;
+}
+
+function studyStatusText(status) {
+  return (
+    statusLabel(normalizeStatus(status)) ||
+    humanizeStatus(status)
+  );
+}
+
+function studyStatusClass(status) {
+  const normalized = normalizeStatus(status);
+
+  return normalized
+    ? `is-${normalized.replace(/_/g, '-')}`
+    : '';
+}
+
+function studyNavigationKey(study = {}) {
+  return String(
+    study?.id ||
+    study?.estudio_id ||
+    study?.study_id ||
+    study?.folio ||
+    ''
+  ).trim();
+}
+
+function studyByKeyOrIndex(keyOrIndex, fallbackIndex = null) {
+  const studies = Array.isArray(selectedPatient?.estudios)
+    ? selectedPatient.estudios
+    : [];
+
+  const key = String(keyOrIndex || '').trim();
+
+  if (key) {
+    const matchingStudy = studies.find(
+      (study) => studyNavigationKey(study) === key
+    );
+
+    if (matchingStudy) {
+      return matchingStudy;
+    }
+  }
+
+  if (Number.isInteger(fallbackIndex)) {
+    return studies[fallbackIndex] || null;
+  }
+
+  const normalizedIndex = Number(keyOrIndex);
+
+  if (Number.isInteger(normalizedIndex)) {
+    return studies[normalizedIndex] || null;
+  }
+
+  return null;
+}
+
+function navigateInsideApp(route) {
+  if (typeof window.enclaiiNavigate === 'function') {
+    window.enclaiiNavigate(route);
+    return;
+  }
+
+  window.location.hash = route;
+}
+
+function openStudyDetail(keyOrIndex, fallbackIndex = null) {
+  if (!selectedPatient?.id) {
+    return;
+  }
+
+  const study =
+    studyByKeyOrIndex(keyOrIndex, fallbackIndex);
+
+  const studyKey =
+    studyNavigationKey(study) ||
+    String(keyOrIndex || '').trim();
+
+  const params = new URLSearchParams({
+    paciente: String(selectedPatient.id),
+  });
+
+  if (studyKey) {
+    params.set('estudio_id', String(studyKey));
+  }
+
+  sessionStorage.setItem(
+    STUDY_PATIENT_ID_STORAGE_KEY,
+    String(selectedPatient.id)
+  );
+
+  sessionStorage.setItem(
+    STUDY_PATIENT_NAME_STORAGE_KEY,
+    selectedPatient.name
+  );
+
+  if (studyKey) {
+    sessionStorage.setItem(
+      STUDY_ID_STORAGE_KEY,
+      String(studyKey)
+    );
+  } else {
+    sessionStorage.removeItem(
+      STUDY_ID_STORAGE_KEY
+    );
+  }
+
+  if (study?.tipo) {
+    sessionStorage.setItem(
+      STUDY_LABEL_STORAGE_KEY,
+      study.tipo
+    );
+  }
+
+  navigateInsideApp(
+    `estudio-paciente?${params.toString()}`
+  );
 }
 
 function renderHistory(patient) {
@@ -1273,11 +2256,21 @@ function renderHistory(patient) {
   const empty =
     document.getElementById('historialEmpty');
 
+  const studies = Array.isArray(patient.estudios)
+    ? patient.estudios
+    : [];
+
+  const totalStudies =
+    optionalCount(patient.estudios_count) ??
+    studies.length;
+
+  setPanelText('panelHistoryCount', totalStudies);
+
   if (!list || !empty) {
     return;
   }
 
-  if (!patient.estudios.length) {
+  if (!studies.length) {
     list.innerHTML = '';
     empty.style.display = 'block';
     return;
@@ -1285,25 +2278,59 @@ function renderHistory(patient) {
 
   empty.style.display = 'none';
 
-  list.innerHTML = patient.estudios
-    .slice(0, 5)
-    .map((study) => `
-      <div class="historial-item">
+  list.innerHTML = studies
+    .map((study, index) => {
+      const filesLabel =
+        studyFilesLabel(study.archivos_count);
+      const statusText =
+        studyStatusText(study.estado);
+      const statusClass =
+        studyStatusClass(study.estado);
+      const metaParts = [
+        study.folio
+          ? `Folio: ${study.folio}`
+          : 'Sin folio',
+        filesLabel,
+      ].filter(Boolean);
+
+      return `
+      <button
+        type="button"
+        class="historial-item"
+        data-open-study-gallery="${escapeHtml(studyNavigationKey(study))}"
+        data-open-study-index="${index}"
+      >
+        <div class="historial-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/>
+            <path d="M9 22h6"/>
+          </svg>
+        </div>
+
         <div class="historial-info">
           <div class="historial-title">
             ${escapeHtml(study.tipo)}
           </div>
 
           <div class="historial-doctor">
-            ${escapeHtml(patient.medico)}
+            ${metaParts.map(escapeHtml).join(' &middot; ')}
           </div>
         </div>
 
-        <div class="historial-date">
-          ${escapeHtml(formatDate(study.fecha))}
+        <div class="historial-right">
+          <div class="historial-date">
+            ${escapeHtml(formatDate(study.fecha))}
+          </div>
+
+          ${
+            statusText
+              ? `<span class="historial-status ${statusClass}">${escapeHtml(statusText)}</span>`
+              : ''
+          }
         </div>
-      </div>
-    `)
+      </button>
+    `;
+    })
     .join('');
 }
 
@@ -1458,6 +2485,27 @@ function handlePatientAction(action, index) {
 function handlePatientMenuClick(event) {
   const target =
     event.target;
+
+  const studyGalleryButton =
+    target.closest?.(
+      '[data-open-study-gallery]'
+    );
+
+  if (studyGalleryButton) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    openStudyDetail(
+      studyGalleryButton.dataset
+        .openStudyGallery,
+      Number(
+        studyGalleryButton.dataset
+          .openStudyIndex
+      )
+    );
+
+    return;
+  }
 
   const toggle =
     target.closest?.(
