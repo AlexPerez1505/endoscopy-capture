@@ -1,5 +1,5 @@
 <section class="gallery-page rise d2">
-  <div class="gallery-shell" id="galleryListView">
+  <div class="gallery-shell filters-closed" id="galleryListView">
     <div class="gallery-main">
       <div class="gallery-toolbar">
         <label class="gallery-search" for="gallerySearchInput">
@@ -10,7 +10,7 @@
           <input id="gallerySearchInput" type="search" placeholder="Buscar paciente por nombre, ID o tel&eacute;fono...">
         </label>
 
-        <button class="gallery-filter-btn" id="galleryFilterBtn" type="button" aria-expanded="true" aria-controls="galleryFilterPanel">
+        <button class="gallery-filter-btn" id="galleryFilterBtn" type="button" aria-expanded="false" aria-controls="galleryFilterPanel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
           </svg>
@@ -27,7 +27,7 @@
       </div>
     </div>
 
-    <aside class="gallery-filters is-open" id="galleryFilterPanel" aria-label="Filtros de galeria">
+    <aside class="gallery-filters" id="galleryFilterPanel" aria-label="Filtros de galeria">
       <div class="gallery-filters-head">
         <h2>Filtros</h2>
         <button class="gallery-filter-close" id="galleryFilterClose" type="button" aria-label="Cerrar filtros">

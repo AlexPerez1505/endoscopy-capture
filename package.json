@@ -6,6 +6,7 @@
   "scripts": {
     "tauri": "tauri",
     "build": "tauri build",
+    "build:mac": "tauri build --config src-tauri/tauri.macos.conf.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:duplicated-helpers": "node scripts/check-duplicated-helpers.js",

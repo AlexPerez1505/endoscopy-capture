@@ -1488,7 +1488,7 @@ export function initGaleria() {
   document.getElementById('galleryImageViewer')?.classList.add('is-hidden');
   document.getElementById('galleryDrawingPanel')?.classList.add('is-hidden');
   document.getElementById('galleryImageFiltersPanel')?.classList.add('is-hidden');
-  setFilterPanelOpen(!window.matchMedia('(max-width: 1100px)').matches);
+  setFilterPanelOpen(false);
   updateAdjustmentLabels();
   setGalleryEmptyText('Cargando galeria...');
   renderGalleryPatients();
