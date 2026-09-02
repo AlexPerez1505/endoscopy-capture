@@ -35,6 +35,7 @@ export async function laravelFetch(
     return fetch(url, options);
   }
 
+
   try {
     const headers =
       normalizeHeaders(
