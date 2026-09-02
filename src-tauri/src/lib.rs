@@ -17,13 +17,9 @@ fn apply_window_icon(app: &tauri::App) -> tauri::Result<()> {
     if let Some(window) =
         app.get_webview_window("main")
     {
-        let icon = tauri::image::Image::new(
-            include_bytes!(
-                "../icons/taskbar-icon.rgba"
-            ),
-            512,
-            512,
-        );
+        let icon = tauri::image::Image::from_bytes(
+            include_bytes!("../icons/icon.png"),
+        )?;
 
         window.set_icon(icon)?;
     }
